@@ -258,7 +258,7 @@
   <div class="platform-grid" id="platformGrid"></div>
 
   <div class="translate-box" id="translateBox">
-    <div class="label">✍️ اكتب ترجمة كلمة البحث هنا يدويًا (بأي لغة) — ستُستخدم تلقائيًا في كل روابط البحث بدل النص الأصلي</div>
+    <div class="label">🌍 ترجمة تلقائية للغة الدولة المختارة — تقدر تعدّلها يدويًا لو حبيت، وستُستخدم في كل روابط البحث بدل النص الأصلي</div>
     <input type="text" id="translatedInput" class="filter-input" placeholder="اكتب الترجمة هنا..." style="direction:ltr; text-align:right;" oninput="onTranslatedInputChange()">
   </div>
 
@@ -549,6 +549,7 @@ function onQueryInput(e){
   refreshEffectiveType();
   updateHashtagHint(fullQueryText());
   updateTranslateVisibility();
+  if(autoTranslate) scheduleAutoTranslate();
   if(text.trim().length < 1){ hideSuggestions(); return; }
   renderSuggestions(buildLocalSuggestions(text));
 }
@@ -600,16 +601,61 @@ function pickSuggestion(s){
   updateHashtagHint(fullQueryText());
   hideSuggestions();
   updateTranslateVisibility();
+  if(autoTranslate) scheduleAutoTranslate();
 }
 function hideSuggestions(){ document.getElementById('suggestPanel').classList.remove('show'); }
 
-/* ===================== TRANSLATION (يدوي بالكامل - لا يعتمد على أي طلب شبكة) ===================== */
-function onTranslatedInputChange(){ /* أي نص يكتبه المستخدم هنا يُستخدم تلقائيًا في البحث بمجرد وجوده */ }
+/* ===================== TRANSLATION (تلقائية عبر خدمة ترجمة خارجية + إمكانية التعديل اليدوي) ===================== */
+let translateDebounce = null;
+const LANG_NAME_EN = {en:'English', tr:'Turkish', fa:'Persian', he:'Hebrew', ru:'Russian', de:'German', fr:'French', es:'Spanish', it:'Italian', 'zh-CN':'Chinese', ja:'Japanese', hi:'Hindi', ur:'Urdu', 'pt-BR':'Portuguese'};
+
+function onTranslatedInputChange(){ /* المستخدم عدّل الترجمة يدويًا — تُستخدم كما هي */ }
 
 function updateTranslateVisibility(){
   const box = document.getElementById('translateBox');
-  document.getElementById('transHint').textContent = '';
-  box.classList.toggle('show', autoTranslate);
+  const hint = document.getElementById('transHint');
+  if(!autoTranslate){ box.classList.remove('show'); hint.textContent=''; return; }
+  if(!selectedCountry || !selectedCountry.hl || selectedCountry.hl === 'ar'){
+    box.classList.remove('show');
+    hint.textContent = '👆 اختر دولة بلغة غير عربية أولاً ليتم تفعيل الترجمة التلقائية';
+    return;
+  }
+  hint.textContent = '';
+  box.classList.add('show');
+  scheduleAutoTranslate();
+}
+
+function scheduleAutoTranslate(){
+  clearTimeout(translateDebounce);
+  translateDebounce = setTimeout(runAutoTranslate, 450);
+}
+
+async function runAutoTranslate(){
+  const text = document.getElementById('query').value.trim();
+  const input = document.getElementById('translatedInput');
+  if(!autoTranslate || !text || !selectedCountry || !selectedCountry.hl || selectedCountry.hl === 'ar') return;
+  const targetLang = selectedCountry.hl.split('-')[0];
+  input.placeholder = 'جارٍ الترجمة تلقائيًا...';
+
+  // محاولة 1: خدمة ترجمة جوجل غير الرسمية
+  try{
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`);
+    if(res.ok){
+      const data = await res.json();
+      const translated = data?.[0]?.map(chunk => chunk[0]).join('');
+      if(translated){ input.value = translated; input.placeholder = 'اكتب الترجمة هنا...'; updateHashtagHint(fullQueryText()); return; }
+    }
+  }catch(err){ /* ننتقل للمحاولة التالية */ }
+
+  // محاولة 2: MyMemory كبديل احتياطي
+  try{
+    const res2 = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ar|${targetLang}`);
+    const data2 = await res2.json();
+    const translated2 = data2?.responseData?.translatedText;
+    if(translated2){ input.value = translated2; input.placeholder = 'اكتب الترجمة هنا...'; updateHashtagHint(fullQueryText()); return; }
+  }catch(err){ /* فشلت المحاولتان */ }
+
+  input.placeholder = 'تعذّرت الترجمة التلقائية — اكتب الترجمة هنا يدويًا';
 }
 
 /* ===================== URL BUILDERS (SafeSearch off بشكل دائم وصامت) ===================== */
