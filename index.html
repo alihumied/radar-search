@@ -838,7 +838,7 @@ function googleUrl(q, type, opts){
     finalQ = `${q} filetype:${ext}`;
   }
   if(type === 'comment'){
-    finalQ = `"${q}"`; // مطابقة دقيقة للكلمة نفسها، بدون عمليات منطقية معقّدة كانت تشوّش نتائج جوجل
+    finalQ = `"${q}" (inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")`; // مطابقة دقيقة مع توجيه Google نحو التعليقات والردود المفهرسة
   }
   if(type === 'live'){
     finalQ = `${q} (بث مباشر OR "live now" OR livestream)`;
