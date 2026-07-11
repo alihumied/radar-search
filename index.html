@@ -76,14 +76,6 @@
   .sub-group span{font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
   .sub-group select{background:none; border:none; color:var(--text); font-family:'Tajawal',sans-serif; font-size:13px; outline:none;}
 
-  .desc-toggle{margin-top:14px; font-size:13px; color:var(--cyan); cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace;}
-  .desc-box{display:none; margin-top:10px;}
-  .desc-box.show{display:block;}
-  .desc-box textarea{width:100%; min-height:60px; background:var(--bg-0); border:1px solid var(--line); border-radius:12px; padding:12px 14px; color:var(--text); font-family:'Tajawal',sans-serif; font-size:14px; outline:none; resize:vertical; margin-top:6px;}
-  .desc-group-title{font-size:11px; color:var(--muted); margin:12px 0 6px; font-family:'JetBrains Mono',monospace; letter-spacing:0.5px;}
-  .desc-box textarea:focus{border-color:var(--blue);}
-  .desc-hint{font-size:11px; color:var(--muted-2); margin-top:6px; font-family:'JetBrains Mono',monospace;}
-
   .toggles{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;}
   .toggle{display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:100px; border:1px solid var(--line); background:var(--bg-0); cursor:pointer; user-select:none; font-size:13px; transition:.15s;}
   .toggle.active{border-color:var(--blue); background:rgba(46,107,255,0.14); color:#cfe0ff;}
@@ -176,6 +168,7 @@
 
     <!-- نوع المحتوى -->
     <div class="type-row" id="typeRow"></div>
+    <div class="type-row" id="priceModeRow" style="margin-top:8px;"></div>
     <div class="sub-filters" id="imageSubFilters">
       <div class="sub-group"><span>اللون</span>
         <select id="imgColor"><option value="">الكل</option><option value="color">ملوّن</option><option value="gray">أبيض وأسود</option><option value="trans">خلفية شفافة</option></select>
@@ -193,6 +186,23 @@
       </div>
       <div class="sub-group"><span>الجودة</span>
         <select id="vidQuality"><option value="">الكل</option><option value="HD">HD</option><option value="4K">4K</option></select>
+      </div>
+    </div>
+    <div class="sub-filters" id="fileSubFilters">
+      <div class="sub-group"><span>نوع الملف</span>
+        <select id="fileExt">
+          <option value="apk">APK (تطبيق أندرويد)</option>
+          <option value="pdf">PDF</option>
+          <option value="doc">Word (doc)</option>
+          <option value="docx">Word (docx)</option>
+          <option value="ppt">PowerPoint</option>
+          <option value="xls">Excel</option>
+          <option value="zip">ZIP مضغوط</option>
+          <option value="rar">RAR مضغوط</option>
+          <option value="mp3">MP3 صوتي</option>
+          <option value="exe">EXE (ويندوز)</option>
+          <option value="epub">EPUB (كتاب إلكتروني)</option>
+        </select>
       </div>
     </div>
 
@@ -225,24 +235,6 @@
       <div class="filter"><label>إلى تاريخ</label><input class="filter-input" type="date" id="dateTo"></div>
     </div>
 
-    <div class="desc-toggle" onclick="toggleDescBox()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      <span id="descToggleLabel">+ إضافة وصف دقيق (مواصفات الصورة/الفيديو)</span>
-    </div>
-    <div class="desc-box" id="descBox">
-      <div class="desc-group-title">من/ماذا يظهر؟</div>
-      <div class="type-row" id="descPeopleRow"></div>
-      <div class="desc-group-title">المكان</div>
-      <div class="type-row" id="descEnvRow"></div>
-      <div class="desc-group-title">التوقيت المرئي</div>
-      <div class="type-row" id="descTimeRow"></div>
-      <div class="desc-group-title">اللون البارز</div>
-      <div class="type-row" id="descColorRow"></div>
-      <div class="desc-group-title">تفاصيل إضافية (اختياري)</div>
-      <textarea id="descText" placeholder="مثال: ترتدي عباءة سوداء، بجانب سيارة رياضية حمراء، بالقرب من نفق..." oninput="onDescInput()"></textarea>
-      <div class="desc-hint">كل ما تختاره وتكتبه هنا يُضاف تلقائيًا لكل روابط البحث لتضييق النتائج وزيادة الدقة.</div>
-    </div>
-
     <div class="toggles">
       <div class="toggle" id="transToggle" onclick="toggleAutoTranslate()">
         <div class="sw"></div>
@@ -272,43 +264,216 @@
 
 <script>
 /* ===================== DATA ===================== */
-const WORLDWIDE = {ar:"كل العالم", en:"Worldwide", code:"", hl:"", flag:"🌐"};
+const WORLDWIDE = {ar:"كل العالم", en:"Worldwide", code:"", hl:""};
+function countryFlag(c){
+  if(!c || !c.code) return '🌐';
+  return c.code.toUpperCase().split('').map(ch => String.fromCodePoint(127397 + ch.charCodeAt(0))).join('');
+}
 const COUNTRIES = [
   WORLDWIDE,
-  {ar:"فلسطين", en:"Palestine", code:"ps", hl:"ar", flag:"🇵🇸"},
-  {ar:"الأردن", en:"Jordan", code:"jo", hl:"ar", flag:"🇯🇴"},
-  {ar:"السعودية", en:"Saudi Arabia", code:"sa", hl:"ar", flag:"🇸🇦"},
-  {ar:"مصر", en:"Egypt", code:"eg", hl:"ar", flag:"🇪🇬"},
-  {ar:"الإمارات", en:"UAE", code:"ae", hl:"ar", flag:"🇦🇪"},
-  {ar:"قطر", en:"Qatar", code:"qa", hl:"ar", flag:"🇶🇦"},
-  {ar:"الكويت", en:"Kuwait", code:"kw", hl:"ar", flag:"🇰🇼"},
-  {ar:"البحرين", en:"Bahrain", code:"bh", hl:"ar", flag:"🇧🇭"},
-  {ar:"عُمان", en:"Oman", code:"om", hl:"ar", flag:"🇴🇲"},
-  {ar:"لبنان", en:"Lebanon", code:"lb", hl:"ar", flag:"🇱🇧"},
-  {ar:"سوريا", en:"Syria", code:"sy", hl:"ar", flag:"🇸🇾"},
-  {ar:"العراق", en:"Iraq", code:"iq", hl:"ar", flag:"🇮🇶"},
-  {ar:"المغرب", en:"Morocco", code:"ma", hl:"ar", flag:"🇲🇦"},
-  {ar:"الجزائر", en:"Algeria", code:"dz", hl:"ar", flag:"🇩🇿"},
-  {ar:"تونس", en:"Tunisia", code:"tn", hl:"ar", flag:"🇹🇳"},
-  {ar:"ليبيا", en:"Libya", code:"ly", hl:"ar", flag:"🇱🇾"},
-  {ar:"السودان", en:"Sudan", code:"sd", hl:"ar", flag:"🇸🇩"},
-  {ar:"اليمن", en:"Yemen", code:"ye", hl:"ar", flag:"🇾🇪"},
-  {ar:"تركيا", en:"Turkey", code:"tr", hl:"tr", flag:"🇹🇷"},
-  {ar:"إيران", en:"Iran", code:"ir", hl:"fa", flag:"🇮🇷"},
-  {ar:"إسرائيل", en:"Israel", code:"il", hl:"he", flag:"🇮🇱"},
-  {ar:"روسيا", en:"Russia", code:"ru", hl:"ru", flag:"🇷🇺"},
-  {ar:"الولايات المتحدة", en:"United States", code:"us", hl:"en", flag:"🇺🇸"},
-  {ar:"بريطانيا", en:"United Kingdom", code:"gb", hl:"en", flag:"🇬🇧"},
-  {ar:"ألمانيا", en:"Germany", code:"de", hl:"de", flag:"🇩🇪"},
-  {ar:"فرنسا", en:"France", code:"fr", hl:"fr", flag:"🇫🇷"},
-  {ar:"إسبانيا", en:"Spain", code:"es", hl:"es", flag:"🇪🇸"},
-  {ar:"إيطاليا", en:"Italy", code:"it", hl:"it", flag:"🇮🇹"},
-  {ar:"الصين", en:"China", code:"cn", hl:"zh-CN", flag:"🇨🇳"},
-  {ar:"اليابان", en:"Japan", code:"jp", hl:"ja", flag:"🇯🇵"},
-  {ar:"الهند", en:"India", code:"in", hl:"hi", flag:"🇮🇳"},
-  {ar:"باكستان", en:"Pakistan", code:"pk", hl:"ur", flag:"🇵🇰"},
-  {ar:"البرازيل", en:"Brazil", code:"br", hl:"pt-BR", flag:"🇧🇷"},
-  {ar:"كندا", en:"Canada", code:"ca", hl:"en", flag:"🇨🇦"},
+  // الشرق الأوسط وشمال أفريقيا
+  {ar:"فلسطين", en:"Palestine", code:"ps", hl:"ar"},
+  {ar:"الأردن", en:"Jordan", code:"jo", hl:"ar"},
+  {ar:"السعودية", en:"Saudi Arabia", code:"sa", hl:"ar"},
+  {ar:"مصر", en:"Egypt", code:"eg", hl:"ar"},
+  {ar:"الإمارات", en:"UAE", code:"ae", hl:"ar"},
+  {ar:"قطر", en:"Qatar", code:"qa", hl:"ar"},
+  {ar:"الكويت", en:"Kuwait", code:"kw", hl:"ar"},
+  {ar:"البحرين", en:"Bahrain", code:"bh", hl:"ar"},
+  {ar:"عُمان", en:"Oman", code:"om", hl:"ar"},
+  {ar:"لبنان", en:"Lebanon", code:"lb", hl:"ar"},
+  {ar:"سوريا", en:"Syria", code:"sy", hl:"ar"},
+  {ar:"العراق", en:"Iraq", code:"iq", hl:"ar"},
+  {ar:"المغرب", en:"Morocco", code:"ma", hl:"ar"},
+  {ar:"الجزائر", en:"Algeria", code:"dz", hl:"ar"},
+  {ar:"تونس", en:"Tunisia", code:"tn", hl:"ar"},
+  {ar:"ليبيا", en:"Libya", code:"ly", hl:"ar"},
+  {ar:"السودان", en:"Sudan", code:"sd", hl:"ar"},
+  {ar:"اليمن", en:"Yemen", code:"ye", hl:"ar"},
+  {ar:"موريتانيا", en:"Mauritania", code:"mr", hl:"ar"},
+  {ar:"جيبوتي", en:"Djibouti", code:"dj", hl:"ar"},
+  {ar:"الصومال", en:"Somalia", code:"so", hl:"ar"},
+  {ar:"جزر القمر", en:"Comoros", code:"km", hl:"ar"},
+  {ar:"تركيا", en:"Turkey", code:"tr", hl:"tr"},
+  {ar:"إيران", en:"Iran", code:"ir", hl:"fa"},
+  {ar:"إسرائيل", en:"Israel", code:"il", hl:"he"},
+  {ar:"قبرص", en:"Cyprus", code:"cy", hl
+     // أفريقيا
+  {ar:"أنغولا", en:"Angola", code:"ao", hl:"pt"},
+  {ar:"بنين", en:"Benin", code:"bj", hl:"fr"},
+  {ar:"بوتسوانا", en:"Botswana", code:"bw", hl:"en"},
+  {ar:"بوركينا فاسو", en:"Burkina Faso", code:"bf", hl:"fr"},
+  {ar:"بوروندي", en:"Burundi", code:"bi", hl:"fr"},
+  {ar:"الرأس الأخضر", en:"Cabo Verde", code:"cv", hl:"pt"},
+  {ar:"الكاميرون", en:"Cameroon", code:"cm", hl:"fr"},
+  {ar:"جمهورية أفريقيا الوسطى", en:"Central African Republic", code:"cf", hl:"fr"},
+  {ar:"تشاد", en:"Chad", code:"td", hl:"fr"},
+  {ar:"الكونغو برازافيل", en:"Congo", code:"cg", hl:"fr"},
+  {ar:"الكونغو الديمقراطية", en:"DR Congo", code:"cd", hl:"fr"},
+  {ar:"غينيا الاستوائية", en:"Equatorial Guinea", code:"gq", hl:"es"},
+  {ar:"إريتريا", en:"Eritrea", code:"er", hl:"ar"},
+  {ar:"إسواتيني", en:"Eswatini", code:"sz", hl:"en"},
+  {ar:"إثيوبيا", en:"Ethiopia", code:"et", hl:"en"},
+  {ar:"الغابون", en:"Gabon", code:"ga", hl:"fr"},
+  {ar:"غامبيا", en:"Gambia", code:"gm", hl:"en"},
+  {ar:"غانا", en:"Ghana", code:"gh", hl:"en"},
+  {ar:"غينيا", en:"Guinea", code:"gn", hl:"fr"},
+  {ar:"غينيا بيساو", en:"Guinea-Bissau", code:"gw", hl:"pt"},
+  {ar:"ساحل العاج", en:"Ivory Coast", code:"ci", hl:"fr"},
+  {ar:"كينيا", en:"Kenya", code:"ke", hl:"en"},
+  {ar:"ليسوتو", en:"Lesotho", code:"ls", hl:"en"},
+  {ar:"ليبيريا", en:"Liberia", code:"lr", hl:"en"},
+  {ar:"مدغشقر", en:"Madagascar", code:"mg", hl:"fr"},
+  {ar:"مالاوي", en:"Malawi", code:"mw", hl:"en"},
+  {ar:"مالي", en:"Mali", code:"ml", hl:"fr"},
+  {ar:"موريشيوس", en:"Mauritius", code:"mu", hl:"en"},
+  {ar:"موزمبيق", en:"Mozambique", code:"mz", hl:"pt"},
+  {ar:"ناميبيا", en:"Namibia", code:"na", hl:"en"},
+  {ar:"النيجر", en:"Niger", code:"ne", hl:"fr"},
+  {ar:"نيجيريا", en:"Nigeria", code:"ng", hl:"en"},
+  {ar:"رواندا", en:"Rwanda", code:"rw", hl:"fr"},
+  {ar:"ساو تومي وبرينسيبي", en:"Sao Tome and Principe", code:"st", hl:"pt"},
+  {ar:"السنغال", en:"Senegal", code:"sn", hl:"fr"},
+  {ar:"سيشل", en:"Seychelles", code:"sc", hl:"en"},
+  {ar:"سيراليون", en:"Sierra Leone", code:"sl", hl:"en"},
+  {ar:"جنوب أفريقيا", en:"South Africa", code:"za", hl:"en"},
+  {ar:"جنوب السودان", en:"South Sudan", code:"ss", hl:"en"},
+  {ar:"تنزانيا", en:"Tanzania", code:"tz", hl:"sw"},
+  {ar:"توغو", en:"Togo", code:"tg", hl:"fr"},
+  {ar:"أوغندا", en:"Uganda", code:"ug", hl:"en"},
+  {ar:"زامبيا", en:"Zambia", code:"zm", hl:"en"},
+  {ar:"زيمبابوي", en:"Zimbabwe", code:"zw", hl:"en"},
+  // آسيا
+  {ar:"أفغانستان", en:"Afghanistan", code:"af", hl:"fa"},
+  {ar:"أرمينيا", en:"Armenia", code:"am", hl:"hy"},
+  {ar:"أذربيجان", en:"Azerbaijan", code:"az", hl:"az"},
+  {ar:"بنغلاديش", en:"Bangladesh", code:"bd", hl:"bn"},
+  {ar:"بوتان", en:"Bhutan", code:"bt", hl:"en"},
+  {ar:"بروناي", en:"Brunei", code:"bn", hl:"ms"},
+  {ar:"كمبوديا", en:"Cambodia", code:"kh", hl:"km"},
+  {ar:"الصين", en:"China", code:"cn", hl:"zh-CN"},
+  {ar:"جورجيا", en:"Georgia", code:"ge", hl:"ka"},
+  {ar:"الهند", en:"India", code:"in", hl:"hi"},
+  {ar:"إندونيسيا", en:"Indonesia", code:"id", hl:"id"},
+  {ar:"اليابان", en:"Japan", code:"jp", hl:"ja"},
+  {ar:"كازاخستان", en:"Kazakhstan", code:"kz", hl:"kk"},
+  {ar:"قيرغيزستان", en:"Kyrgyzstan", code:"kg", hl:"ky"},
+  {ar:"لاوس", en:"Laos", code:"la", hl:"lo"},
+  {ar:"ماليزيا", en:"Malaysia", code:"my", hl:"ms"},
+  {ar:"جزر المالديف", en:"Maldives", code:"mv", hl:"dv"},
+  {ar:"منغوليا", en:"Mongolia", code:"mn", hl:"mn"},
+  {ar:"ميانمار", en:"Myanmar", code:"mm", hl:"my"},
+  {ar:"نيبال", en:"Nepal", code:"np", hl:"ne"},
+  {ar:"كوريا الشمالية", en:"North Korea", code:"kp", hl:"ko"},
+  {ar:"باكستان", en:"Pakistan", code:"pk", hl:"ur"},
+  {ar:"الفلبين", en:"Philippines", code:"ph", hl:"en"},
+  {ar:"سنغافورة", en:"Singapore", code:"sg", hl:"en"},
+  {ar:"كوريا الجنوبية", en:"South Korea", code:"kr", hl:"ko"},
+  {ar:"سريلانكا", en:"Sri Lanka", code:"lk", hl:"si"},
+  {ar:"تايوان", en:"Taiwan", code:"tw", hl:"zh-TW"},
+  {ar:"طاجيكستان", en:"Tajikistan", code:"tj", hl:"tg"},
+  {ar:"تايلاند", en:"Thailand", code:"th", hl:"th"},
+  {ar:"تيمور الشرقية", en:"Timor-Leste", code:"tl", hl:"pt"},
+  {ar:"تركمانستان", en:"Turkmenistan", code:"tm", hl:"tk"},
+  {ar:"أوزبكستان", en:"Uzbekistan", code:"uz", hl:"uz"},
+  {ar:"فيتنام", en:"Vietnam", code:"vn", hl:"vi"},
+  // أوروبا
+  {ar:"ألبانيا", en:"Albania", code:"al", hl:"sq"},
+  {ar:"أندورا", en:"Andorra", code:"ad", hl:"ca"},
+  {ar:"النمسا", en:"Austria", code:"at", hl:"de"},
+  {ar:"بيلاروسيا", en:"Belarus", code:"by", hl:"be"},
+  {ar:"بلجيكا", en:"Belgium", code:"be", hl:"nl"},
+  {ar:"البوسنة والهرسك", en:"Bosnia and Herzegovina", code:"ba", hl:"bs"},
+  {ar:"بلغاريا", en:"Bulgaria", code:"bg", hl:"bg"},
+  {ar:"كرواتيا", en:"Croatia", code:"hr", hl:"hr"},
+  {ar:"التشيك", en:"Czechia", code:"cz", hl:"cs"},
+  {ar:"الدنمارك", en:"Denmark", code:"dk", hl:"da"},
+  {ar:"إستونيا", en:"Estonia", code:"ee", hl:"et"},
+  {ar:"فنلندا", en:"Finland", code:"fi", hl:"fi"},
+  {ar:"فرنسا", en:"France", code:"fr", hl:"fr"},
+  {ar:"ألمانيا", en:"Germany", code:"de", hl:"de"},
+  {ar:"اليونان", en:"Greece", code:"gr", hl:"el"},
+  {ar:"المجر", en:"Hungary", code:"hu", hl:"hu"},
+  {ar:"آيسلندا", en:"Iceland", code:"is", hl:"is"},
+  {ar:"أيرلندا", en:"Ireland", code:"ie", hl:"en"},
+  {ar:"إيطاليا", en:"Italy", code:"it", hl:"it"},
+  {ar:"كوسوفو", en:"Kosovo", code:"xk", hl:"sq"},
+  {ar:"لاتفيا", en:"Latvia", code:"lv", hl:"lv"},
+  {ar:"ليختنشتاين", en:"Liechtenstein", code:"li", hl:"de"},
+  {ar:"ليتوانيا", en:"Lithuania", code:"lt", hl:"lt"},
+  {ar:"لوكسمبورغ", en:"Luxembourg", code:"lu", hl:"fr"},
+  {ar:"مالطا", en:"Malta", code:"mt", hl:"mt"},
+  {ar:"مولدوفا", en:"Moldova", code:"md", hl:"ro"},
+  {ar:"موناكو", en:"Monaco", code:"mc", hl:"fr"},
+  {ar:"الجبل الأسود", en:"Montenegro", code:"me", hl:"sr"},
+  {ar:"هولندا", en:"Netherlands", code:"nl", hl:"nl"},
+  {ar:"مقدونيا الشمالية", en:"North Macedonia", code:"mk", hl:"mk"},
+  {ar:"النرويج", en:"Norway", code:"no", hl:"no"},
+  {ar:"بولندا", en:"Poland", code:"pl", hl:"pl"},
+  {ar:"البرتغال", en:"Portugal", code:"pt", hl:"pt"},
+  {ar:"رومانيا", en:"Romania", code:"ro", hl:"ro"},
+  {ar:"روسيا", en:"Russia", code:"ru", hl:"ru"},
+  {ar:"سان مارينو", en:"San Marino", code:"sm", hl:"it"},
+  {ar:"صربيا", en:"Serbia", code:"rs", hl:"sr"},
+  {ar:"سلوفاكيا", en:"Slovakia", code:"sk", hl:"sk"},
+  {ar:"سلوفينيا", en:"Slovenia", code:"si", hl:"sl"},
+  {ar:"إسبانيا", en:"Spain", code:"es", hl:"es"},
+  {ar:"السويد", en:"Sweden", code:"se", hl:"sv"},
+  {ar:"سويسرا", en:"Switzerland", code:"ch", hl:"de"},
+  {ar:"أوكرانيا", en:"Ukraine", code:"ua", hl:"uk"},
+  {ar:"بريطانيا", en:"United Kingdom", code:"gb", hl:"en"},
+  {ar:"الفاتيكان", en:"Vatican City", code:"va", hl:"it"},
+  // الأمريكتان
+  {ar:"أنتيغوا وباربودا", en:"Antigua and Barbuda", code:"ag", hl:"en"},
+  {ar:"الأرجنتين", en:"Argentina", code:"ar", hl:"es"},
+  {ar:"باهاماس", en:"Bahamas", code:"bs", hl:"en"},
+  {ar:"باربادوس", en:"Barbados", code:"bb", hl:"en"},
+  {ar:"بليز", en:"Belize", code:"bz", hl:"en"},
+  {ar:"بوليفيا", en:"Bolivia", code:"bo", hl:"es"},
+  {ar:"البرازيل", en:"Brazil", code:"br", hl:"pt-BR"},
+  {ar:"كندا", en:"Canada", code:"ca", hl:"en"},
+  {ar:"تشيلي", en:"Chile", code:"cl", hl:"es"},
+  {ar:"كولومبيا", en:"Colombia", code:"co", hl:"es"},
+  {ar:"كوستاريكا", en:"Costa Rica", code:"cr", hl:"es"},
+  {ar:"كوبا", en:"Cuba", code:"cu", hl:"es"},
+  {ar:"دومينيكا", en:"Dominica", code:"dm", hl:"en"},
+  {ar:"جمهورية الدومينيكان", en:"Dominican Republic", code:"do", hl:"es"},
+  {ar:"الإكوادور", en:"Ecuador", code:"ec", hl:"es"},
+  {ar:"السلفادور", en:"El Salvador", code:"sv", hl:"es"},
+  {ar:"غرينادا", en:"Grenada", code:"gd", hl:"en"},
+  {ar:"غواتيمالا", en:"Guatemala", code:"gt", hl:"es"},
+  {ar:"غيانا", en:"Guyana", code:"gy", hl:"en"},
+  {ar:"هايتي", en:"Haiti", code:"ht", hl:"fr"},
+  {ar:"هندوراس", en:"Honduras", code:"hn", hl:"es"},
+  {ar:"جامايكا", en:"Jamaica", code:"jm", hl:"en"},
+  {ar:"المكسيك", en:"Mexico", code:"mx", hl:"es"},
+  {ar:"نيكاراغوا", en:"Nicaragua", code:"ni", hl:"es"},
+  {ar:"بنما", en:"Panama", code:"pa", hl:"es"},
+  {ar:"باراغواي", en:"Paraguay", code:"py", hl:"es"},
+  {ar:"بيرو", en:"Peru", code:"pe", hl:"es"},
+  {ar:"سانت كيتس ونيفيس", en:"Saint Kitts and Nevis", code:"kn", hl:"en"},
+  {ar:"سانت لوسيا", en:"Saint Lucia", code:"lc", hl:"en"},
+  {ar:"سانت فينسنت والغرينادين", en:"Saint Vincent and the Grenadines", code:"vc", hl:"en"},
+  {ar:"سورينام", en:"Suriname", code:"sr", hl:"nl"},
+  {ar:"ترينيداد وتوباغو", en:"Trinidad and Tobago", code:"tt", hl:"en"},
+  {ar:"الولايات المتحدة", en:"United States", code:"us", hl:"en"},
+  {ar:"أوروغواي", en:"Uruguay", code:"uy", hl:"es"},
+  {ar:"فنزويلا", en:"Venezuela", code:"ve", hl:"es"},
+  // أوقيانوسيا
+  {ar:"أستراليا", en:"Australia", code:"au", hl:"en"},
+  {ar:"فيجي", en:"Fiji", code:"fj", hl:"en"},
+  {ar:"كيريباتي", en:"Kiribati", code:"ki", hl:"en"},
+  {ar:"جزر مارشال", en:"Marshall Islands", code:"mh", hl:"en"},
+  {ar:"ميكرونيزيا", en:"Micronesia", code:"fm", hl:"en"},
+  {ar:"ناورو", en:"Nauru", code:"nr", hl:"en"},
+  {ar:"نيوزيلندا", en:"New Zealand", code:"nz", hl:"en"},
+  {ar:"بالاو", en:"Palau", code:"pw", hl:"en"},
+  {ar:"بابوا غينيا الجديدة", en:"Papua New Guinea", code:"pg", hl:"en"},
+  {ar:"ساموا", en:"Samoa", code:"ws", hl:"en"},
+  {ar:"جزر سليمان", en:"Solomon Islands", code:"sb", hl:"en"},
+  {ar:"تونغا", en:"Tonga", code:"to", hl:"en"},
+  {ar:"توفالو", en:"Tuvalu", code:"tv", hl:"en"},
+  {ar:"فانواتو", en:"Vanuatu", code:"vu", hl:"en"},
 ];
 
 // نوع المحتوى: قيمة اختيار المستخدم (auto يعني كشف تلقائي)
@@ -319,11 +484,17 @@ const TYPE_OPTIONS = [
   {id:'video', label:'🎬 فيديو'},
   {id:'location', label:'📍 مكان'},
   {id:'person', label:'👤 حساب/شخص'},
+  {id:'comment', label:'💬 داخل التعليقات'},
+  {id:'live', label:'🔴 بث مباشر'},
+  {id:'file', label:'📄 ملف (APK/PDF/...)'},
 ];
 let currentTypeChoice = 'auto'; // ما اختاره المستخدم
 let effectiveType = 'general';  // القيمة الفعلية المستخدمة في البناء
 
 const TYPE_KEYWORDS = {
+  live: ['بث مباشر','مباشر','live','livestream','بث حي'],
+  comment: ['تعليق','تعليقات','رد','ردود','comment','comments','reply'],
+  file: ['apk','pdf','word','doc','ppt','excel','ملف','تحميل برنامج','تطبيق','كتاب الكتروني','epub'],
   image: ['صورة','صور','image','photo','pic','سكرين','سكرينشوت','screenshot','لقطة شاشة'],
   video: ['فيديو','فديو','video','كليب','clip','مقطع','ريل','reel','shorts'],
   location: ['موقع','مكان','عنوان','location','address','خريطة','map'],
@@ -353,11 +524,11 @@ const PLATFORMS = [
 let selectedCountry = null;
 let selectedPlatforms = new Set(PLATFORMS.filter(p=>p.active).map(p=>p.id));
 let autoTranslate = false;
-let descOpen = false;
 
 /* ===================== INIT ===================== */
 function init(){
   renderTypeRow();
+  renderPriceModeRow();
   renderPlatforms();
   renderCountryDropdown(COUNTRIES);
   selectCountry(WORLDWIDE);
@@ -389,57 +560,31 @@ function refreshEffectiveType(){
 }
 function updateSubFilters(){
   document.getElementById('imageSubFilters').classList.toggle('show', effectiveType === 'image');
-  document.getElementById('videoSubFilters').classList.toggle('show', effectiveType === 'video');
+  document.getElementById('videoSubFilters').classList.toggle('show', effectiveType === 'video' || effectiveType === 'live');
+  document.getElementById('fileSubFilters').classList.toggle('show', effectiveType === 'file');
 }
 
-/* ===================== DESCRIPTION BOX ===================== */
-function toggleDescBox(){
-  descOpen = !descOpen;
-  document.getElementById('descBox').classList.toggle('show', descOpen);
-  document.getElementById('descToggleLabel').textContent = descOpen ? '− إخفاء الوصف الدقيق' : '+ إضافة وصف دقيق (مواصفات الصورة/الفيديو)';
-  if(descOpen) renderDescGroups();
+/* ===================== وضع مجاني/مدفوع ===================== */
+const PRICE_MODES = [
+  {id:'none', label:'بدون تفضيل'},
+  {id:'free', label:'💚 مجاني فقط'},
+  {id:'paid', label:'💳 مدفوع/رسمي'},
+];
+let priceMode = 'none';
+function renderPriceModeRow(){
+  const row = document.getElementById('priceModeRow');
+  row.innerHTML = PRICE_MODES.map(p=>
+    `<div class="type-chip ${priceMode===p.id?'active':''}" onclick="pickPriceMode('${p.id}')">${p.label}</div>`
+  ).join('');
 }
-function onDescInput(){ updateHashtagHint(fullQueryText()); }
-
-const DESC_GROUPS = {
-  people: {row:'descPeopleRow', options:[
-    {id:'none', label:'بدون أشخاص'}, {id:'one', label:'شخص واحد'}, {id:'many', label:'أكثر من شخص'}, {id:'child', label:'طفل/أطفال'},
-  ]},
-  env: {row:'descEnvRow', options:[
-    {id:'indoor', label:'داخلي'}, {id:'outdoor', label:'خارجي'}, {id:'street', label:'شارع'}, {id:'nature', label:'طبيعة/خارج المدينة'},
-  ]},
-  time: {row:'descTimeRow', options:[
-    {id:'day', label:'نهاري'}, {id:'night', label:'ليلي'},
-  ]},
-  color: {row:'descColorRow', options:[
-    {id:'red', label:'أحمر'}, {id:'blue', label:'أزرق'}, {id:'black', label:'أسود'}, {id:'white', label:'أبيض'}, {id:'green', label:'أخضر'}, {id:'yellow', label:'أصفر'},
-  ]},
-};
-let descChoices = {people:'', env:'', time:'', color:''};
-
-function renderDescGroups(){
-  Object.entries(DESC_GROUPS).forEach(([groupKey, group])=>{
-    const row = document.getElementById(group.row);
-    row.innerHTML = group.options.map(o=>
-      `<div class="type-chip ${descChoices[groupKey]===o.id?'active':''}" onclick="pickDescChoice('${groupKey}','${o.id}')">${o.label}</div>`
-    ).join('');
-  });
+function pickPriceMode(id){
+  priceMode = (priceMode === id) ? 'none' : id;
+  renderPriceModeRow();
 }
-function pickDescChoice(groupKey, optId){
-  descChoices[groupKey] = (descChoices[groupKey] === optId) ? '' : optId; // اضغط مرة ثانية لإلغاء الاختيار
-  renderDescGroups();
-  updateHashtagHint(fullQueryText());
-}
-function descChoiceLabels(){
-  const labels = [];
-  Object.entries(DESC_GROUPS).forEach(([groupKey, group])=>{
-    const chosen = descChoices[groupKey];
-    if(chosen){
-      const opt = group.options.find(o=>o.id===chosen);
-      if(opt) labels.push(opt.label);
-    }
-  });
-  return labels;
+function priceModifierText(){
+  if(priceMode === 'free') return '(مجاني OR free OR "تحميل مجاني" OR "free download") -اشتراك -شراء -buy -subscribe -price';
+  if(priceMode === 'paid') return '(اشتراك OR شراء OR buy OR subscribe OR "official store" OR رسمي)';
+  return '';
 }
 
 /* ===================== PLATFORM GRID ===================== */
@@ -475,7 +620,7 @@ function renderCountryDropdown(list){
   list.forEach(c=>{
     const opt = document.createElement('div');
     opt.className = 'country-opt';
-    opt.innerHTML = `<span>${c.flag}</span><span>${c.ar}</span><span style="color:var(--muted-2); font-size:11px; margin-right:auto;">${c.en}</span>`;
+    opt.innerHTML = `<span>${countryFlag(c)}</span><span>${c.ar}</span><span style="color:var(--muted-2); font-size:11px; margin-right:auto;">${c.en}</span>`;
     opt.onclick = ()=> selectCountry(c);
     dd.appendChild(opt);
   });
@@ -487,7 +632,7 @@ function onCountryFocus(){
 function onCountryBlur(){
   setTimeout(()=>{
     hideCountryDropdown();
-    if(selectedCountry) document.getElementById('countryInput').value = `${selectedCountry.flag} ${selectedCountry.ar}`;
+    if(selectedCountry) document.getElementById('countryInput').value = `${countryFlag(selectedCountry)} ${selectedCountry.ar}`;
   }, 200);
 }
 function filterCountries(){
@@ -499,7 +644,7 @@ function filterCountries(){
 function hideCountryDropdown(){document.getElementById('countryDropdown').classList.remove('show');}
 function selectCountry(c){
   selectedCountry = c;
-  document.getElementById('countryInput').value = `${c.flag} ${c.ar}`;
+  document.getElementById('countryInput').value = `${countryFlag(c)} ${c.ar}`;
   document.getElementById('langDisplay').value = langName(c.hl);
   hideCountryDropdown();
   updateTranslateVisibility();
@@ -534,13 +679,11 @@ function updateHashtagHint(text){
   document.getElementById('hashtagHint').textContent = tags.length ? '🏷️ هاشتاقات مقترحة: ' + tags.join('  ') : '';
 }
 
-/* دمج نص البحث الأساسي مع الوصف التفصيلي */
+/* دمج نص البحث الأساسي مع الترجمة إن وُجدت */
 function fullQueryText(){
   const translated = document.getElementById('translatedInput').value.trim();
   const base = translated || document.getElementById('query').value.trim();
-  const chipLabels = descChoiceLabels().join(' ');
-  const freeText = document.getElementById('descText').value.trim();
-  return [base, chipLabels, freeText].filter(Boolean).join(' ');
+  return base;
 }
 
 /* ===================== SUGGESTIONS (محلي بالكامل، لا يعتمد على شبكة خارجية) ===================== */
@@ -689,7 +832,19 @@ function googleUrl(q, type, opts){
   opts = opts || {};
   const hl = selectedCountry?.hl ? selectedCountry.hl.split('-')[0] : '';
   const gl = selectedCountry?.code || '';
-  let paramObj = {q, safe:'off'};
+  let finalQ = q;
+  if(type === 'file'){
+    const ext = document.getElementById('fileExt').value;
+    finalQ = `${q} filetype:${ext}`;
+  }
+  if(type === 'comment'){
+    finalQ = `${q} (تعليق OR رد OR comment OR reply) intext:"${q}"`;
+  }
+  if(type === 'live'){
+    finalQ = `${q} (بث مباشر OR "live now" OR livestream)`;
+  }
+  if(opts.siteDomain) finalQ = `site:${opts.siteDomain} ${finalQ}`;
+  let paramObj = {q: finalQ, safe:'off'};
   if(hl) paramObj.hl = hl;
   if(gl) paramObj.gl = gl;
   let params = new URLSearchParams(paramObj);
@@ -699,12 +854,11 @@ function googleUrl(q, type, opts){
     params.set('tbm','isch');
     tbs.push(...googleImageTbs());
   }
-  if(type === 'video'){
+  if(type === 'video' || type === 'live'){
     params.set('tbm','vid');
     const {dur} = googleVideoExtra();
     if(dur) tbs.push(`dur:${dur}`);
   }
-  if(opts.siteDomain) params.set('q', `site:${opts.siteDomain} ${q}`);
   if(tbs.length) params.set('tbs', tbs.join(','));
   return `https://www.google.com/search?${params.toString()}`;
 }
@@ -720,7 +874,9 @@ function xUrl(q){
 }
 function youtubeUrl(q, type){
   const params = new URLSearchParams({search_query:q});
-  return `https://www.youtube.com/results?${params.toString()}`;
+  let url = `https://www.youtube.com/results?${params.toString()}`;
+  if(type === 'live') url += '&sp=EgJAAQ%253D%253D'; // فلتر "بث مباشر" الرسمي بيوتيوب
+  return url;
 }
 function yandexUrl(q, type){
   const params = new URLSearchParams({text:q, fmode:'none'});
@@ -742,6 +898,13 @@ function runSearch(){
     const {quality} = googleVideoExtra();
     if(quality) query = `${query} ${quality}`;
   }
+  // تحيّز نحو البث المباشر بالنص أيضًا (يفيد المنصات الأصلية متل فيسبوك وX)
+  if(type === 'live'){
+    query = `${query} بث مباشر live`;
+  }
+  // تعديل مجاني/مدفوع
+  const priceMod = priceModifierText();
+  if(priceMod) query = `${query} ${priceMod}`;
 
   updateHashtagHint(query);
 
@@ -751,22 +914,29 @@ function runSearch(){
     <div class="meta-chip">اللغة: <b>${selectedCountry ? langName(selectedCountry.hl) : '—'}</b></div>
     <div class="meta-chip">الفترة: <b>${timeRangeLabel()}</b></div>
     <div class="meta-chip">النوع: <b>${typeLabelAr(type)}</b></div>
+    <div class="meta-chip">الوضع: <b>${priceMode === 'free' ? 'مجاني فقط' : priceMode === 'paid' ? 'مدفوع/رسمي' : 'بدون تفضيل'}</b></div>
     <div class="meta-chip">SafeSearch: <b>متوقف</b></div>
   `;
+
+  // النوعان "تعليق" و"ملف" ما بيدعمهم بحث المنصات الأصلي إطلاقًا — نفرض المرور عبر Google دائمًا لهذين النوعين
+  const forceGoogleTypes = (type === 'comment' || type === 'file');
 
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
   PLATFORMS.filter(p => p.active && selectedPlatforms.has(p.id)).forEach(p=>{
     let url, badge = '';
-    if(p.mode === 'site'){
+    if(p.mode === 'site' || (forceGoogleTypes && p.domain)){
       url = googleUrl(query, type, {siteDomain:p.domain});
+      badge = 'عبر Google';
+    } else if(forceGoogleTypes && p.id !== 'yandex'){
+      url = googleUrl(query, type, {});
       badge = 'عبر Google';
     } else {
       url = p.build(query, type);
     }
     // زر إضافي: بحث Google مقيّد بموقع المنصة نفسها (لكل منصة عدا جوجل ونفسه ياندكس)
     let googleExtraHtml = '';
-    if(p.mode !== 'site' && p.id !== 'google' && p.id !== 'yandex' && p.domain){
+    if(!forceGoogleTypes && p.mode !== 'site' && p.id !== 'google' && p.id !== 'yandex' && p.domain){
       const gUrl = googleUrl(query, type, {siteDomain:p.domain});
       googleExtraHtml = `
         <a class="google-extra" href="${gUrl}" target="_blank" rel="noopener" title="بحث Google داخل ${p.domain}">
@@ -792,29 +962,27 @@ function runSearch(){
   // ملاحظة: لا تفريغ تلقائي بعد البحث — يبقى كل شيء كما هو حتى يضغط المستخدم زر إعادة الضبط يدويًا
 }
 function resetAllInputs(){
-  // نص البحث والوصف
+  // نص البحث
   document.getElementById('query').value = '';
-  document.getElementById('descText').value = '';
-  descOpen = false;
-  descChoices = {people:'', env:'', time:'', color:''};
-  document.getElementById('descBox').classList.remove('show');
-  document.getElementById('descToggleLabel').textContent = '+ إضافة وصف دقيق (مواصفات الصورة/الفيديو)';
 
   // نوع المحتوى
   currentTypeChoice = 'auto';
   effectiveType = 'general';
   renderTypeRow();
+  priceMode = 'none';
+  renderPriceModeRow();
 
-  // فلاتر الصورة/الفيديو
+  // فلاتر الصورة/الفيديو/الملف
   document.getElementById('imgColor').value = '';
   document.getElementById('imgSize').value = '';
   document.getElementById('imgType').value = '';
   document.getElementById('vidDur').value = '';
   document.getElementById('vidQuality').value = '';
+  document.getElementById('fileExt').value = 'apk';
 
   // الدولة الافتراضية
   selectedCountry = WORLDWIDE;
-  document.getElementById('countryInput').value = `${WORLDWIDE.flag} ${WORLDWIDE.ar}`;
+  document.getElementById('countryInput').value = `${countryFlag(WORLDWIDE)} ${WORLDWIDE.ar}`;
   document.getElementById('langDisplay').value = langName(WORLDWIDE.hl);
 
   // الفترة الزمنية
@@ -846,7 +1014,7 @@ function manualReset(){
   document.getElementById('query').focus();
 }
 function typeLabelAr(t){
-  const map = {general:'عام', image:'صورة', video:'فيديو', location:'مكان', person:'حساب/شخص'};
+  const map = {general:'عام', image:'صورة', video:'فيديو', location:'مكان', person:'حساب/شخص', comment:'داخل التعليقات', live:'بث مباشر', file:'ملف'};
   return map[t] || 'عام';
 }
 function timeRangeLabel(){
