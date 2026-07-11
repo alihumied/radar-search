@@ -484,7 +484,7 @@ const TYPE_OPTIONS = [
   {id:'video', label:'🎬 فيديو'},
   {id:'location', label:'📍 مكان'},
   {id:'person', label:'👤 حساب/شخص'},
-  {id:'comment', label:'💬 داخل التعليقات'},
+  {id:'comment', label:'💬 كلمة دقيقة (منشورات/تعليقات)'},
   {id:'live', label:'🔴 بث مباشر'},
   {id:'file', label:'📄 ملف (APK/PDF/...)'},
 ];
@@ -838,7 +838,7 @@ function googleUrl(q, type, opts){
     finalQ = `${q} filetype:${ext}`;
   }
   if(type === 'comment'){
-    finalQ = `${q} (تعليق OR رد OR comment OR reply) intext:"${q}"`;
+    finalQ = `"${q}"`; // مطابقة دقيقة للكلمة نفسها، بدون عمليات منطقية معقّدة كانت تشوّش نتائج جوجل
   }
   if(type === 'live'){
     finalQ = `${q} (بث مباشر OR "live now" OR livestream)`;
@@ -1014,7 +1014,7 @@ function manualReset(){
   document.getElementById('query').focus();
 }
 function typeLabelAr(t){
-  const map = {general:'عام', image:'صورة', video:'فيديو', location:'مكان', person:'حساب/شخص', comment:'داخل التعليقات', live:'بث مباشر', file:'ملف'};
+  const map = {general:'عام', image:'صورة', video:'فيديو', location:'مكان', person:'حساب/شخص', comment:'كلمة دقيقة', live:'بث مباشر', file:'ملف'};
   return map[t] || 'عام';
 }
 function timeRangeLabel(){
