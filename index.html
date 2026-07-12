@@ -918,11 +918,37 @@ function runSearch(){
     <div class="meta-chip">SafeSearch: <b>متوقف</b></div>
   `;
 
-  // النوعان "تعليق" و"ملف" ما بيدعمهم بحث المنصات الأصلي إطلاقًا — نفرض المرور عبر Google دائمًا لهذين النوعين
-  const forceGoogleTypes = (type === 'comment' || type === 'file');
-
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
+
+  if(type === 'file'){
+    // بحث الملفات لازم يكون عالميًا بدون تقييد بموقع منصة — الملفات مش مستضافة عادةً على فيسبوك/تيليجرام/تيك توك
+    const ext = document.getElementById('fileExt').value;
+    const fileEngines = [
+      {name:'جوجل — بحث ملفات', color:'#4285F4', letter:'G', url: googleUrl(query, 'file', {})},
+      {name:'البحث الروسي — بحث ملفات', color:'#FF3333', letter:'Я', url: `https://yandex.com/search/?text=${encodeURIComponent(query + ' filetype:' + ext)}&fmode=none`},
+    ];
+    fileEngines.forEach(eng=>{
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.innerHTML = `
+        <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+          <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+          <div class="result-body">
+            <div class="result-title">${eng.name} <span class="badge">بحث عالمي بدون تقييد موقع</span></div>
+            <div class="result-desc">${eng.url}</div>
+          </div>
+          <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+        </a>`;
+      cards.appendChild(card);
+    });
+    document.getElementById('resultsArea').classList.add('show');
+    document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+    return;
+  }
+
+  // النوع "تعليق/كلمة دقيقة" ما بيدعمه بحث المنصات الأصلي — نفرض المرور عبر Google مقيّد بموقع كل منصة
+  const forceGoogleTypes = (type === 'comment');
   PLATFORMS.filter(p => p.active && selectedPlatforms.has(p.id)).forEach(p=>{
     let url, badge = '';
     if(p.mode === 'site' || (forceGoogleTypes && p.domain)){
