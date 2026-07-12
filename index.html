@@ -246,6 +246,27 @@
     <div class="hint" id="hashtagHint"></div>
   </div>
 
+  <div class="core" style="margin-top:16px;">
+    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 اعثر على المزيد من نفس النوع</h2></div>
+    <div class="hint" style="margin-top:0; margin-bottom:12px;">
+      الصق رابط الفيديو أو الصورة مباشرة (يوتيوب، تيك توك، أو رابط صورة) — بنجيب الصورة المصغّرة تلقائيًا ونبحث عكسيًا عنها. بدون سكرين شوت أو رفع يدوي.
+    </div>
+    <div class="search-row" style="z-index:1;">
+      <div class="search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <input type="text" id="imageUrlInput" placeholder="https://... رابط فيديو يوتيوب/تيك توك أو رابط صورة" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
+      </div>
+      <button class="go-btn" onclick="runImageSearch()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        ابحث
+      </button>
+    </div>
+    <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
+    <div class="results" id="imageResultsArea">
+      <div id="imageResultCards" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
   <div class="section-title"><h2>المنصات</h2></div>
   <div class="platform-grid" id="platformGrid"></div>
 
@@ -535,6 +556,7 @@ function init(){
   selectCountry(WORLDWIDE);
   document.getElementById('query').addEventListener('input', onQueryInput);
   document.getElementById('query').addEventListener('keydown', e=>{ if(e.key === 'Enter') runSearch(); });
+  document.getElementById('imageUrlInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') runImageSearch(); });
   document.addEventListener('click', (e)=>{
     if(!e.target.closest('.search-row')) hideSuggestions();
     if(!e.target.closest('.filter')) hideCountryDropdown();
@@ -915,6 +937,95 @@ function buildFileSearchUrls(q, ext){
     yandex: `https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,
     badge: 'بحث مفتوح بالكلمات (بدون تحديد مواقع)',
   };
+}
+
+/* ===================== REVERSE IMAGE SEARCH (اعثر على المزيد من نفس النوع) ===================== */
+function extractYouTubeId(url){
+  const patterns = [
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for(const p of patterns){
+    const m = url.match(p);
+    if(m) return m[1];
+  }
+  return null;
+}
+
+async function runImageSearch(){
+  const input = document.getElementById('imageUrlInput');
+  const url = input.value.trim();
+  const cards = document.getElementById('imageResultCards');
+  const status = document.getElementById('imageSearchStatus');
+  status.textContent = '';
+  cards.innerHTML = '';
+
+  if(!url || !/^https?:\/\//i.test(url)){
+    status.innerHTML = '⚠️ لازم يكون رابط صحيح يبدأ بـ http:// أو https://';
+    document.getElementById('imageResultsArea').classList.add('show');
+    return;
+  }
+
+  let imageUrl = null;
+  let sourceLabel = '';
+
+  // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
+  const ytId = extractYouTubeId(url);
+  if(ytId){
+    imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+    sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
+  }
+  // 2) تيك توك: محاولة عبر oEmbed الرسمي (قد ينجح أو يفشل حسب القيود)
+  else if(/tiktok\.com/i.test(url)){
+    status.textContent = 'جارٍ محاولة جلب الصورة المصغّرة من تيك توك...';
+    try{
+      const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if(data && data.thumbnail_url){
+        imageUrl = data.thumbnail_url;
+        sourceLabel = 'تم جلب الصورة المصغّرة من تيك توك تلقائيًا ✅';
+      }
+    }catch(err){ /* فشلت المحاولة */ }
+    if(!imageUrl){
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة تيك توك تلقائيًا (قيود من المنصة). الصق رابط صورة مباشرة بدلاً من ذلك، أو جرّب لصق رابط الفيديو من يوتيوب.';
+      document.getElementById('imageResultsArea').classList.add('show');
+      return;
+    }
+  }
+  // 3) غير ذلك: افترض إنه رابط صورة مباشر
+  else{
+    imageUrl = url;
+    sourceLabel = 'بحث عكسي بالرابط المُدخل';
+  }
+
+  status.textContent = sourceLabel;
+  const encoded = encodeURIComponent(imageUrl);
+  const engines = [
+    {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
+    {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
+  ];
+  cards.innerHTML = `
+    <div class="result-card" style="margin-bottom:14px;">
+      <div class="result-body" style="display:flex; align-items:center; gap:12px;">
+        <img src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0;" onerror="this.style.display='none'">
+        <div class="result-desc" style="white-space:normal;">${imageUrl}</div>
+      </div>
+    </div>
+  ` + engines.map(eng => `
+    <div class="result-card">
+      <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+        <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+        <div class="result-body">
+          <div class="result-title">${eng.name} <span class="badge">${eng.badge}</span></div>
+          <div class="result-desc">${eng.url}</div>
+        </div>
+        <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+      </a>
+    </div>`).join('');
+  document.getElementById('imageResultsArea').classList.add('show');
+  document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 /* ===================== RUN SEARCH ===================== */
