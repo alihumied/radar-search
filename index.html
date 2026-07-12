@@ -885,15 +885,15 @@ function yandexUrl(q, type){
   return `https://yandex.com/search/?${params.toString()}`;
 }
 
-/* بعض الامتدادات (APK/EXE) غير مدعومة رسميًا بعملية filetype: في جوجل — نستخدم مواقع تحميل موثوقة ومتخصصة بدلها */
+/* بعض الامتدادات (APK/EXE) غير مدعومة رسميًا بعملية filetype: في جوجل — نستخدم بحثًا مفتوحًا بالكلمات بدل تحديد مواقع معيّنة، حتى يقرر المستخدم بنفسه من أي موقع يحمّل */
 const FILE_TYPE_STRATEGY = {
-  apk:  {mode:'sites', domains:['apkpure.com','apkmirror.com','apkcombo.com','uptodown.com']},
-  exe:  {mode:'sites', domains:['uptodown.com','filehippo.com','softpedia.com']},
   pdf:  {mode:'filetype'},
   doc:  {mode:'filetype'},
   docx: {mode:'filetype'},
   ppt:  {mode:'filetype'},
   xls:  {mode:'filetype'},
+  apk:  {mode:'keyword'},
+  exe:  {mode:'keyword'},
   zip:  {mode:'keyword'},
   rar:  {mode:'keyword'},
   mp3:  {mode:'keyword'},
@@ -908,26 +908,12 @@ function buildFileSearchUrls(q, ext){
       badge: 'بحث ملفات مباشر (مدعوم رسميًا)',
     };
   }
-  if(strategy.mode === 'sites'){
-    const siteQuery = strategy.domains.map(d=>`site:${d}`).join(' OR ');
-    const fullQ = `${q} (${siteQuery})`;
-    const hl = selectedCountry?.hl ? selectedCountry.hl.split('-')[0] : '';
-    const gl = selectedCountry?.code || '';
-    let paramObj = {q: fullQ, safe:'off'};
-    if(hl) paramObj.hl = hl;
-    if(gl) paramObj.gl = gl;
-    return {
-      google: `https://www.google.com/search?${new URLSearchParams(paramObj).toString()}`,
-      yandex: `https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,
-      badge: `مواقع ${ext.toUpperCase()} موثوقة فقط`,
-    };
-  }
-  // keyword mode: لا يوجد دعم رسمي ولا مواقع موحّدة موثوقة — نعتمد كلمات مفتاحية
+  // keyword mode: بحث مفتوح بدون تقييد بمواقع معيّنة — القرار للمستخدم
   const fullQ = `${q} (تحميل ${ext} OR download ${ext} OR "${ext} file")`;
   return {
     google: googleUrl(fullQ, 'general', {}),
     yandex: `https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,
-    badge: 'بحث بالكلمات المفتاحية (بدون دعم رسمي من جوجل)',
+    badge: 'بحث مفتوح بالكلمات (بدون تحديد مواقع)',
   };
 }
 
