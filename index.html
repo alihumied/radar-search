@@ -517,6 +517,7 @@ const PLATFORMS = [
   {id:"youtube", name:"يوتيوب", color:"#FF0000", letter:"▶", mode:'native', build:youtubeUrl, domain:'youtube.com', active:true},
   {id:"yandex", name:"البحث الروسي", color:"#FF3333", letter:"Я", mode:'native', build:yandexUrl, active:true},
   {id:"snapchat", name:"سناب شات", color:"#FFFC00", letter:"👻", mode:'site', domain:'snapchat.com', active:true, dark:true},
+  {id:"instagram", name:"إنستجرام", color:"#E1306C", letter:"📷", mode:'site', domain:'instagram.com', active:true},
   {id:"telegram", name:"تيليجرام (قنوات عامة)", color:"#26A5E4", letter:"✈", mode:'site', domain:'t.me', active:true},
   {id:"whatsapp", name:"واتساب", color:"#25D366", letter:"☎", mode:null, active:false},
 ];
@@ -884,6 +885,52 @@ function yandexUrl(q, type){
   return `https://yandex.com/search/?${params.toString()}`;
 }
 
+/* بعض الامتدادات (APK/EXE) غير مدعومة رسميًا بعملية filetype: في جوجل — نستخدم مواقع تحميل موثوقة ومتخصصة بدلها */
+const FILE_TYPE_STRATEGY = {
+  apk:  {mode:'sites', domains:['apkpure.com','apkmirror.com','apkcombo.com','uptodown.com']},
+  exe:  {mode:'sites', domains:['uptodown.com','filehippo.com','softpedia.com']},
+  pdf:  {mode:'filetype'},
+  doc:  {mode:'filetype'},
+  docx: {mode:'filetype'},
+  ppt:  {mode:'filetype'},
+  xls:  {mode:'filetype'},
+  zip:  {mode:'keyword'},
+  rar:  {mode:'keyword'},
+  mp3:  {mode:'keyword'},
+  epub: {mode:'keyword'},
+};
+function buildFileSearchUrls(q, ext){
+  const strategy = FILE_TYPE_STRATEGY[ext] || {mode:'keyword'};
+  if(strategy.mode === 'filetype'){
+    return {
+      google: googleUrl(q, 'file', {}),
+      yandex: `https://yandex.com/search/?text=${encodeURIComponent(q + ' filetype:' + ext)}&fmode=none`,
+      badge: 'بحث ملفات مباشر (مدعوم رسميًا)',
+    };
+  }
+  if(strategy.mode === 'sites'){
+    const siteQuery = strategy.domains.map(d=>`site:${d}`).join(' OR ');
+    const fullQ = `${q} (${siteQuery})`;
+    const hl = selectedCountry?.hl ? selectedCountry.hl.split('-')[0] : '';
+    const gl = selectedCountry?.code || '';
+    let paramObj = {q: fullQ, safe:'off'};
+    if(hl) paramObj.hl = hl;
+    if(gl) paramObj.gl = gl;
+    return {
+      google: `https://www.google.com/search?${new URLSearchParams(paramObj).toString()}`,
+      yandex: `https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,
+      badge: `مواقع ${ext.toUpperCase()} موثوقة فقط`,
+    };
+  }
+  // keyword mode: لا يوجد دعم رسمي ولا مواقع موحّدة موثوقة — نعتمد كلمات مفتاحية
+  const fullQ = `${q} (تحميل ${ext} OR download ${ext} OR "${ext} file")`;
+  return {
+    google: googleUrl(fullQ, 'general', {}),
+    yandex: `https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,
+    badge: 'بحث بالكلمات المفتاحية (بدون دعم رسمي من جوجل)',
+  };
+}
+
 /* ===================== RUN SEARCH ===================== */
 function runSearch(){
   const baseQuery = document.getElementById('query').value.trim();
@@ -924,9 +971,10 @@ function runSearch(){
   if(type === 'file'){
     // بحث الملفات لازم يكون عالميًا بدون تقييد بموقع منصة — الملفات مش مستضافة عادةً على فيسبوك/تيليجرام/تيك توك
     const ext = document.getElementById('fileExt').value;
+    const strat = buildFileSearchUrls(query, ext);
     const fileEngines = [
-      {name:'جوجل — بحث ملفات', color:'#4285F4', letter:'G', url: googleUrl(query, 'file', {})},
-      {name:'البحث الروسي — بحث ملفات', color:'#FF3333', letter:'Я', url: `https://yandex.com/search/?text=${encodeURIComponent(query + ' filetype:' + ext)}&fmode=none`},
+      {name:'جوجل — بحث ملفات', color:'#4285F4', letter:'G', url: strat.google, badge: strat.badge},
+      {name:'البحث الروسي — بحث ملفات', color:'#FF3333', letter:'Я', url: strat.yandex, badge: strat.badge},
     ];
     fileEngines.forEach(eng=>{
       const card = document.createElement('div');
@@ -935,7 +983,7 @@ function runSearch(){
         <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
           <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
           <div class="result-body">
-            <div class="result-title">${eng.name} <span class="badge">بحث عالمي بدون تقييد موقع</span></div>
+            <div class="result-title">${eng.name} <span class="badge">${eng.badge}</span></div>
             <div class="result-desc">${eng.url}</div>
           </div>
           <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
