@@ -247,10 +247,7 @@
   </div>
 
   <div class="core" style="margin-top:16px;">
-    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 اعثر على المزيد من نفس النوع</h2></div>
-    <div class="hint" style="margin-top:0; margin-bottom:12px;">
-      الصق رابط الفيديو أو الصورة (يوتيوب، تيك توك، فيسبوك، إنستجرام، أو رابط صورة مباشر) — بنجيب الصورة المصغّرة والوصف تلقائيًا ونبحث عن صور وفيديوهات مشابهة. بدون سكرين شوت أو رفع يدوي.
-    </div>
+    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
     <div class="search-row" style="z-index:1;">
       <div class="search-box" style="padding:0 18px; min-height:58px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -267,20 +264,17 @@
     <div class="toggles" style="margin-top:10px;">
       <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
         <span style="font-size:16px;">⚡</span>
-        <span>افتح الرابط المُلصق مباشرة (الأسرع — افتح وسكرين من داخل التطبيق)</span>
+        <span>افتح الرابط مباشرة</span>
       </div>
-    </div>
-    <div class="toggles" style="margin-top:8px;">
       <a href="https://imgbb.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📤</span>
-        <span>ارفع سكرين شوت واحصل على رابط — imgbb</span>
+        <span>imgbb</span>
       </a>
       <a href="https://postimages.org/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📤</span>
-        <span>بديل ثاني — postimages</span>
+        <span>postimages</span>
       </a>
     </div>
-    <div class="hint" style="margin-top:6px;">⚡ الأسرع: الصق رابط الفيديو واضغط "افتح الرابط مباشرة" — بيفتحه بالتطبيق نفسه إذا كان مثبّت عندك، خذ سكرين شوت من جواه مباشرة (أسرع من المتصفح). 🔁 أو لو فشل الاستخراج التلقائي: ارفع السكرين بأحد الموقعين فوق وألصق الرابط بخانة البحث.</div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
       <div id="imageResultCards" style="margin-top:16px;"></div>
@@ -889,7 +883,10 @@ function googleUrl(q, type, opts){
   if(opts.siteDomain) finalQ = `site:${opts.siteDomain} ${finalQ}`;
   let paramObj = {q: finalQ, safe:'off'};
   if(hl) paramObj.hl = hl;
-  if(gl) paramObj.gl = gl;
+  if(gl){
+    paramObj.gl = gl;
+    paramObj.cr = `country${gl.toUpperCase()}`; // تقييد أقوى من gl وحدها لحصر النتائج بدولة واحدة فعليًا
+  }
   let params = new URLSearchParams(paramObj);
   const tbs = [];
   const tp = timeParams(); if(tp) tbs.push(tp);
