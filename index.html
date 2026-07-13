@@ -248,16 +248,18 @@
 
   <div class="core" style="margin-top:16px;">
     <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
+    <div class="hint" style="margin:0 0 10px;color:var(--cyan);font-size:13px;">الخيار 1: الصق رابط YouTube أو TikTok ثم اضغط «ابحث» لجلب الصورة المصغرة والبحث بها مباشرة.</div>
     <div class="search-row" style="z-index:1;">
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        <input type="text" id="imageUrlInput" placeholder="الصق رابط فيديو أو صورة..." style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
+        <input type="text" id="imageUrlInput" placeholder="الصق رابط YouTube أو TikTok أو رابط صورة..." style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
       </div>
       <button class="go-btn" onclick="runImageSearch()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         ابحث
       </button>
     </div>
+    <div class="hint" style="margin-top:14px;color:var(--cyan);font-size:13px;">الخيار 2: ارفع صورة أو لقطة شاشة من الجهاز.</div>
     <div class="rev-upload-row">
       <label class="rev-upload" for="revFile">📷 رفع لقطة شاشة أو صورة من الجهاز<input id="revFile" type="file" accept="image/*" hidden></label>
       <button class="rev-mini" type="button" onclick="revClearAll()">تنظيف</button>
@@ -281,7 +283,7 @@
     <div id="resultCards"></div>
   </div>
 
-  <footer>RADAR — بحث موجّه نحو الروابط العامة للمنصات · لا يقوم بأي تجاوز لخصوصية أو اختراق حسابات</footer>
+  <footer>RADAR v3.5 — رابط YouTube/TikTok أو رفع صورة · بحث موجّه نحو الروابط العامة للمنصات</footer>
 </div>
 
 <script>
