@@ -249,35 +249,14 @@
   <div class="core" style="margin-top:16px;">
     <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
     <div class="search-row" style="z-index:1;">
-      <div class="search-box" style="padding:0 18px; min-height:58px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="imageUrlInput" placeholder="https://...  الصق رابط الفيديو أو الصورة هنا" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
-        <button onclick="clearImageInput()" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
+      <div class="search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <input type="text" id="imageUrlInput" placeholder="https://... رابط فيديو يوتيوب/تيك توك أو رابط صورة" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
       </div>
       <button class="go-btn" onclick="runImageSearch()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         ابحث
       </button>
-    </div>
-    <div class="toggles" style="margin-top:10px;">
-      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
-        <span style="font-size:16px;">⚡</span>
-        <span>افتح الرابط مباشرة</span>
-      </div>
-      <a href="https://imgbb.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📤</span>
-        <span>imgbb</span>
-      </a>
-      <a href="https://postimages.org/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📤</span>
-        <span>postimages</span>
-      </a>
-      <a href="https://imgur.com/upload" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📤</span>
-        <span>imgur</span>
-      </a>
     </div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
@@ -971,66 +950,6 @@ function extractYouTubeId(url){
   }
   return null;
 }
-function clearImageInput(){
-  document.getElementById('imageUrlInput').value = '';
-  document.getElementById('imageSearchStatus').textContent = '';
-  document.getElementById('imageResultsArea').classList.remove('show');
-  document.getElementById('imageUrlInput').focus();
-}
-function openPastedLinkDirectly(){
-  const url = document.getElementById('imageUrlInput').value.trim();
-  if(!url || !/^https?:\/\//i.test(url)){
-    document.getElementById('imageSearchStatus').innerHTML = '⚠️ الصق رابط الفيديو أولاً بالخانة فوق';
-    return;
-  }
-  window.open(url, '_blank', 'noopener');
-}
-
-/* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
-async function fetchOgTags(pageUrl){
-  const proxies = [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  ];
-  for(const buildProxyUrl of proxies){
-    try{
-      const res = await fetch(buildProxyUrl(pageUrl));
-      if(!res.ok) continue;
-      const html = await res.text();
-      if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
-      const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-      const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-      const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-      if(imgMatch){
-        return {
-          image: imgMatch[1],
-          title: titleMatch ? titleMatch[1] : null,
-          desc: descMatch ? descMatch[1] : null,
-        };
-      }
-    }catch(err){ /* جرّب الوسيط التالي */ }
-  }
-  return {image:null, title:null, desc:null};
-}
-
-/* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
-function openOriginalLinkHtml(url){
-  return `
-    <div class="result-card">
-      <a class="main-link" href="${url}" target="_blank" rel="noopener">
-        <div class="result-icon" style="background:var(--blue)">↗</div>
-        <div class="result-body">
-          <div class="result-title">افتح الرابط الأصلي بالمتصفح</div>
-          <div class="result-desc">${url}</div>
-        </div>
-        <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
-      </a>
-    </div>`;
-}
 
 async function runImageSearch(){
   const input = document.getElementById('imageUrlInput');
@@ -1047,7 +966,6 @@ async function runImageSearch(){
   }
 
   let imageUrl = null;
-  let captionText = '';
   let sourceLabel = '';
 
   // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
@@ -1056,44 +974,24 @@ async function runImageSearch(){
     imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
     sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
   }
-  // 2) تيك توك: عبر oEmbed الرسمي (يعطي صورة + عنوان الفيديو)
+  // 2) تيك توك: محاولة عبر oEmbed الرسمي (قد ينجح أو يفشل حسب القيود)
   else if(/tiktok\.com/i.test(url)){
-    status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
+    status.textContent = 'جارٍ محاولة جلب الصورة المصغّرة من تيك توك...';
     try{
       const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
       const data = await res.json();
       if(data && data.thumbnail_url){
         imageUrl = data.thumbnail_url;
-        captionText = data.title || '';
-        sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
+        sourceLabel = 'تم جلب الصورة المصغّرة من تيك توك تلقائيًا ✅';
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
-      cards.innerHTML = openOriginalLinkHtml(url);
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة تيك توك تلقائيًا (قيود من المنصة). الصق رابط صورة مباشرة بدلاً من ذلك، أو جرّب لصق رابط الفيديو من يوتيوب.';
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
-  // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
-  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
-    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
-    try{
-      const og = await fetchOgTags(url);
-      if(og.image){
-        imageUrl = og.image;
-        captionText = og.title || og.desc || '';
-        sourceLabel = 'تم جلب الصورة والوصف تلقائيًا ✅';
-      }
-    }catch(err){ /* فشلت المحاولة */ }
-    if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات هذا الرابط تلقائيًا (المحتوى خاص أو يتطلب تسجيل دخول، أو الوسطاء المتاحون مزدحمون حاليًا). افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
-      cards.innerHTML = openOriginalLinkHtml(url);
-      document.getElementById('imageResultsArea').classList.add('show');
-      return;
-    }
-  }
-  // 4) غير ذلك: افترض إنه رابط صورة مباشر
+  // 3) غير ذلك: افترض إنه رابط صورة مباشر
   else{
     imageUrl = url;
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
@@ -1101,39 +999,10 @@ async function runImageSearch(){
 
   status.textContent = sourceLabel;
   const encoded = encodeURIComponent(imageUrl);
-
-  // محركات البحث العكسي بالصورة (تجيب صورًا ومصادر مشابهة)
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
     {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
-    {name:'Bing — بحث عكسي بالصورة', color:'#008373', letter:'B', url:`https://www.bing.com/images/search?q=imgurl:${encoded}&view=detailv2&iss=sbi&form=SBIVSP`, badge:'قوي بالمصادر التجارية والمنتجات'},
-    {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
-
-  let videoEnginesHtml = '';
-  if(captionText){
-    // بحث فيديوهات فعلي (مو صور بس) باستخدام وصف/عنوان الفيديو المستخرَج
-    const vq = captionText.trim();
-    const videoEngines = [
-      {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url: youtubeUrl(vq, 'general')},
-      {name:'تيك توك — فيديوهات مشابهة', color:'#010101', letter:'♪', url: googleUrl(vq, 'video', {siteDomain:'tiktok.com'})},
-      {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url: googleUrl(vq, 'video', {})},
-    ];
-    videoEnginesHtml = `
-      <div class="hint" style="margin:16px 0 8px;">🎬 بحث فيديوهات فعلي (مو صور فقط) باستخدام الوصف المستخرَج: <b style="color:var(--cyan);">${vq}</b></div>
-    ` + videoEngines.map(eng => `
-      <div class="result-card">
-        <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
-          <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
-          <div class="result-body">
-            <div class="result-title">${eng.name}</div>
-            <div class="result-desc">${eng.url}</div>
-          </div>
-          <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
-        </a>
-      </div>`).join('');
-  }
-
   cards.innerHTML = `
     <div class="result-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex; align-items:center; gap:12px;">
@@ -1151,7 +1020,7 @@ async function runImageSearch(){
         </div>
         <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
       </a>
-    </div>`).join('') + videoEnginesHtml;
+    </div>`).join('');
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
