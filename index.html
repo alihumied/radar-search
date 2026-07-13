@@ -253,7 +253,7 @@
     </div>
     <div class="search-row" style="z-index:1;">
       <div class="search-box" style="padding:0 18px; min-height:58px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="imageUrlInput" placeholder="https://...  الصق رابط الفيديو أو الصورة هنا" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
         <button onclick="clearImageInput()" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -265,6 +265,12 @@
       </button>
     </div>
     <div class="toggles" style="margin-top:10px;">
+      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
+        <span style="font-size:16px;">⚡</span>
+        <span>افتح الرابط المُلصق مباشرة (الأسرع — افتح وسكرين من داخل التطبيق)</span>
+      </div>
+    </div>
+    <div class="toggles" style="margin-top:8px;">
       <a href="https://imgbb.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📤</span>
         <span>ارفع سكرين شوت واحصل على رابط — imgbb</span>
@@ -274,7 +280,7 @@
         <span>بديل ثاني — postimages</span>
       </a>
     </div>
-    <div class="hint" style="margin-top:6px;">🔁 احتياطي لو فشل الاستخراج التلقائي: خذ سكرين شوت → ارفعه بأحد الموقعين فوق (بدون تسجيل) → انسخ الرابط المباشر يلي يعطيك ياه → الصقه بخانة البحث فوق.</div>
+    <div class="hint" style="margin-top:6px;">⚡ الأسرع: الصق رابط الفيديو واضغط "افتح الرابط مباشرة" — بيفتحه بالتطبيق نفسه إذا كان مثبّت عندك، خذ سكرين شوت من جواه مباشرة (أسرع من المتصفح). 🔁 أو لو فشل الاستخراج التلقائي: ارفع السكرين بأحد الموقعين فوق وألصق الرابط بخانة البحث.</div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
       <div id="imageResultCards" style="margin-top:16px;"></div>
@@ -973,6 +979,14 @@ function clearImageInput(){
   document.getElementById('imageResultsArea').classList.remove('show');
   document.getElementById('imageUrlInput').focus();
 }
+function openPastedLinkDirectly(){
+  const url = document.getElementById('imageUrlInput').value.trim();
+  if(!url || !/^https?:\/\//i.test(url)){
+    document.getElementById('imageSearchStatus').innerHTML = '⚠️ الصق رابط الفيديو أولاً بالخانة فوق';
+    return;
+  }
+  window.open(url, '_blank', 'noopener');
+}
 
 /* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
 async function fetchOgTags(pageUrl){
@@ -1063,9 +1077,9 @@ async function runImageSearch(){
       return;
     }
   }
-  // 3) فيسبوك / إنستجرام: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
-  else if(/facebook\.com|fb\.watch|instagram\.com/i.test(url)){
-    status.textContent = 'جارٍ محاولة جلب بيانات الفيديو... قد تأخذ بضع ثوانٍ';
+  // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
+  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
+    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
     try{
       const og = await fetchOgTags(url);
       if(og.image){
