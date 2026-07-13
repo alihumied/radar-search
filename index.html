@@ -258,13 +258,9 @@
         ابحث
       </button>
     </div>
-    <div class="reverse-tools-row">
-      <label class="reverse-upload-btn" for="reverseImageFile">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        رفع صورة أو لقطة شاشة من الجهاز
-        <input type="file" id="reverseImageFile" accept="image/*" hidden>
-      </label>
-      <span class="hint" id="reverseDetected" style="margin:0"></span>
+    <div class="rev-upload-row">
+      <label class="rev-upload" for="revFile">📷 رفع لقطة شاشة أو صورة من الجهاز<input id="revFile" type="file" accept="image/*" hidden></label>
+      <button class="rev-mini" type="button" onclick="revClearAll()">تنظيف</button>
     </div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
@@ -1203,41 +1199,32 @@ init();
 </script>
 
 <style>
-/* هذا القسم فقط - نفس قياس خانة البحث العام */
 #imageUrlInput{font-family:'Tajawal',sans-serif!important;font-size:16px!important;padding:16px 10px!important;direction:ltr!important;text-align:left!important}
-.reverse-tools-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px}
-.reverse-upload-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--bg-0);color:var(--text);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
-.reverse-upload-btn:hover{border-color:var(--blue);background:rgba(46,107,255,.1)}
-.reverse-methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin-top:12px}
-.reverse-method{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:12px;text-decoration:none;display:flex;align-items:center;gap:10px;font-family:'Tajawal',sans-serif;text-align:right;cursor:pointer}
-.reverse-method:hover{border-color:var(--blue)}
-.reverse-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;flex-shrink:0}
-.reverse-title{font-size:13px;font-weight:700}.reverse-sub{font-size:10px;color:var(--muted);display:block;margin-top:2px}
-.reverse-preview{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:12px}
-.reverse-preview img{width:76px;height:76px;object-fit:cover;border-radius:9px;background:#000}.reverse-preview-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px 'JetBrains Mono',monospace;color:var(--muted);direction:ltr;text-align:left}
-@media(max-width:640px){.reverse-upload-btn{width:100%}.reverse-methods{grid-template-columns:1fr}}
+.rev-upload-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.rev-upload,.rev-mini{border:1px solid var(--line);background:var(--bg-0);color:var(--text);border-radius:10px;padding:10px 14px;font:700 13px 'Tajawal',sans-serif;cursor:pointer}
+.rev-upload:hover,.rev-mini:hover{border-color:var(--blue)}
+.rev-preview{margin-top:13px;border:1px solid var(--line);background:var(--bg-0);border-radius:13px;padding:10px}
+.rev-preview img{display:block;width:100%;max-height:440px;object-fit:contain;border-radius:9px;background:#111}
+.rev-file-name{font:11px 'JetBrains Mono',monospace;color:var(--muted);direction:ltr;text-align:left;margin-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin-top:12px}
+.rev-card{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:12px;text-decoration:none;display:flex;align-items:center;gap:10px;font-family:'Tajawal',sans-serif;text-align:right;cursor:pointer}
+.rev-card:hover{border-color:var(--blue)}
+.rev-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;flex-shrink:0}
+.rev-title{font-size:13px;font-weight:700}.rev-sub{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.rev-warning{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.8}
+@media(max-width:640px){.rev-upload{flex:1;text-align:center}.rev-grid{grid-template-columns:1fr}}
 </style>
 <script>
-(function(){
- const input=document.getElementById('imageUrlInput'),file=document.getElementById('reverseImageFile');
- if(!input||!file)return;
- input.addEventListener('input',()=>{document.getElementById('reverseDetected').textContent=reverseProvider(input.value.trim()).label});
- file.addEventListener('change',reverseFilePicked);
-})();
-function reverseProvider(url){let h='';try{h=new URL(url).hostname.toLowerCase()}catch(e){}
- if(h==='youtu.be'||h.endsWith('.youtube.com')||h==='youtube.com')return{id:'youtube',label:'▶️ YouTube'};
- if(h==='tiktok.com'||h.endsWith('.tiktok.com'))return{id:'tiktok',label:'♪ TikTok'};
- if(h==='facebook.com'||h.endsWith('.facebook.com')||h==='fb.watch')return{id:'facebook',label:'f Facebook'};
- if(h==='instagram.com'||h.endsWith('.instagram.com'))return{id:'instagram',label:'📷 Instagram'};
- if(h==='x.com'||h.endsWith('.x.com')||h==='twitter.com'||h.endsWith('.twitter.com'))return{id:'x',label:'𝕏 X'};
- if(/\.(png|jpe?g|webp|gif)([?#].*)?$/i.test(url))return{id:'image',label:'🖼️ صورة مباشرة'};
- if(/^https?:\/\//i.test(url))return{id:'other',label:'🔗 رابط عام'};return{id:'',label:''}}
-function rEsc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function rCard(t,sub,color,letter,url){return '<a class="reverse-method" href="'+rEsc(url)+'" target="_blank" rel="noopener noreferrer"><span class="reverse-icon" style="background:'+color+'">'+letter+'</span><span><span class="reverse-title">'+t+'</span><span class="reverse-sub">'+sub+'</span></span></a>'}
-async function rJson(url){const c=new AbortController(),tm=setTimeout(()=>c.abort(),9000);try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(tm)}}
-async function rThumb(url,p){if(p==='youtube'){const id=extractYouTubeId(url);if(id)return'https://img.youtube.com/vi/'+id+'/hqdefault.jpg'}if(p==='tiktok'){try{const d=await rJson('https://www.tiktok.com/oembed?url='+encodeURIComponent(url));if(d&&d.thumbnail_url)return d.thumbnail_url}catch(e){}}try{const d=await rJson('https://noembed.com/embed?url='+encodeURIComponent(url));if(d&&d.thumbnail_url)return d.thumbnail_url}catch(e){}try{const d=await rJson('https://api.microlink.io?url='+encodeURIComponent(url));if(d&&d.data&&d.data.image&&d.data.image.url)return d.data.image.url}catch(e){}if(p==='image')return url;return''}
-runImageSearch=async function(){const url=document.getElementById('imageUrlInput').value.trim(),p=reverseProvider(url),status=document.getElementById('imageSearchStatus'),cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea');cards.innerHTML='';area.classList.add('show');document.getElementById('reverseDetected').textContent=p.label;if(!p.id){status.textContent='⚠️ ألصق رابطًا كاملًا صحيحًا أو اضغط رفع صورة.';return}status.textContent='جارٍ تحليل '+p.label+'...';const image=await rThumb(url,p.id),exact='"'+url+'"';let h='';if(image)h+='<div class="reverse-preview"><img src="'+rEsc(image)+'" onerror="this.style.display=\'none\'"><div class="reverse-preview-text">'+rEsc(image)+'</div></div>';h+='<div class="reverse-methods">';if(p.id!=='image')h+=rCard('فتح الرابط الأصلي','فتح الفيديو في المنصة','#2e6bff','↗',url)+rCard('Yandex Video','البحث عن الفيديو','#ff3333','Я','https://yandex.com/video/search?text='+encodeURIComponent(exact)+'&family=no')+rCard('Google Video','البحث عن الفيديو والنسخ','#4285f4','G','https://www.google.com/search?tbm=vid&safe=off&q='+encodeURIComponent(exact));if(image)h+=rCard('Google Lens','البحث بالصورة المصغرة','#34a853','G','https://lens.google.com/uploadbyurl?url='+encodeURIComponent(image)+'&safe=off')+rCard('Yandex Images','البحث العكسي بالصورة','#ff3333','Я','https://yandex.com/images/search?rpt=imageview&url='+encodeURIComponent(image)+'&family=no');h+='</div>';cards.innerHTML=h;status.textContent=image?'✅ تم اكتشاف '+p.label+' والصورة المصغرة. اختر طريقة البحث.':(p.id==='facebook'?'تعذّر جلب صورة Facebook؛ افتح الفيديو أو ارفع لقطة شاشة من الزر الموجود أعلى النتائج.':'لم تتوفر صورة مصغرة؛ يمكنك فتح الرابط أو بحث الفيديو أو رفع لقطة شاشة.');area.scrollIntoView({behavior:'smooth',block:'start'})}
-function reverseFilePicked(e){const f=e.target.files&&e.target.files[0];if(!f)return;if(!f.type.startsWith('image/'))return;const cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea'),status=document.getElementById('imageSearchStatus'),o=URL.createObjectURL(f);area.classList.add('show');document.getElementById('reverseDetected').textContent='🖼️ صورة مرفوعة';cards.innerHTML='<div class="reverse-preview"><img src="'+o+'"><div class="reverse-preview-text">'+rEsc(f.name)+'</div></div><div class="reverse-methods">'+rCard('Google Lens','افتح ثم اختر الصورة الأخيرة','#4285f4','G','https://lens.google.com/')+rCard('Yandex Images','افتح ثم اختر الصورة الأخيرة','#ff3333','Я','https://yandex.com/images/')+'</div>';status.textContent='✅ تم رفع لقطة الشاشة إلى RADAR. اختر محرك البحث ثم اختر الصورة الأخيرة من الجهاز.';area.scrollIntoView({behavior:'smooth',block:'start'})}
+(function(){const f=document.getElementById('revFile');if(f)f.addEventListener('change',revFilePicked)})();
+function revEsc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function revProvider(url){let h='';try{h=new URL(url).hostname.toLowerCase()}catch(e){}
+ if(h==='youtu.be'||h==='youtube.com'||h.endsWith('.youtube.com'))return'youtube';if(h==='tiktok.com'||h.endsWith('.tiktok.com'))return'tiktok';if(h==='facebook.com'||h.endsWith('.facebook.com')||h==='fb.watch')return'facebook';if(h==='instagram.com'||h.endsWith('.instagram.com'))return'instagram';if(h==='x.com'||h.endsWith('.x.com')||h==='twitter.com'||h.endsWith('.twitter.com'))return'x';if(/\.(png|jpe?g|webp|gif)([?#].*)?$/i.test(url))return'image';if(/^https?:\/\//i.test(url))return'other';return''}
+function revCard(title,sub,color,letter,url){return '<a class="rev-card" href="'+revEsc(url)+'" target="_blank" rel="noopener noreferrer"><span class="rev-icon" style="background:'+color+'">'+letter+'</span><span><span class="rev-title">'+title+'</span><span class="rev-sub">'+sub+'</span></span></a>'}
+async function revJson(url){const c=new AbortController(),t=setTimeout(()=>c.abort(),8500);try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw 0;return await r.json()}finally{clearTimeout(t)}}
+async function revThumb(url,p){if(p==='youtube'){const id=extractYouTubeId(url);if(id)return'https://img.youtube.com/vi/'+id+'/hqdefault.jpg'}if(p==='tiktok'){try{const d=await revJson('https://www.tiktok.com/oembed?url='+encodeURIComponent(url));if(d&&d.thumbnail_url)return d.thumbnail_url}catch(e){}}try{const d=await revJson('https://noembed.com/embed?url='+encodeURIComponent(url));if(d&&d.thumbnail_url)return d.thumbnail_url}catch(e){}try{const d=await revJson('https://api.microlink.io?url='+encodeURIComponent(url));if(d&&d.data&&d.data.image&&d.data.image.url)return d.data.image.url}catch(e){}if(p==='image')return url;return''}
+runImageSearch=async function(){const url=document.getElementById('imageUrlInput').value.trim(),p=revProvider(url),status=document.getElementById('imageSearchStatus'),cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea');cards.innerHTML='';area.classList.add('show');if(!p){status.textContent='⚠️ ألصق رابط فيديو كاملًا أو ارفع لقطة شاشة.';return}status.textContent='جارٍ تحليل الرابط...';const img=await revThumb(url,p),exact='"'+url+'"';let h='';if(img)h='<div class="rev-preview"><img src="'+revEsc(img)+'" alt="معاينة الصورة" onerror="this.parentElement.style.display=\'none\'"><div class="rev-file-name">'+revEsc(img)+'</div></div>';h+='<div class="rev-grid">';if(p!=='image')h+=revCard('فتح الرابط الأصلي','فتح TikTok أو المنصة','#2e6bff','↗',url)+revCard('Yandex Video','البحث عن الفيديو','#ff3333','Я','https://yandex.com/video/search?text='+encodeURIComponent(exact)+'&family=no')+revCard('Google Video','البحث عن نسخ الفيديو','#4285f4','G','https://www.google.com/search?tbm=vid&safe=off&q='+encodeURIComponent(exact));if(img)h+=revCard('Google Lens','بحث بالصورة المصغرة','#34a853','G','https://lens.google.com/uploadbyurl?url='+encodeURIComponent(img))+revCard('Yandex Images','بحث عكسي بالصورة','#ff3333','Я','https://yandex.com/images/search?rpt=imageview&url='+encodeURIComponent(img));h+='</div>';cards.innerHTML=h;status.textContent=img?'✅ تم تجهيز الصورة وطرق البحث.':'لم تتوفر صورة مصغرة. افتح الرابط أو ارفع لقطة شاشة.';area.scrollIntoView({behavior:'smooth',block:'start'})}
+function revFilePicked(e){const f=e.target.files&&e.target.files[0];if(!f||!f.type.startsWith('image/'))return;if(window.revBlob)URL.revokeObjectURL(window.revBlob);window.revBlob=URL.createObjectURL(f);const cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea'),status=document.getElementById('imageSearchStatus');area.classList.add('show');cards.innerHTML='<div class="rev-preview"><img src="'+window.revBlob+'" alt="لقطة الشاشة"><div class="rev-file-name">'+revEsc(f.name)+'</div></div><div class="rev-grid">'+revCard('PimEyes','بحث بالوجه — استخدم صورتك أو صورة بموافقة صاحبها','#6f42c1','P','https://pimeyes.com/en')+revCard('Google Lens','اختر الصورة نفسها بعد فتح الموقع','#4285f4','G','https://lens.google.com/')+revCard('Yandex Images','اختر الصورة نفسها بعد فتح الموقع','#ff3333','Я','https://yandex.com/images/')+'</div><div class="rev-warning">لأسباب حماية المتصفح، لا يستطيع RADAR إرسال ملف جهازك تلقائيًا إلى موقع آخر. اضغط المحرك ثم اختر لقطة الشاشة نفسها من معرض الصور. استخدم PimEyes فقط للبحث عن صورتك الشخصية أو بموافقة واضحة.</div>';status.textContent='✅ ظهرت لقطة الشاشة داخل RADAR. اختر PimEyes أو Lens أو Yandex.';area.scrollIntoView({behavior:'smooth',block:'start'})}
+function revClearAll(){document.getElementById('imageUrlInput').value='';document.getElementById('revFile').value='';document.getElementById('imageSearchStatus').textContent='';document.getElementById('imageResultCards').innerHTML='';document.getElementById('imageResultsArea').classList.remove('show');if(window.revBlob){URL.revokeObjectURL(window.revBlob);window.revBlob=''}document.getElementById('imageUrlInput').focus()}
 </script>
 
 </body>
