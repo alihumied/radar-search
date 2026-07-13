@@ -1196,5 +1196,177 @@ function timeRangeLabel(){
 
 init();
 </script>
+
+<!-- RADAR user-requested improvements: image/video URL field only -->
+<style>
+  /* تكبير خانة رابط الصورة/الفيديو فقط */
+  #imageUrlInput{
+    min-height:68px;
+    font-size:15px !important;
+    padding:18px 14px !important;
+  }
+  #imageUrlInput.closest-fallback{min-height:68px;}
+  #imageUrlInputClear{
+    background:var(--bg-0);
+    border:1px solid var(--line);
+    color:var(--muted);
+    font-family:'Tajawal',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    min-width:54px;
+    padding:0 16px;
+    border-radius:14px;
+    cursor:pointer;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    transition:.15s;
+  }
+  #imageUrlInputClear.show{display:flex;}
+  #imageUrlInputClear:hover{border-color:var(--blue);color:#fff;background:rgba(46,107,255,.12);}
+  @media(max-width:640px){
+    #imageUrlInput{min-height:64px;font-size:14px !important;}
+    #imageUrlInputClear{width:100%;min-height:48px;}
+  }
+</style>
+<script>
+(function(){
+  'use strict';
+
+  /* زر تنظيف خاص بخانة رابط الصورة/الفيديو فقط */
+  const imageInput = document.getElementById('imageUrlInput');
+  if(imageInput){
+    const imageSearchBox = imageInput.closest('.search-box');
+    if(imageSearchBox) imageSearchBox.style.minHeight = '68px';
+    const imageRow = imageInput.closest('.search-row');
+    const imageGoButton = imageRow ? imageRow.querySelector('.go-btn') : null;
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.id = 'imageUrlInputClear';
+    clearButton.title = 'تنظيف خانة الرابط فقط';
+    clearButton.setAttribute('aria-label','تنظيف خانة رابط الصورة أو الفيديو');
+    clearButton.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg><span>تنظيف</span>';
+    if(imageRow) imageRow.appendChild(clearButton);
+
+    const syncClearButton = function(){
+      clearButton.classList.toggle('show', Boolean(imageInput.value.trim()));
+    };
+    imageInput.addEventListener('input', syncClearButton);
+    clearButton.addEventListener('click', function(){
+      imageInput.value = '';
+      document.getElementById('imageSearchStatus').textContent = '';
+      document.getElementById('imageResultCards').innerHTML = '';
+      document.getElementById('imageResultsArea').classList.remove('show');
+      syncClearButton();
+      imageInput.focus();
+    });
+    syncClearButton();
+  }
+
+  /* إصلاح Yandex: الفيديو والبث يذهبان إلى تبويب الفيديو، لا الصور */
+  yandexUrl = function(q, type){
+    const params = new URLSearchParams({text:q, family:'no'});
+    if(type === 'image') return `https://yandex.com/images/search?${params.toString()}`;
+    if(type === 'video' || type === 'live') return `https://yandex.com/video/search?${params.toString()}`;
+    return `https://yandex.com/search/?${params.toString()}`;
+  };
+  const yandexItem = PLATFORMS.find(function(p){return p.id === 'yandex';});
+  if(yandexItem) yandexItem.build = yandexUrl;
+
+  function platformLabel(url){
+    if(/youtu\.be|youtube\.com/i.test(url)) return 'يوتيوب';
+    if(/tiktok\.com/i.test(url)) return 'تيك توك';
+    if(/instagram\.com/i.test(url)) return 'إنستجرام';
+    if(/facebook\.com|fb\.watch/i.test(url)) return 'فيسبوك';
+    if(/(?:^|\.)x\.com|twitter\.com/i.test(url)) return 'X';
+    if(/vimeo\.com/i.test(url)) return 'Vimeo';
+    return 'الرابط';
+  }
+
+  async function getJson(endpoint, timeoutMs){
+    const controller = new AbortController();
+    const timer = setTimeout(function(){controller.abort();}, timeoutMs || 9000);
+    try{
+      const response = await fetch(endpoint, {signal:controller.signal});
+      if(!response.ok) throw new Error('HTTP '+response.status);
+      return await response.json();
+    }finally{clearTimeout(timer);}
+  }
+
+  async function thumbnailFromLink(url){
+    const youtubeId = extractYouTubeId(url);
+    if(youtubeId) return {url:`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`, source:'يوتيوب'};
+
+    if(/tiktok\.com/i.test(url)){
+      try{
+        const d = await getJson(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+        if(d && d.thumbnail_url) return {url:d.thumbnail_url, source:'تيك توك'};
+      }catch(e){}
+    }
+
+    /* محاولة عامة تدعم عددًا من روابط الفيديو العامة */
+    try{
+      const d = await getJson(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+      if(d && d.thumbnail_url) return {url:d.thumbnail_url, source:platformLabel(url)};
+    }catch(e){}
+
+    /* محاولة احتياطية لفيسبوك وإنستجرام وX وغيرهما عندما تسمح المنصة بالمعاينة العامة */
+    try{
+      const d = await getJson(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+      const candidate = d && d.data && (d.data.image && d.data.image.url || d.data.logo && d.data.logo.url);
+      if(candidate) return {url:candidate, source:platformLabel(url)};
+    }catch(e){}
+
+    if(/\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/i.test(url)) return {url:url, source:'صورة مباشرة'};
+    return null;
+  }
+
+  function safeText(value){
+    return String(value).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});
+  }
+
+  function makeCard(name,color,letter,url,badge){
+    return `<div class="result-card"><a class="main-link" href="${safeText(url)}" target="_blank" rel="noopener noreferrer"><div class="result-icon" style="background:${color}">${letter}</div><div class="result-body"><div class="result-title">${name} <span class="badge">${badge}</span></div><div class="result-desc">${safeText(url)}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>`;
+  }
+
+  /* بحث الرابط المطوّر: لا يحتاج سكرين شوت */
+  runImageSearch = async function(){
+    const input = document.getElementById('imageUrlInput');
+    const url = input.value.trim();
+    const cards = document.getElementById('imageResultCards');
+    const status = document.getElementById('imageSearchStatus');
+    const area = document.getElementById('imageResultsArea');
+    cards.innerHTML = '';
+    status.textContent = '';
+    area.classList.add('show');
+
+    if(!/^https?:\/\//i.test(url)){
+      status.textContent = '⚠️ أدخل رابطًا صحيحًا يبدأ بـ http:// أو https://';
+      return;
+    }
+
+    status.textContent = `جارٍ فحص رابط ${platformLabel(url)} وجلب الصورة المصغّرة...`;
+    const found = await thumbnailFromLink(url);
+
+    if(found){
+      const encodedImage = encodeURIComponent(found.url);
+      status.textContent = `تم جلب صورة ${found.source} المصغّرة تلقائيًا ✅`;
+      cards.innerHTML = `<div class="result-card" style="margin-bottom:14px"><div class="result-body" style="display:flex;align-items:center;gap:12px"><img src="${safeText(found.url)}" alt="الصورة المصغرة" style="width:78px;height:78px;object-fit:cover;border-radius:10px;flex-shrink:0" onerror="this.style.display='none'"><div class="result-desc" style="white-space:normal;word-break:break-all">${safeText(found.url)}</div></div></div>`
+        + makeCard('ياندكس — إيجاد الصور والفيديوهات المطابقة','#FF3333','Я',`https://yandex.com/images/search?rpt=imageview&url=${encodedImage}&family=no`,'بحث عكسي بالصورة')
+        + makeCard('Google Lens — المصدر والمحتوى المشابه','#4285F4','G',`https://lens.google.com/uploadbyurl?url=${encodedImage}&safe=off`,'بحث عكسي بالصورة');
+    }else{
+      /* بعض المنصات تمنع جلب الصورة من المتصفح؛ نبحث عن رابط الفيديو نفسه بدل طلب سكرين شوت */
+      const exact = `"${url}"`;
+      status.textContent = 'المنصة منعت جلب الصورة المصغّرة؛ تم تجهيز بحث مباشر عن رابط الفيديو نفسه، ولا تحتاج إلى سكرين شوت.';
+      cards.innerHTML = makeCard('ياندكس فيديو — البحث عن نفس الرابط','#FF3333','Я',`https://yandex.com/video/search?text=${encodeURIComponent(exact)}&family=no`,'بحث فيديو')
+        + makeCard('جوجل فيديو — البحث عن نفس الرابط','#4285F4','G',`https://www.google.com/search?tbm=vid&safe=off&q=${encodeURIComponent(exact)}`,'بحث فيديو')
+        + makeCard('جوجل — الصفحات التي نشرت الرابط','#34A853','G',`https://www.google.com/search?safe=off&q=${encodeURIComponent(exact)}`,'تتبّع الرابط');
+    }
+    area.scrollIntoView({behavior:'smooth',block:'start'});
+  };
+})();
+</script>
+
 </body>
 </html>
