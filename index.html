@@ -1106,6 +1106,8 @@ async function runImageSearch(){
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
     {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
+    {name:'Bing — بحث عكسي بالصورة', color:'#008373', letter:'B', url:`https://www.bing.com/images/search?q=imgurl:${encoded}&view=detailv2&iss=sbi&form=SBIVSP`, badge:'قوي بالمصادر التجارية والمنتجات'},
+    {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
 
   let videoEnginesHtml = '';
