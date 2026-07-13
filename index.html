@@ -264,6 +264,17 @@
         ابحث
       </button>
     </div>
+    <div class="toggles" style="margin-top:10px;">
+      <a href="https://imgbb.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📤</span>
+        <span>ارفع سكرين شوت واحصل على رابط — imgbb</span>
+      </a>
+      <a href="https://postimages.org/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📤</span>
+        <span>بديل ثاني — postimages</span>
+      </a>
+    </div>
+    <div class="hint" style="margin-top:6px;">🔁 احتياطي لو فشل الاستخراج التلقائي: خذ سكرين شوت → ارفعه بأحد الموقعين فوق (بدون تسجيل) → انسخ الرابط المباشر يلي يعطيك ياه → الصقه بخانة البحث فوق.</div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
       <div id="imageResultCards" style="margin-top:16px;"></div>
@@ -963,22 +974,50 @@ function clearImageInput(){
   document.getElementById('imageUrlInput').focus();
 }
 
-/* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نفس تقنية مواقع تحميل الفيديوهات */
+/* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
 async function fetchOgTags(pageUrl){
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(pageUrl)}`;
-  const res = await fetch(proxyUrl);
-  const html = await res.text();
-  const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                 || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-  const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-                    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-  const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-                   || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-  return {
-    image: imgMatch ? imgMatch[1] : null,
-    title: titleMatch ? titleMatch[1] : null,
-    desc: descMatch ? descMatch[1] : null,
-  };
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ];
+  for(const buildProxyUrl of proxies){
+    try{
+      const res = await fetch(buildProxyUrl(pageUrl));
+      if(!res.ok) continue;
+      const html = await res.text();
+      if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
+      const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+      const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+      const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+      if(imgMatch){
+        return {
+          image: imgMatch[1],
+          title: titleMatch ? titleMatch[1] : null,
+          desc: descMatch ? descMatch[1] : null,
+        };
+      }
+    }catch(err){ /* جرّب الوسيط التالي */ }
+  }
+  return {image:null, title:null, desc:null};
+}
+
+/* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
+function openOriginalLinkHtml(url){
+  return `
+    <div class="result-card">
+      <a class="main-link" href="${url}" target="_blank" rel="noopener">
+        <div class="result-icon" style="background:var(--blue)">↗</div>
+        <div class="result-body">
+          <div class="result-title">افتح الرابط الأصلي بالمتصفح</div>
+          <div class="result-desc">${url}</div>
+        </div>
+        <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+      </a>
+    </div>`;
 }
 
 async function runImageSearch(){
@@ -1018,7 +1057,8 @@ async function runImageSearch(){
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. جرّب رابط يوتيوب، أو الصق رابط صورة مباشرة.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
+      cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
@@ -1035,7 +1075,8 @@ async function runImageSearch(){
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات هذا الرابط تلقائيًا — غالبًا لأن المحتوى يتطلب تسجيل دخول أو خاص. جرّب رابط عام (بوست/ريل عام مو خاص)، أو الصق رابط صورة مباشرة كبديل.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات هذا الرابط تلقائيًا (المحتوى خاص أو يتطلب تسجيل دخول، أو الوسطاء المتاحون مزدحمون حاليًا). افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
+      cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
