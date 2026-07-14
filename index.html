@@ -1103,14 +1103,16 @@ async function runImageSearch(){
     status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
     try{
       const og = await fetchOgTags(url);
-      if(og.image){
+      // X وفيسبوك أحيانًا يرجّعوا صورة عامة تابعة لواجهة التطبيق نفسه (abs.twimg.com / static.xx.fbcdn.net) بدل صورة المنشور الحقيقية — نتجاهلها لأنها مضلّلة
+      const isGenericAsset = og.image && /abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image);
+      if(og.image && !isGenericAsset){
         imageUrl = og.image;
         captionText = og.title || og.desc || '';
         sourceLabel = 'تم جلب الصورة والوصف تلقائيًا ✅';
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات هذا الرابط تلقائيًا (المحتوى خاص أو يتطلب تسجيل دخول، أو الوسطاء المتاحون مزدحمون حاليًا). افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو (لو كان رابط ستوري) الستوريهات لا تعرض معاينة عامة لأنها مؤقتة بطبيعتها. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
       cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
