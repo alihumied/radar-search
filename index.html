@@ -248,19 +248,42 @@
 
   <div class="core" style="margin-top:16px;">
     <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
+
+    <div class="hint" style="margin-top:0; margin-bottom:8px;">عندك رابط فيديو/صورة؟</div>
     <div class="search-row" style="z-index:1;">
-      <div class="search-box">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        <input type="text" id="imageUrlInput" placeholder="الصق رابط فيديو أو ستوري أو صورة..." style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
+      <div class="search-box" style="padding:0 18px; min-height:58px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="imageUrlInput" placeholder="https://...  الصق رابط الفيديو أو الصورة هنا" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
+        <button onclick="clearImageInput()" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <button class="go-btn" onclick="runImageSearch()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         ابحث
       </button>
     </div>
-    <div class="rev-upload-row">
-      <label class="rev-upload" for="revFile">📷 رفع لقطة شاشة أو صورة من الجهاز<input id="revFile" type="file" accept="image/*" hidden></label>
-      <button class="rev-mini" type="button" onclick="revClearAll()">تنظيف</button>
+    <div class="toggles" style="margin-top:10px;">
+      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
+        <span style="font-size:16px;">⚡</span>
+        <span>افتح الرابط مباشرة</span>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
+    <div class="toggles">
+      <a href="https://yandex.com/images/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>ياندكس</span>
+      </a>
+      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>جوجل</span>
+      </a>
+      <a href="https://www.bing.com/visualsearch" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>Bing</span>
+      </a>
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>TinEye</span>
+      </a>
     </div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
@@ -281,7 +304,7 @@
     <div id="resultCards"></div>
   </div>
 
-  <footer>RADAR v3.10 — منع صورة Facebook العامة في الستوري</footer>
+  <footer>RADAR — بحث موجّه نحو الروابط العامة للمنصات · لا يقوم بأي تجاوز لخصوصية أو اختراق حسابات</footer>
 </div>
 
 <script>
@@ -954,6 +977,83 @@ function extractYouTubeId(url){
   }
   return null;
 }
+function clearImageInput(){
+  document.getElementById('imageUrlInput').value = '';
+  document.getElementById('imageSearchStatus').textContent = '';
+  document.getElementById('imageResultsArea').classList.remove('show');
+  document.getElementById('imageUrlInput').focus();
+}
+function openPastedLinkDirectly(){
+  const url = document.getElementById('imageUrlInput').value.trim();
+  if(!url || !/^https?:\/\//i.test(url)){
+    document.getElementById('imageSearchStatus').innerHTML = '⚠️ الصق رابط الفيديو أولاً بالخانة فوق';
+    return;
+  }
+  window.open(url, '_blank', 'noopener');
+}
+
+/* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
+async function fetchOgTags(pageUrl){
+  // محاولة أولى: خدمات oEmbed عامة وسريعة (noembed / microlink) قبل اللجوء لوسطاء CORS الأبطأ
+  try{
+    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
+    const data = await res.json();
+    if(data && data.thumbnail_url){
+      return {image: data.thumbnail_url, title: data.title || null, desc: null};
+    }
+  }catch(err){ /* التالي */ }
+  try{
+    const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`);
+    const data = await res.json();
+    if(data && data.data && data.data.image && data.data.image.url){
+      return {image: data.data.image.url, title: data.data.title || null, desc: data.data.description || null};
+    }
+  }catch(err){ /* التالي */ }
+
+  // محاولة أخيرة: وسطاء CORS لسحب og:image من كود الصفحة مباشرة
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ];
+  for(const buildProxyUrl of proxies){
+    try{
+      const res = await fetch(buildProxyUrl(pageUrl));
+      if(!res.ok) continue;
+      const html = await res.text();
+      if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
+      const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+      const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+      const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+      if(imgMatch){
+        return {
+          image: imgMatch[1],
+          title: titleMatch ? titleMatch[1] : null,
+          desc: descMatch ? descMatch[1] : null,
+        };
+      }
+    }catch(err){ /* جرّب الوسيط التالي */ }
+  }
+  return {image:null, title:null, desc:null};
+}
+
+/* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
+function openOriginalLinkHtml(url){
+  return `
+    <div class="result-card">
+      <a class="main-link" href="${url}" target="_blank" rel="noopener">
+        <div class="result-icon" style="background:var(--blue)">↗</div>
+        <div class="result-body">
+          <div class="result-title">افتح الرابط الأصلي بالمتصفح</div>
+          <div class="result-desc">${url}</div>
+        </div>
+        <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+      </a>
+    </div>`;
+}
 
 async function runImageSearch(){
   const input = document.getElementById('imageUrlInput');
@@ -970,6 +1070,7 @@ async function runImageSearch(){
   }
 
   let imageUrl = null;
+  let captionText = '';
   let sourceLabel = '';
 
   // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
@@ -978,24 +1079,44 @@ async function runImageSearch(){
     imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
     sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
   }
-  // 2) تيك توك: محاولة عبر oEmbed الرسمي (قد ينجح أو يفشل حسب القيود)
+  // 2) تيك توك: عبر oEmbed الرسمي (يعطي صورة + عنوان الفيديو)
   else if(/tiktok\.com/i.test(url)){
-    status.textContent = 'جارٍ محاولة جلب الصورة المصغّرة من تيك توك...';
+    status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
     try{
       const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
       const data = await res.json();
       if(data && data.thumbnail_url){
         imageUrl = data.thumbnail_url;
-        sourceLabel = 'تم جلب الصورة المصغّرة من تيك توك تلقائيًا ✅';
+        captionText = data.title || '';
+        sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة تيك توك تلقائيًا (قيود من المنصة). الصق رابط صورة مباشرة بدلاً من ذلك، أو جرّب لصق رابط الفيديو من يوتيوب.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
+      cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
-  // 3) غير ذلك: افترض إنه رابط صورة مباشر
+  // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
+  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
+    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
+    try{
+      const og = await fetchOgTags(url);
+      if(og.image){
+        imageUrl = og.image;
+        captionText = og.title || og.desc || '';
+        sourceLabel = 'تم جلب الصورة والوصف تلقائيًا ✅';
+      }
+    }catch(err){ /* فشلت المحاولة */ }
+    if(!imageUrl){
+      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات هذا الرابط تلقائيًا (المحتوى خاص أو يتطلب تسجيل دخول، أو الوسطاء المتاحون مزدحمون حاليًا). افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
+      cards.innerHTML = openOriginalLinkHtml(url);
+      document.getElementById('imageResultsArea').classList.add('show');
+      return;
+    }
+  }
+  // 4) غير ذلك: افترض إنه رابط صورة مباشر
   else{
     imageUrl = url;
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
@@ -1003,10 +1124,39 @@ async function runImageSearch(){
 
   status.textContent = sourceLabel;
   const encoded = encodeURIComponent(imageUrl);
+
+  // محركات البحث العكسي بالصورة (تجيب صورًا ومصادر مشابهة)
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
     {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
+    {name:'Bing — بحث عكسي بالصورة', color:'#008373', letter:'B', url:`https://www.bing.com/images/search?q=imgurl:${encoded}&view=detailv2&iss=sbi&form=SBIVSP`, badge:'قوي بالمصادر التجارية والمنتجات'},
+    {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
+
+  let videoEnginesHtml = '';
+  if(captionText){
+    // بحث فيديوهات فعلي (مو صور بس) باستخدام وصف/عنوان الفيديو المستخرَج
+    const vq = captionText.trim();
+    const videoEngines = [
+      {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url: youtubeUrl(vq, 'general')},
+      {name:'تيك توك — فيديوهات مشابهة', color:'#010101', letter:'♪', url: googleUrl(vq, 'video', {siteDomain:'tiktok.com'})},
+      {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url: googleUrl(vq, 'video', {})},
+    ];
+    videoEnginesHtml = `
+      <div class="hint" style="margin:16px 0 8px;">🎬 بحث فيديوهات فعلي (مو صور فقط) باستخدام الوصف المستخرَج: <b style="color:var(--cyan);">${vq}</b></div>
+    ` + videoEngines.map(eng => `
+      <div class="result-card">
+        <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+          <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+          <div class="result-body">
+            <div class="result-title">${eng.name}</div>
+            <div class="result-desc">${eng.url}</div>
+          </div>
+          <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+        </a>
+      </div>`).join('');
+  }
+
   cards.innerHTML = `
     <div class="result-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex; align-items:center; gap:12px;">
@@ -1024,7 +1174,7 @@ async function runImageSearch(){
         </div>
         <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
       </a>
-    </div>`).join('');
+    </div>`).join('') + videoEnginesHtml;
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -1197,35 +1347,5 @@ function timeRangeLabel(){
 
 init();
 </script>
-
-<style>
-#imageUrlInput{font-family:'Tajawal',sans-serif!important;font-size:16px!important;padding:16px 10px!important;direction:ltr!important;text-align:left!important}
-.rev-upload-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
-.rev-upload,.rev-mini{border:1px solid var(--line);background:var(--bg-0);color:var(--text);border-radius:10px;padding:10px 14px;font:700 13px 'Tajawal',sans-serif;cursor:pointer}
-.rev-upload:hover,.rev-mini:hover{border-color:var(--blue)}
-.rev-preview{margin-top:13px;border:1px solid var(--line);background:var(--bg-0);border-radius:13px;padding:10px}
-.rev-preview img{display:block;width:100%;max-height:440px;object-fit:contain;border-radius:9px;background:#111}
-.rev-file-name{font:11px 'JetBrains Mono',monospace;color:var(--muted);direction:ltr;text-align:left;margin-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin-top:12px}
-.rev-card{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:12px;text-decoration:none;display:flex;align-items:center;gap:10px;font-family:'Tajawal',sans-serif;text-align:right;cursor:pointer}
-.rev-card:hover{border-color:var(--blue)}
-.rev-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;flex-shrink:0}
-.rev-title{font-size:13px;font-weight:700}.rev-sub{display:block;font-size:10px;color:var(--muted);margin-top:2px}
-.rev-warning{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.8}
-@media(max-width:640px){.rev-upload{flex:1;text-align:center}.rev-grid{grid-template-columns:1fr}}
-</style>
-<script>
-(function(){const f=document.getElementById('revFile');if(f)f.addEventListener('change',revFilePicked)})();
-function revEsc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function revProvider(url){let h='',path='';try{const u=new URL(url);h=u.hostname.toLowerCase();path=u.pathname.toLowerCase()}catch(e){} const fb=(h==='facebook.com'||h.endsWith('.facebook.com')||h==='fb.watch');if(fb&&(/\/(stories|story)\//.test(path)||/\/share\/s\//.test(path)||/\/story\.php/.test(path)))return'facebook_story';if(h==='youtu.be'||h==='youtube.com'||h.endsWith('.youtube.com'))return'youtube';if(h==='tiktok.com'||h.endsWith('.tiktok.com'))return'tiktok';if(fb)return'facebook';if(h==='instagram.com'||h.endsWith('.instagram.com'))return'instagram';if(h==='x.com'||h.endsWith('.x.com')||h==='twitter.com'||h.endsWith('.twitter.com'))return'x';if(/\.(png|jpe?g|webp|gif)([?#].*)?$/i.test(url))return'image';if(/^https?:\/\//i.test(url))return'other';return''}
-function revCard(title,sub,color,letter,url){return '<a class="rev-card" href="'+revEsc(url)+'" target="_blank" rel="noopener noreferrer"><span class="rev-icon" style="background:'+color+'">'+letter+'</span><span><span class="rev-title">'+title+'</span><span class="rev-sub">'+sub+'</span></span></a>'}
-async function revJson(url){const c=new AbortController(),t=setTimeout(()=>c.abort(),8500);try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw 0;return await r.json()}finally{clearTimeout(t)}}
-function revUsableThumb(img,p){if(!img)return false;try{const u=new URL(img),h=u.hostname.toLowerCase(),path=u.pathname.toLowerCase();if(p==='facebook_story'&&(h.startsWith('static.')||path.includes('/rsrc.php')||path.includes('/rsrc/')))return false}catch(e){}return true}
-async function revThumb(url,p){if(p==='youtube'){const id=extractYouTubeId(url);if(id)return'https://img.youtube.com/vi/'+id+'/hqdefault.jpg'}if(p==='tiktok'){try{const d=await revJson('https://www.tiktok.com/oembed?url='+encodeURIComponent(url));if(d&&revUsableThumb(d.thumbnail_url,p))return d.thumbnail_url}catch(e){}}try{const d=await revJson('https://noembed.com/embed?url='+encodeURIComponent(url));if(d&&revUsableThumb(d.thumbnail_url,p))return d.thumbnail_url}catch(e){}try{const d=await revJson('https://api.microlink.io?url='+encodeURIComponent(url));const img=d&&d.data&&d.data.image&&d.data.image.url;if(revUsableThumb(img,p))return img}catch(e){}if(p==='image')return url;return''}
-runImageSearch=async function(){const url=document.getElementById('imageUrlInput').value.trim(),p=revProvider(url),status=document.getElementById('imageSearchStatus'),cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea');cards.innerHTML='';area.classList.add('show');if(!p){status.textContent='⚠️ ألصق رابط فيديو أو ستوري كاملًا أو ارفع لقطة شاشة.';return}const fbStory=p==='facebook_story';status.textContent=fbStory?'جارٍ فحص رابط ستوري Facebook...':'جارٍ تحليل الرابط...';const img=await revThumb(url,p),exact='"'+url+'"';let h='';if(img)h='<div class="rev-preview"><img src="'+revEsc(img)+'" alt="معاينة الصورة" onerror="this.parentElement.style.display=\'none\'"><div class="rev-file-name">'+revEsc(img)+'</div></div>';h+='<div class="rev-grid">';if(p!=='image'){h+=revCard('فتح الرابط الأصلي',fbStory?'فتح ستوري Facebook':'فتح الفيديو أو المنصة','#2e6bff','↗',url);h+=revCard(fbStory?'Yandex Story':'Yandex Video','البحث عن الرابط والنسخ','#ff3333','Я','https://yandex.com/search/?text='+encodeURIComponent(exact));h+=revCard(fbStory?'Google Story':'Google Video','البحث عن الرابط والنسخ','#4285f4','G','https://www.google.com/search?safe=off&q='+encodeURIComponent(exact));}if(img)h+=revCard('Google Lens','بحث بالصورة المصغرة','#34a853','G','https://lens.google.com/uploadbyurl?url='+encodeURIComponent(img))+revCard('Yandex Images','بحث عكسي بالصورة','#ff3333','Я','https://yandex.com/images/search?rpt=imageview&url='+encodeURIComponent(img));h+='</div>';cards.innerHTML=h;if(fbStory&&!img)status.textContent='تم رفض صورة Facebook العامة لأنها ليست صورة الستوري. افتح الستوري والتقط شاشة ثم ارفعها للبحث بالصورة.';else status.textContent=img?'✅ تم تجهيز الصورة وطرق البحث.':'لم تتوفر صورة مصغرة حقيقية. افتح الرابط أو ارفع لقطة شاشة.';area.scrollIntoView({behavior:'smooth',block:'start'})}
-function revFilePicked(e){const f=e.target.files&&e.target.files[0];if(!f||!f.type.startsWith('image/'))return;if(window.revBlob)URL.revokeObjectURL(window.revBlob);window.revBlob=URL.createObjectURL(f);const cards=document.getElementById('imageResultCards'),area=document.getElementById('imageResultsArea'),status=document.getElementById('imageSearchStatus');area.classList.add('show');cards.innerHTML='<div class="rev-preview"><img src="'+window.revBlob+'" alt="لقطة الشاشة"><div class="rev-file-name">'+revEsc(f.name)+'</div></div><div class="rev-grid">'+revCard('PimEyes','بحث بالوجه — استخدم صورتك أو صورة بموافقة صاحبها','#6f42c1','P','https://pimeyes.com/en')+revCard('Google Lens','اختر الصورة نفسها بعد فتح الموقع','#4285f4','G','https://lens.google.com/')+revCard('Yandex Images','اختر الصورة نفسها بعد فتح الموقع','#ff3333','Я','https://yandex.com/images/')+'</div><div class="rev-warning">لأسباب حماية المتصفح، لا يستطيع RADAR إرسال ملف جهازك تلقائيًا إلى موقع آخر. اضغط المحرك ثم اختر لقطة الشاشة نفسها من معرض الصور. استخدم PimEyes فقط للبحث عن صورتك الشخصية أو بموافقة واضحة.</div>';status.textContent='✅ ظهرت لقطة الشاشة داخل RADAR. اختر PimEyes أو Lens أو Yandex.';area.scrollIntoView({behavior:'smooth',block:'start'})}
-function revClearAll(){document.getElementById('imageUrlInput').value='';document.getElementById('revFile').value='';document.getElementById('imageSearchStatus').textContent='';document.getElementById('imageResultCards').innerHTML='';document.getElementById('imageResultsArea').classList.remove('show');if(window.revBlob){URL.revokeObjectURL(window.revBlob);window.revBlob=''}document.getElementById('imageUrlInput').focus()}
-</script>
-
 </body>
 </html>
