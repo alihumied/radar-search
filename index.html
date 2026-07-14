@@ -1108,7 +1108,7 @@ async function runImageSearch(){
     try{
       const og = await fetchOgTags(url);
       // X وفيسبوك أحيانًا يرجّعوا صورة عامة تابعة لواجهة التطبيق نفسه (abs.twimg.com / static.xx.fbcdn.net) بدل صورة المنشور الحقيقية — نتجاهلها لأنها مضلّلة
-      const isGenericAsset = og.image && /abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image);
+      const isGenericAsset = og.image && (/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image) || og.image.startsWith('data:'));
       if(og.image && !isGenericAsset){
         imageUrl = og.image;
         captionText = og.title || og.desc || '';
@@ -1141,15 +1141,22 @@ async function runImageSearch(){
 
   let videoEnginesHtml = '';
   if(captionText){
-    // بحث فيديوهات فعلي (مو صور بس) باستخدام وصف/عنوان الفيديو المستخرَج
-    const vq = captionText.trim();
+    // تنظيف الوصف من أرقام التفاعل (views/reactions/likes...) لأنها ضجيج مش مفيدة للبحث
+    const cleanedCaption = captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi, '').replace(/\s*\|\s*|\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    // استخراج الهاشتاقات الموجودة أصلاً بالوصف (إن وُجدت)
+    const extractedTags = (captionText.match(/#[\w\u0600-\u06FF]+/g) || []);
+    const vq = (cleanedCaption || captionText.trim());
     const videoEngines = [
       {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url: youtubeUrl(vq, 'general')},
       {name:'تيك توك — فيديوهات مشابهة', color:'#010101', letter:'♪', url: googleUrl(vq, 'video', {siteDomain:'tiktok.com'})},
       {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url: googleUrl(vq, 'video', {})},
     ];
+    const tagsHtml = extractedTags.length
+      ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات مستخرَجة من المنشور: <b style="color:var(--cyan);">${extractedTags.join('  ')}</b></div>`
+      : '';
     videoEnginesHtml = `
       <div class="hint" style="margin:16px 0 8px;">🎬 بحث فيديوهات فعلي (مو صور فقط) باستخدام الوصف المستخرَج: <b style="color:var(--cyan);">${vq}</b></div>
+      ${tagsHtml}
     ` + videoEngines.map(eng => `
       <div class="result-card">
         <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
@@ -1162,6 +1169,7 @@ async function runImageSearch(){
         </a>
       </div>`).join('');
   }
+
 
   cards.innerHTML = `
     <div class="result-card" style="margin-bottom:14px;">
