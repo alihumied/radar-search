@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RADAR // محرك البحث العميق</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#040609">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -1347,7 +1351,27 @@ function timeRangeLabel(){
   return labels[v] || 'أي وقت';
 }
 
+/* تسجيل Service Worker لتفعيل التثبيت كتطبيق PWA */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+/* استقبال رابط تمت مشاركته من تطبيق آخر (إنستجرام/X/فيسبوك) عبر قائمة "مشاركة" بأندرويد */
+function handleSharedLink(){
+  const params = new URLSearchParams(window.location.search);
+  const shared = params.get('shared_url') || params.get('shared_text') || '';
+  const urlMatch = shared.match(/https?:\/\/\S+/);
+  if(urlMatch){
+    const link = urlMatch[0];
+    document.getElementById('imageUrlInput').value = link;
+    // تنظيف الرابط من شريط العنوان بدون إعادة تحميل الصفحة
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(()=> runImageSearch(), 300);
+  }
+}
+
 init();
+handleSharedLink();
 </script>
 </body>
 </html>
