@@ -1045,6 +1045,14 @@ async function fetchOgTags(pageUrl){
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
+/* الضغط على هاشتاق مستخرَج من البحث العكسي يبحث عنه مباشرة عبر كل المنصات */
+function searchHashtag(tag){
+  document.getElementById('query').value = tag;
+  refreshEffectiveType();
+  updateHashtagHint(fullQueryText());
+  runSearch();
+}
+
 function openOriginalLinkHtml(url){
   return `
     <div class="result-card">
@@ -1141,7 +1149,7 @@ async function runImageSearch(){
 
   let videoEnginesHtml = '';
   if(captionText){
-    // تنظيف الوصف من أرقام التفاعل (views/reactions/likes...) لأنها ضجيج مش مفيدة للبحث
+    // نسخة نظيفة (بدون أرقام تفاعل) تُستخدم فقط داخل رابط البحث نفسه — العرض يبقى بالنص الكامل الأصلي
     const cleanedCaption = captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi, '').replace(/\s*\|\s*|\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
     // استخراج الهاشتاقات الموجودة أصلاً بالوصف (إن وُجدت)
     const extractedTags = (captionText.match(/#[\w\u0600-\u06FF]+/g) || []);
@@ -1152,10 +1160,10 @@ async function runImageSearch(){
       {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url: googleUrl(vq, 'video', {})},
     ];
     const tagsHtml = extractedTags.length
-      ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات مستخرَجة من المنشور: <b style="color:var(--cyan);">${extractedTags.join('  ')}</b></div>`
+      ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات (اضغط لبحث مباشر): ${extractedTags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan); cursor:pointer; text-decoration:underline; margin-inline-end:8px;">${t}</span>`).join('')}</div>`
       : '';
     videoEnginesHtml = `
-      <div class="hint" style="margin:16px 0 8px;">🎬 بحث فيديوهات فعلي (مو صور فقط) باستخدام الوصف المستخرَج: <b style="color:var(--cyan);">${vq}</b></div>
+      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج (يتضمن أرقام المشاهدات/التفاعل إن وُجدت): <b style="color:var(--cyan);">${captionText.trim()}</b></div>
       ${tagsHtml}
     ` + videoEngines.map(eng => `
       <div class="result-card">
