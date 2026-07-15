@@ -274,20 +274,22 @@
       </div>
     </div>
 
-    <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
+    <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ اختره أو الصقه ثم افتح محرك البحث:</div>
+    <input id="radarScreenshotInput" type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="radarUseScreenshot(this.files[0])">
     <div class="toggles">
-      <a href="https://yandex.com/images/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>ياندكس</span>
-      </a>
-      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>جوجل</span>
-      </a>
-      <a href="https://www.bing.com/visualsearch" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>Bing</span>
-      </a>
-      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>TinEye</span>
-      </a>
+      <div class="toggle" onclick="document.getElementById('radarScreenshotInput').click()"><span style="font-size:16px;">📷</span><span>اختيار لقطة</span></div>
+      <div class="toggle" onclick="radarPasteScreenshot()"><span style="font-size:16px;">📋</span><span>لصق لقطة</span></div>
+      <a href="https://lens.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;"><span style="font-size:16px;">📷</span><span>Google Lens</span></a>
+      <a href="https://yandex.com/images/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;"><span style="font-size:16px;">📷</span><span>ياندكس</span></a>
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;"><span style="font-size:16px;">📷</span><span>TinEye</span></a>
+    </div>
+    <div id="radarShotBox" style="display:none; margin-top:12px; background:var(--bg-0); border:1px solid var(--line); border-radius:12px; padding:12px;">
+      <img id="radarShotPreview" alt="معاينة اللقطة" style="display:block; max-width:100%; max-height:360px; margin:auto; border-radius:9px; object-fit:contain; background:#000;">
+      <div class="toggles" style="justify-content:center;">
+        <div class="toggle" onclick="radarCopyScreenshot()"><span>📋 نسخ الصورة</span></div>
+        <div class="toggle" onclick="radarDownloadScreenshot()"><span>⬇️ تنزيل الصورة</span></div>
+        <div class="toggle" onclick="radarClearScreenshot()"><span>✕ حذف</span></div>
+      </div>
     </div>
     <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
     <div class="results" id="imageResultsArea">
@@ -1200,6 +1202,42 @@ async function runImageSearch(){
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
+
+
+/* ===================== LOCAL SCREENSHOT (RADAR TEST) ===================== */
+let radarScreenshotFile=null;
+let radarScreenshotUrl='';
+function radarShotStatus(msg){document.getElementById('imageSearchStatus').textContent=msg;}
+function radarUseScreenshot(file){
+  if(!file)return;
+  if(!/^image\/(png|jpeg|webp)$/i.test(file.type)){radarShotStatus('⚠️ اختر PNG أو JPG أو WEBP');return;}
+  if(file.size>20*1024*1024){radarShotStatus('⚠️ حجم الصورة أكبر من 20MB');return;}
+  if(radarScreenshotUrl)URL.revokeObjectURL(radarScreenshotUrl);
+  radarScreenshotFile=file; radarScreenshotUrl=URL.createObjectURL(file);
+  document.getElementById('radarShotPreview').src=radarScreenshotUrl;
+  document.getElementById('radarShotBox').style.display='block';
+  radarShotStatus('✅ اللقطة جاهزة. انسخها أو نزّلها، ثم ارفعها إلى Google Lens أو Yandex.');
+}
+async function radarPasteScreenshot(){
+  try{
+    if(!navigator.clipboard?.read)throw new Error();
+    const items=await navigator.clipboard.read();
+    for(const item of items){const type=item.types.find(x=>x.startsWith('image/'));if(type){const blob=await item.getType(type);radarUseScreenshot(new File([blob],'radar-screenshot-'+Date.now()+'.png',{type}));return;}}
+    radarShotStatus('⚠️ لا توجد صورة في الحافظة');
+  }catch(e){radarShotStatus('⚠️ المتصفح منع قراءة الحافظة. استخدم اختيار لقطة.');}
+}
+async function radarCopyScreenshot(){
+  if(!radarScreenshotFile){radarShotStatus('⚠️ اختر لقطة أولاً');return;}
+  try{
+    const blob=await radarToPng(radarScreenshotFile);
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+    radarShotStatus('✅ تم نسخ الصورة. افتح محرك البحث والصقها إن كان يدعم اللصق.');
+  }catch(e){radarShotStatus('⚠️ تعذر نسخ الصورة. استخدم تنزيل الصورة.');}
+}
+function radarToPng(file){return new Promise((resolve,reject)=>{if(file.type==='image/png'){resolve(file);return;}const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);c.toBlob(b=>{URL.revokeObjectURL(u);b?resolve(b):reject();},'image/png');};im.onerror=reject;im.src=u;});}
+function radarDownloadScreenshot(){if(!radarScreenshotUrl){radarShotStatus('⚠️ اختر لقطة أولاً');return;}const a=document.createElement('a');a.href=radarScreenshotUrl;a.download=radarScreenshotFile?.name||'radar-screenshot.png';a.click();}
+function radarClearScreenshot(){if(radarScreenshotUrl)URL.revokeObjectURL(radarScreenshotUrl);radarScreenshotFile=null;radarScreenshotUrl='';document.getElementById('radarScreenshotInput').value='';document.getElementById('radarShotPreview').removeAttribute('src');document.getElementById('radarShotBox').style.display='none';radarShotStatus('');}
+document.addEventListener('paste',e=>{const item=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith('image/'));if(item){const f=item.getAsFile();if(f){e.preventDefault();radarUseScreenshot(f);}}});
 
 /* ===================== RUN SEARCH ===================== */
 function runSearch(){
