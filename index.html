@@ -1091,7 +1091,7 @@ async function runImageSearch(){
     imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
     sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
   }
-  // 2) تيك توك: عبر oEmbed الرسمي (يعطي صورة + عنوان الفيديو)
+  // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
   else if(/tiktok\.com/i.test(url)){
     status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
     try{
@@ -1102,7 +1102,17 @@ async function runImageSearch(){
         captionText = data.title || '';
         sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
       }
-    }catch(err){ /* فشلت المحاولة */ }
+    }catch(err){ /* فشلت المحاولة، ننتقل للاحتياطي */ }
+    if(!imageUrl){
+      try{
+        const og = await fetchOgTags(url);
+        if(og.image){
+          imageUrl = og.image;
+          captionText = og.title || og.desc || '';
+          sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
+        }
+      }catch(err){ /* فشلت كل المحاولات */ }
+    }
     if(!imageUrl){
       status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
       cards.innerHTML = openOriginalLinkHtml(url);
@@ -1151,7 +1161,7 @@ async function runImageSearch(){
     // نسخة نظيفة (بدون أرقام تفاعل) تُستخدم فقط داخل رابط البحث نفسه — العرض يبقى بالنص الكامل الأصلي
     const cleanedCaption = captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi, '').replace(/\s*\|\s*|\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
     // استخراج الهاشتاقات الموجودة أصلاً بالوصف (إن وُجدت)
-    const extractedTags = (captionText.match(/#[\w\u0600-\u06FF]+/g) || []);
+    const extractedTags = [...new Set(captionText.match(/#[\w\u0600-\u06FF]+/g) || [])];
     const vq = (cleanedCaption || captionText.trim());
     const videoEngines = [
       {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url: youtubeUrl(vq, 'general')},
