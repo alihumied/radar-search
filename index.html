@@ -176,6 +176,13 @@
         <span style="font-size:16px;">⚡</span>
         <span>افتح الرابط مباشرة</span>
       </div>
+      <div class="toggle" onclick="toggleSavedLinksView()" style="cursor:pointer;">
+        <span style="font-size:16px;">📌</span>
+        <span>المحفوظات</span>
+      </div>
+    </div>
+    <div class="results" id="savedLinksArea">
+      <div id="savedLinksList" style="margin-top:12px;"></div>
     </div>
 
     <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
@@ -581,6 +588,14 @@ function init(){
   selectCountry(WORLDWIDE);
   document.getElementById('query').addEventListener('input', onQueryInput);
   document.getElementById('query').addEventListener('keydown', e=>{ if(e.key === 'Enter') runSearch(); });
+  document.getElementById('query').addEventListener('focus', ()=>{
+    if(document.getElementById('query').value.trim().length < 1){
+      const history = getSearchHistory();
+      if(history.length){
+        renderSuggestions(history.slice(0,6).map(h=>({text:h, tag:'🕘 سجلك'})));
+      }
+    }
+  });
   document.getElementById('imageUrlInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') runImageSearch(); });
   document.addEventListener('click', (e)=>{
     if(!e.target.closest('.search-row')) hideSuggestions();
@@ -735,6 +750,25 @@ function fullQueryText(){
 }
 
 /* ===================== SUGGESTIONS (محلي بالكامل، لا يعتمد على شبكة خارجية) ===================== */
+/* ===================== سجل البحث (مخزَّن محليًا بالجهاز) ===================== */
+const HISTORY_KEY = 'radar_search_history';
+function getSearchHistory(){
+  try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }catch(e){ return []; }
+}
+function saveToSearchHistory(term){
+  const t = term.trim();
+  if(!t) return;
+  let history = getSearchHistory();
+  history = history.filter(h => h !== t); // شيل التكرار القديم
+  history.unshift(t); // الأحدث فوق
+  history = history.slice(0, 30); // حد أقصى 30
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+function clearSearchHistory(){
+  localStorage.removeItem(HISTORY_KEY);
+  hideSuggestions();
+}
+
 function onQueryInput(e){
   const text = e.target.value;
   refreshEffectiveType();
@@ -749,6 +783,11 @@ function buildLocalSuggestions(text){
   const type = (currentTypeChoice === 'auto') ? detectType(t) : currentTypeChoice;
   const countryName = selectedCountry ? selectedCountry.ar : '';
   const list = [];
+
+  // سجل البحث أولاً (أعلى أولوية) — أي بحث سابق يطابق جزئيًا يلي عم تكتبه
+  const history = getSearchHistory();
+  const historyMatches = history.filter(h => h.toLowerCase().includes(t.toLowerCase()) && h.toLowerCase() !== t.toLowerCase());
+  historyMatches.slice(0,3).forEach(h => list.push({text:h, tag:'🕘 سجلك'}));
 
   list.push({text:`"${t}"`, tag:'مطابقة دقيقة'});
 
@@ -773,7 +812,7 @@ function buildLocalSuggestions(text){
     if(seen.has(s.text)) return false;
     seen.add(s.text);
     return true;
-  }).slice(0,6);
+  }).slice(0,8);
 }
 function renderSuggestions(list){
   const panel = document.getElementById('suggestPanel');
@@ -1191,9 +1230,10 @@ async function runImageSearch(){
   cards.innerHTML = `
     <div class="result-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex; align-items:center; gap:12px;">
-        <img src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0;" onerror="this.style.display='none'">
+        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
         <div class="result-desc" style="white-space:normal;">${imageUrl}</div>
       </div>
+      <div class="hint" style="margin-top:8px; margin-bottom:0;">📌 اضغط مطوّلاً على الصورة لحفظ رابطها بالمحفوظات</div>
     </div>
   ` + engines.map(eng => `
     <div class="result-card">
@@ -1208,12 +1248,82 @@ async function runImageSearch(){
     </div>`).join('') + videoEnginesHtml;
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  attachLongPressSave(imageUrl);
+}
+
+/* ===================== حفظ روابط الصور (ضغط مطوّل) ===================== */
+const SAVED_LINKS_KEY = 'radar_saved_images';
+function getSavedLinks(){
+  try{ return JSON.parse(localStorage.getItem(SAVED_LINKS_KEY)) || []; }catch(e){ return []; }
+}
+function saveLinkToStorage(url){
+  let saved = getSavedLinks();
+  saved = saved.filter(u => u !== url);
+  saved.unshift(url);
+  saved = saved.slice(0, 50);
+  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
+}
+function toggleSavedLinksView(){
+  const area = document.getElementById('savedLinksArea');
+  const isShown = area.classList.contains('show');
+  if(isShown){ area.classList.remove('show'); return; }
+  renderSavedLinks();
+  area.classList.add('show');
+  area.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function renderSavedLinks(){
+  const saved = getSavedLinks();
+  const list = document.getElementById('savedLinksList');
+  if(!saved.length){
+    list.innerHTML = `<div class="hint" style="margin-top:0;">ما في روابط محفوظة بعد — اضغط مطوّلاً على أي صورة مستخرَجة لحفظها.</div>`;
+    return;
+  }
+  list.innerHTML = saved.map((u,i) => `
+    <div class="result-card">
+      <a class="main-link" href="${u}" target="_blank" rel="noopener">
+        <img src="${u}" style="width:44px; height:44px; object-fit:cover; border-radius:8px; flex-shrink:0;" onerror="this.style.display='none'">
+        <div class="result-desc" style="white-space:normal; flex:1;">${u}</div>
+      </a>
+      <button onclick="removeSavedLink(${i})" title="حذف" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+function removeSavedLink(index){
+  let saved = getSavedLinks();
+  saved.splice(index, 1);
+  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
+  renderSavedLinks();
+}
+
+function attachLongPressSave(url){
+  const el = document.getElementById('extractedThumb');
+  if(!el) return;
+  let pressTimer = null;
+  const start = () => {
+    pressTimer = setTimeout(()=>{
+      saveLinkToStorage(url);
+      const status = document.getElementById('imageSearchStatus');
+      const prev = status.textContent;
+      status.textContent = '✅ تم حفظ رابط الصورة بالمحفوظات';
+      if(navigator.vibrate) navigator.vibrate(30);
+      setTimeout(()=>{ if(status.textContent === '✅ تم حفظ رابط الصورة بالمحفوظات') status.textContent = prev; }, 2000);
+    }, 550);
+  };
+  const cancel = () => { if(pressTimer) clearTimeout(pressTimer); };
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchmove', cancel);
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', cancel);
+  el.addEventListener('mouseleave', cancel);
 }
 
 /* ===================== RUN SEARCH ===================== */
 function runSearch(){
   const baseQuery = document.getElementById('query').value.trim();
   if(!baseQuery){ document.getElementById('query').focus(); return; }
+  saveToSearchHistory(baseQuery);
   hideSuggestions();
   refreshEffectiveType();
   const type = effectiveType;
