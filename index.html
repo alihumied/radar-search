@@ -995,6 +995,9 @@ function openPastedLinkDirectly(){
 
 /* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
 async function fetchOgTags(pageUrl){
+  // نسخة فيسبوك الخفيفة للموبايل (m.facebook.com) أبسط بكود أقل تعقيدًا وأكثر ثباتًا للاستخراج من النسخة الكاملة
+  const scrapeUrl = pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i, 'https://m.facebook.com');
+
   // محاولة أولى: خدمات oEmbed عامة وسريعة (noembed / microlink) قبل اللجوء لوسطاء CORS الأبطأ
   try{
     const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
@@ -1011,7 +1014,7 @@ async function fetchOgTags(pageUrl){
     }
   }catch(err){ /* التالي */ }
 
-  // محاولة أخيرة: وسطاء CORS لسحب og:image من كود الصفحة مباشرة
+  // محاولة أخيرة: وسطاء CORS لسحب og:image من كود الصفحة مباشرة (نستخدم نسخة الموبايل الخفيفة لفيسبوك هنا تحديدًا)
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1019,7 +1022,7 @@ async function fetchOgTags(pageUrl){
   ];
   for(const buildProxyUrl of proxies){
     try{
-      const res = await fetch(buildProxyUrl(pageUrl));
+      const res = await fetch(buildProxyUrl(scrapeUrl));
       if(!res.ok) continue;
       const html = await res.text();
       if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
