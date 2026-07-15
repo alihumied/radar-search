@@ -155,6 +155,48 @@
   </header>
 
   <div class="core">
+    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
+
+    <div class="hint" style="margin-top:0; margin-bottom:8px;">عندك رابط فيديو/صورة؟</div>
+    <div class="search-row" style="z-index:1;">
+      <div class="search-box" style="padding:0 18px; min-height:58px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="imageUrlInput" placeholder="https://...  الصق رابط الفيديو أو الصورة هنا" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
+        <button onclick="clearImageInput()" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <button class="go-btn" onclick="runImageSearch()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        ابحث
+      </button>
+    </div>
+    <div class="toggles" style="margin-top:10px;">
+      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
+        <span style="font-size:16px;">⚡</span>
+        <span>افتح الرابط مباشرة</span>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
+    <div class="toggles">
+      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>ياندكس</span>
+      </a>
+      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>جوجل</span>
+      </a>
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+        <span style="font-size:16px;">📷</span><span>TinEye</span>
+      </a>
+    </div>
+    <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
+    <div class="results" id="imageResultsArea">
+      <div id="imageResultCards" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
+  <div class="core" style="margin-top:16px;">
     <div class="search-row">
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -248,51 +290,6 @@
     <div class="hint" id="transHint"></div>
 
     <div class="hint" id="hashtagHint"></div>
-  </div>
-
-  <div class="core" style="margin-top:16px;">
-    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
-
-    <div class="hint" style="margin-top:0; margin-bottom:8px;">عندك رابط فيديو/صورة؟</div>
-    <div class="search-row" style="z-index:1;">
-      <div class="search-box" style="padding:0 18px; min-height:58px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" id="imageUrlInput" placeholder="https://...  الصق رابط الفيديو أو الصورة هنا" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
-        <button onclick="clearImageInput()" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-      <button class="go-btn" onclick="runImageSearch()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        ابحث
-      </button>
-    </div>
-    <div class="toggles" style="margin-top:10px;">
-      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;">
-        <span style="font-size:16px;">⚡</span>
-        <span>افتح الرابط مباشرة</span>
-      </div>
-    </div>
-
-    <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
-    <div class="toggles">
-      <a href="https://yandex.com/images/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>ياندكس</span>
-      </a>
-      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>جوجل</span>
-      </a>
-      <a href="https://www.bing.com/visualsearch" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>Bing</span>
-      </a>
-      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
-        <span style="font-size:16px;">📷</span><span>TinEye</span>
-      </a>
-    </div>
-    <div class="hint" id="imageSearchStatus" style="margin-top:8px;"></div>
-    <div class="results" id="imageResultsArea">
-      <div id="imageResultCards" style="margin-top:16px;"></div>
-    </div>
   </div>
 
   <div class="section-title"><h2>المنصات</h2></div>
@@ -1143,7 +1140,6 @@ async function runImageSearch(){
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
     {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
-    {name:'Bing — بحث عكسي بالصورة', color:'#008373', letter:'B', url:`https://www.bing.com/images/search?q=imgurl:${encoded}&view=detailv2&iss=sbi&form=SBIVSP`, badge:'قوي بالمصادر التجارية والمنتجات'},
     {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
 
