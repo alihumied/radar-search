@@ -225,7 +225,7 @@
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="query" placeholder="اكتب اسم، مكان، وصف، أو #هاشتاق..." autocomplete="off">
-        <button class="voice-btn" id="voiceBtn" onclick="startVoiceSearch()" title="بحث صوتي">🎙️</button>
+        <button class="voice-btn" id="voiceBtn" onclick="startVoiceSearch()" title="بحث صوتي (يطلب إذن المايك)">🎙️</button>
       </div>
       <button class="go-btn" onclick="runSearch()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -622,7 +622,7 @@ function init(){
 function startVoiceSearch(){
   const btn = document.getElementById('voiceBtn');
   if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
-    alert('متصفحك لا يدعم خاصية البحث الصوتي، استخدم Chrome أو Edge.');
+    alert('❌ متصفحك لا يدعم البحث الصوتي. يُرجى استخدام Chrome أو Edge أو Safari على الأجهزة الحديثة.');
     return;
   }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -643,13 +643,16 @@ function startVoiceSearch(){
     updateHashtagHint(fullQueryText());
     updateTranslateVisibility();
     if(autoTranslate) scheduleAutoTranslate();
-    runSearch(); // ينفذ البحث تلقائياً بعد التعرف
+    runSearch();
   };
   recognition.onerror = (e) => {
     btn.classList.remove('listening');
     btn.textContent = '🎙️';
-    if(e.error === 'not-allowed') alert('الرجاء السماح بالوصول إلى المايكروفون.');
-    else alert('حدث خطأ في التعرف الصوتي، حاول مجدداً.');
+    if(e.error === 'not-allowed') {
+      alert('🔇 يرجى السماح بالوصول إلى المايكروفون من متصفحك (عادةً يظهر طلب إذن أعلى الصفحة). ثم أعد المحاولة.');
+    } else {
+      alert('⚠️ حدث خطأ في التعرف الصوتي: ' + e.error);
+    }
   };
   recognition.onend = () => {
     btn.classList.remove('listening');
@@ -686,14 +689,12 @@ function saveMainLink(platformId, url, platformName){
   saved.unshift({platformId, url, platformName, date: new Date().toISOString()});
   saved = saved.slice(0, 50);
   localStorage.setItem(SAVED_MAIN_KEY, JSON.stringify(saved));
-  // تحديث واجهة زر الحفظ في البطاقة الحالية
   document.querySelectorAll('.save-btn').forEach(btn => {
     if(btn.dataset.url === url) {
       btn.classList.add('saved');
       btn.innerHTML = '✅ محفوظ';
     }
   });
-  // إظهار رسالة سريعة
   const status = document.getElementById('imageSearchStatus');
   const prev = status.textContent;
   status.textContent = `✅ تم حفظ الرابط: ${platformName}`;
@@ -1144,10 +1145,15 @@ function openPastedLinkDirectly(){
   window.open(url, '_blank', 'noopener');
 }
 
-/* ===================== IMPROVED FETCH OG TAGS (مقفلة) ===================== */
+/* ===================== IMPROVED FETCH OG TAGS (مع دعم X عبر fxtwitter) ===================== */
 async function fetchOgTags(pageUrl){
-  const scrapeUrl = pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i, 'https://m.facebook.com');
-  // المحاولات السريعة (oEmbed)
+  // تحويل x.com إلى fxtwitter.com للحصول على البيانات بسهولة
+  let targetUrl = pageUrl;
+  if(/x\.com|twitter\.com/i.test(pageUrl)){
+    targetUrl = pageUrl.replace(/x\.com/i, 'fxtwitter.com').replace(/twitter\.com/i, 'fxtwitter.com');
+  }
+
+  // محاولة oEmbed أولاً
   try{
     const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
     const data = await res.json();
@@ -1163,7 +1169,7 @@ async function fetchOgTags(pageUrl){
     }
   }catch(e){}
 
-  // وسطاء متعددون + User-Agent متقدم لتجاوز القفل
+  // وسطاء مع User-Agent متقدم
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1176,7 +1182,7 @@ async function fetchOgTags(pageUrl){
 
   for(const buildProxyUrl of proxies){
     try{
-      const res = await fetch(buildProxyUrl(scrapeUrl), { headers });
+      const res = await fetch(buildProxyUrl(targetUrl), { headers });
       if(!res.ok) continue;
       const html = await res.text();
       if(!html || html.length < 200) continue;
@@ -1186,7 +1192,6 @@ async function fetchOgTags(pageUrl){
         const regex2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, 'i');
         let m = html.match(regex1) || html.match(regex2);
         if(m) return m[1];
-        // محاولة استخراج twitter:image كبديل
         if(prop === 'og:image'){
           const tw = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
                     html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
@@ -1200,13 +1205,12 @@ async function fetchOgTags(pageUrl){
       const desc = getMeta('og:description');
 
       if(img){
-        // استبعاد الصور العامة الوهمية
         const isGeneric = /abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net|data:image/i.test(img);
         if(!isGeneric) {
           return { image: img, title: title || null, desc: desc || null };
         }
       }
-    } catch(err){ /* جرّب الوكيل التالي */ }
+    } catch(err){ /* جرّب التالي */ }
   }
   return {image:null, title:null, desc:null};
 }
@@ -1294,7 +1298,7 @@ async function runImageSearch(){
       }
     }catch(err){}
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو ستوري مؤقت. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
+      status.innerHTML = '⚠️ لم نتمكن من استخراج صورة لهذا المنشور. الأسباب: منشور نصي فقط، محتوى خاص/مؤقت (ستوري)، أو يتطلب تسجيل دخول. اضغط "افتح الرابط مباشرة" لرؤيته في المتصفح ثم خذ سكرين شوت يدويًا.';
       cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
