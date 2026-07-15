@@ -43,8 +43,12 @@
   .search-box{flex:1; position:relative; display:flex; align-items:center; background:var(--bg-0); border:1px solid var(--line); border-radius:14px; padding:0 16px; transition:border-color .2s, box-shadow .2s;}
   .search-box:focus-within{border-color:var(--blue); box-shadow:0 0 0 3px rgba(46,107,255,0.18);}
   .search-box svg{flex-shrink:0; color:var(--muted);}
-  #query{flex:1; background:none; border:none; outline:none; color:var(--text); font-family:'Tajawal',sans-serif; font-size:16px; padding:16px 10px; direction:rtl;}
-  #query::placeholder{color:var(--muted-2);}
+  #query, #imageUrlInput{flex:1; background:none; border:none; outline:none; color:var(--text); font-family:'Tajawal',sans-serif; font-size:16px; padding:16px 10px; direction:rtl;}
+  #query::placeholder, #imageUrlInput::placeholder{color:var(--muted-2);}
+  .voice-btn{background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; font-size:20px; display:flex; align-items:center; transition:.2s; border-radius:50%; width:38px; height:38px; justify-content:center;}
+  .voice-btn:hover{background:rgba(46,107,255,0.2); color:var(--cyan);}
+  .voice-btn.listening{color:#ff4444; background:rgba(255,68,68,0.2); animation:glow-red 0.8s ease-in-out infinite alternate;}
+  @keyframes glow-red{from{box-shadow:0 0 5px rgba(255,68,68,0.3);}to{box-shadow:0 0 20px rgba(255,68,68,0.6);}}
   .go-btn{background:linear-gradient(135deg, var(--blue), var(--blue-2)); border:none; color:#fff; font-family:'Tajawal',sans-serif; font-weight:700; font-size:15px; padding:0 26px; border-radius:14px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:transform .15s, box-shadow .15s; box-shadow:0 8px 20px rgba(46,107,255,0.35);}
   .go-btn:hover{transform:translateY(-2px); box-shadow:0 12px 26px rgba(46,107,255,0.45);}
   .go-btn:active{transform:translateY(0);}
@@ -68,7 +72,6 @@
   .country-opt{padding:10px 14px; font-size:13px; display:flex; gap:8px; align-items:center; cursor:pointer;}
   .country-opt:hover{background:rgba(46,107,255,0.12);}
 
-  /* type selector */
   .type-row{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
   .type-chip{padding:9px 16px; border-radius:100px; border:1px solid var(--line); background:var(--bg-0); font-size:13px; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:6px;}
   .type-chip:hover{border-color:var(--blue);}
@@ -112,15 +115,18 @@
   .result-meta{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; font-family:'JetBrains Mono',monospace; font-size:11px;}
   .meta-chip{border:1px solid var(--line); padding:5px 12px; border-radius:100px; color:var(--muted); background:var(--bg-0);}
   .meta-chip b{color:var(--cyan); font-weight:700;}
-  .result-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:10px; transition:.15s; display:flex; align-items:center; gap:10px;}
+  .result-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; margin-bottom:10px; transition:.15s; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .result-card:hover{border-color:var(--blue);}
   .result-card a.main-link{color:inherit; text-decoration:none; display:flex; align-items:center; gap:14px; flex:1; min-width:0;}
   .result-icon{width:42px; height:42px; border-radius:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:900; color:#fff;}
   .result-body{flex:1; min-width:0;}
-  .result-title{font-size:14px; font-weight:700; margin-bottom:3px; display:flex; align-items:center; gap:8px;}
+  .result-title{font-size:14px; font-weight:700; margin-bottom:3px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .result-title .badge{font-size:10px; font-weight:400; color:var(--cyan); border:1px solid rgba(63,212,255,0.3); padding:1px 8px; border-radius:100px; font-family:'JetBrains Mono',monospace;}
   .result-desc{font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace; direction:ltr; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .result-arrow{color:var(--muted); flex-shrink:0;}
+  .save-btn{background:none; border:1px solid var(--line); border-radius:8px; color:var(--muted); padding:6px 10px; cursor:pointer; font-size:12px; transition:.15s; display:flex; align-items:center; gap:4px; flex-shrink:0;}
+  .save-btn:hover{border-color:var(--cyan); color:var(--cyan); background:rgba(63,212,255,0.05);}
+  .save-btn.saved{border-color:var(--cyan); color:var(--cyan); background:rgba(63,212,255,0.1);}
   .google-extra{
     flex-shrink:0; display:flex; align-items:center; gap:6px;
     background:var(--bg-0); border:1px solid var(--line); border-radius:10px;
@@ -134,6 +140,13 @@
   .translate-box.show{display:block;}
   .translate-box .label{font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-bottom:6px;}
   .translate-box .txt{font-size:15px; font-weight:500;}
+
+  .saved-grid{margin-top:12px; display:flex; flex-direction:column; gap:8px;}
+  .saved-item{background:var(--bg-0); border:1px solid var(--line); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px;}
+  .saved-item .info{flex:1; min-width:0;}
+  .saved-item .title{font-size:13px; font-weight:500;}
+  .saved-item .sub{font-size:11px; color:var(--muted-2); font-family:'JetBrains Mono',monospace;}
+  .saved-item .del{background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;}
 
   footer{text-align:center; margin-top:36px; font-size:11px; color:var(--muted-2); font-family:'JetBrains Mono',monospace;}
 
@@ -180,6 +193,10 @@
         <span style="font-size:16px;">📌</span>
         <span>المحفوظات</span>
       </div>
+      <div class="toggle" onclick="clearAllLocalStorage()" style="cursor:pointer; border-color:#ff4444; color:#ff6666;">
+        <span style="font-size:16px;">🗑️</span>
+        <span>مسح الكل</span>
+      </div>
     </div>
     <div class="results" id="savedLinksArea">
       <div id="savedLinksList" style="margin-top:12px;"></div>
@@ -208,6 +225,7 @@
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="query" placeholder="اكتب اسم، مكان، وصف، أو #هاشتاق..." autocomplete="off">
+        <button class="voice-btn" id="voiceBtn" onclick="startVoiceSearch()" title="بحث صوتي">🎙️</button>
       </div>
       <button class="go-btn" onclick="runSearch()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -324,7 +342,6 @@ function countryFlag(c){
 }
 const COUNTRIES = [
   WORLDWIDE,
-  // الشرق الأوسط وشمال أفريقيا
   {ar:"فلسطين", en:"Palestine", code:"ps", hl:"ar"},
   {ar:"الأردن", en:"Jordan", code:"jo", hl:"ar"},
   {ar:"السعودية", en:"Saudi Arabia", code:"sa", hl:"ar"},
@@ -351,7 +368,6 @@ const COUNTRIES = [
   {ar:"إيران", en:"Iran", code:"ir", hl:"fa"},
   {ar:"إسرائيل", en:"Israel", code:"il", hl:"he"},
   {ar:"قبرص", en:"Cyprus", code:"cy", hl:"el"},
-  // أفريقيا
   {ar:"أنغولا", en:"Angola", code:"ao", hl:"pt"},
   {ar:"بنين", en:"Benin", code:"bj", hl:"fr"},
   {ar:"بوتسوانا", en:"Botswana", code:"bw", hl:"en"},
@@ -396,7 +412,6 @@ const COUNTRIES = [
   {ar:"أوغندا", en:"Uganda", code:"ug", hl:"en"},
   {ar:"زامبيا", en:"Zambia", code:"zm", hl:"en"},
   {ar:"زيمبابوي", en:"Zimbabwe", code:"zw", hl:"en"},
-  // آسيا
   {ar:"أفغانستان", en:"Afghanistan", code:"af", hl:"fa"},
   {ar:"أرمينيا", en:"Armenia", code:"am", hl:"hy"},
   {ar:"أذربيجان", en:"Azerbaijan", code:"az", hl:"az"},
@@ -430,7 +445,6 @@ const COUNTRIES = [
   {ar:"تركمانستان", en:"Turkmenistan", code:"tm", hl:"tk"},
   {ar:"أوزبكستان", en:"Uzbekistan", code:"uz", hl:"uz"},
   {ar:"فيتنام", en:"Vietnam", code:"vn", hl:"vi"},
-  // أوروبا
   {ar:"ألبانيا", en:"Albania", code:"al", hl:"sq"},
   {ar:"أندورا", en:"Andorra", code:"ad", hl:"ca"},
   {ar:"النمسا", en:"Austria", code:"at", hl:"de"},
@@ -476,7 +490,6 @@ const COUNTRIES = [
   {ar:"أوكرانيا", en:"Ukraine", code:"ua", hl:"uk"},
   {ar:"بريطانيا", en:"United Kingdom", code:"gb", hl:"en"},
   {ar:"الفاتيكان", en:"Vatican City", code:"va", hl:"it"},
-  // الأمريكتان
   {ar:"أنتيغوا وباربودا", en:"Antigua and Barbuda", code:"ag", hl:"en"},
   {ar:"الأرجنتين", en:"Argentina", code:"ar", hl:"es"},
   {ar:"باهاماس", en:"Bahamas", code:"bs", hl:"en"},
@@ -512,7 +525,6 @@ const COUNTRIES = [
   {ar:"الولايات المتحدة", en:"United States", code:"us", hl:"en"},
   {ar:"أوروغواي", en:"Uruguay", code:"uy", hl:"es"},
   {ar:"فنزويلا", en:"Venezuela", code:"ve", hl:"es"},
-  // أوقيانوسيا
   {ar:"أستراليا", en:"Australia", code:"au", hl:"en"},
   {ar:"فيجي", en:"Fiji", code:"fj", hl:"en"},
   {ar:"كيريباتي", en:"Kiribati", code:"ki", hl:"en"},
@@ -529,7 +541,6 @@ const COUNTRIES = [
   {ar:"فانواتو", en:"Vanuatu", code:"vu", hl:"en"},
 ];
 
-// نوع المحتوى: قيمة اختيار المستخدم (auto يعني كشف تلقائي)
 const TYPE_OPTIONS = [
   {id:'auto', label:'🧭 تلقائي'},
   {id:'general', label:'🔎 عام'},
@@ -541,8 +552,8 @@ const TYPE_OPTIONS = [
   {id:'live', label:'🔴 بث مباشر'},
   {id:'file', label:'📄 ملف (APK/PDF/...)'},
 ];
-let currentTypeChoice = 'auto'; // ما اختاره المستخدم
-let effectiveType = 'general';  // القيمة الفعلية المستخدمة في البناء
+let currentTypeChoice = 'auto';
+let effectiveType = 'general';
 
 const TYPE_KEYWORDS = {
   live: ['بث مباشر','مباشر','live','livestream','بث حي'],
@@ -561,7 +572,6 @@ function detectType(text){
   return 'general';
 }
 
-/* منصات: mode = native (رابط بحث المنصة نفسها) أو site (بحث Google/Yandex مقيّد بالموقع لأنه أكثر موثوقية) */
 const PLATFORMS = [
   {id:"google", name:"جوجل", color:"#4285F4", letter:"G", mode:'native', build:googleUrl, active:true},
   {id:"facebook", name:"فيسبوك", color:"#1877F2", letter:"f", mode:'native', build:facebookUrl, domain:'facebook.com', active:true},
@@ -578,6 +588,11 @@ const PLATFORMS = [
 let selectedCountry = null;
 let selectedPlatforms = new Set(PLATFORMS.filter(p=>p.active).map(p=>p.id));
 let autoTranslate = false;
+
+/* ===================== KEYS ===================== */
+const HISTORY_KEY = 'radar_search_history';
+const SAVED_LINKS_KEY = 'radar_saved_images';
+const SAVED_MAIN_KEY = 'radar_saved_main_links';
 
 /* ===================== INIT ===================== */
 function init(){
@@ -603,7 +618,174 @@ function init(){
   });
 }
 
-/* ===================== TYPE SELECTOR ===================== */
+/* ===================== VOICE SEARCH ===================== */
+function startVoiceSearch(){
+  const btn = document.getElementById('voiceBtn');
+  if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
+    alert('متصفحك لا يدعم خاصية البحث الصوتي، استخدم Chrome أو Edge.');
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ar-SA';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  btn.classList.add('listening');
+  btn.textContent = '🔴';
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    document.getElementById('query').value = transcript;
+    btn.classList.remove('listening');
+    btn.textContent = '🎙️';
+    refreshEffectiveType();
+    updateHashtagHint(fullQueryText());
+    updateTranslateVisibility();
+    if(autoTranslate) scheduleAutoTranslate();
+    runSearch(); // ينفذ البحث تلقائياً بعد التعرف
+  };
+  recognition.onerror = (e) => {
+    btn.classList.remove('listening');
+    btn.textContent = '🎙️';
+    if(e.error === 'not-allowed') alert('الرجاء السماح بالوصول إلى المايكروفون.');
+    else alert('حدث خطأ في التعرف الصوتي، حاول مجدداً.');
+  };
+  recognition.onend = () => {
+    btn.classList.remove('listening');
+    btn.textContent = '🎙️';
+  };
+  recognition.start();
+}
+
+/* ===================== SEARCH HISTORY ===================== */
+function getSearchHistory(){
+  try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }catch(e){ return []; }
+}
+function saveToSearchHistory(term){
+  const t = term.trim();
+  if(!t) return;
+  let history = getSearchHistory();
+  history = history.filter(h => h !== t);
+  history.unshift(t);
+  history = history.slice(0, 30);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+function clearSearchHistory(){
+  localStorage.removeItem(HISTORY_KEY);
+  hideSuggestions();
+}
+
+/* ===================== SAVED MAIN LINKS ===================== */
+function getSavedMainLinks(){
+  try{ return JSON.parse(localStorage.getItem(SAVED_MAIN_KEY)) || []; }catch(e){ return []; }
+}
+function saveMainLink(platformId, url, platformName){
+  let saved = getSavedMainLinks();
+  saved = saved.filter(item => item.url !== url);
+  saved.unshift({platformId, url, platformName, date: new Date().toISOString()});
+  saved = saved.slice(0, 50);
+  localStorage.setItem(SAVED_MAIN_KEY, JSON.stringify(saved));
+  // تحديث واجهة زر الحفظ في البطاقة الحالية
+  document.querySelectorAll('.save-btn').forEach(btn => {
+    if(btn.dataset.url === url) {
+      btn.classList.add('saved');
+      btn.innerHTML = '✅ محفوظ';
+    }
+  });
+  // إظهار رسالة سريعة
+  const status = document.getElementById('imageSearchStatus');
+  const prev = status.textContent;
+  status.textContent = `✅ تم حفظ الرابط: ${platformName}`;
+  setTimeout(()=>{ if(status.textContent === `✅ تم حفظ الرابط: ${platformName}`) status.textContent = prev; }, 2000);
+}
+function removeSavedMainLink(index){
+  let saved = getSavedMainLinks();
+  saved.splice(index, 1);
+  localStorage.setItem(SAVED_MAIN_KEY, JSON.stringify(saved));
+  renderSavedLinks();
+}
+
+/* ===================== SAVED IMAGE LINKS ===================== */
+function getSavedLinks(){
+  try{ return JSON.parse(localStorage.getItem(SAVED_LINKS_KEY)) || []; }catch(e){ return []; }
+}
+function saveLinkToStorage(url){
+  let saved = getSavedLinks();
+  saved = saved.filter(u => u !== url);
+  saved.unshift(url);
+  saved = saved.slice(0, 50);
+  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
+}
+function removeSavedLink(index){
+  let saved = getSavedLinks();
+  saved.splice(index, 1);
+  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
+  renderSavedLinks();
+}
+
+/* ===================== CLEAR ALL ===================== */
+function clearAllLocalStorage(){
+  if(!confirm('هل أنت متأكد؟ سيتم مسح سجل البحث وكل المحفوظات (الصور والروابط) نهائياً.')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  localStorage.removeItem(SAVED_LINKS_KEY);
+  localStorage.removeItem(SAVED_MAIN_KEY);
+  document.getElementById('savedLinksArea').classList.remove('show');
+  document.getElementById('savedLinksList').innerHTML = '';
+  hideSuggestions();
+  alert('تم مسح كل البيانات المحفوظة بنجاح.');
+}
+
+/* ===================== RENDER SAVED LINKS ===================== */
+function toggleSavedLinksView(){
+  const area = document.getElementById('savedLinksArea');
+  const isShown = area.classList.contains('show');
+  if(isShown){ area.classList.remove('show'); return; }
+  renderSavedLinks();
+  area.classList.add('show');
+  area.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function renderSavedLinks(){
+  const list = document.getElementById('savedLinksList');
+  const imageLinks = getSavedLinks();
+  const mainLinks = getSavedMainLinks();
+
+  if(!imageLinks.length && !mainLinks.length){
+    list.innerHTML = `<div class="hint" style="margin-top:0;">ما في روابط محفوظة بعد. اضغط زر 💾 بجانب أي نتيجة بحث رئيسي، أو اضغط مطوّلاً على صورة مستخرَجة.</div>`;
+    return;
+  }
+
+  let html = `<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;"><span style="color:var(--cyan); font-weight:700;">📌 المحفوظات (${imageLinks.length+mainLinks.length})</span></div>`;
+
+  if(mainLinks.length){
+    html += `<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">🔗 روابط البحث الرئيسي:</div>`;
+    mainLinks.forEach((item, idx) => {
+      html += `<div class="saved-item">
+        <div class="info">
+          <div class="title">${item.platformName}</div>
+          <div class="sub">${item.url}</div>
+        </div>
+        <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--cyan); text-decoration:none; padding:4px;">↗</a>
+        <button class="del" onclick="removeSavedMainLink(${idx})" title="حذف">✕</button>
+      </div>`;
+    });
+  }
+
+  if(imageLinks.length){
+    html += `<div style="font-size:12px; color:var(--muted); margin:12px 0 6px;">🖼️ روابط الصور المستخرَجة:</div>`;
+    imageLinks.forEach((url, idx) => {
+      html += `<div class="saved-item">
+        <img src="${url}" style="width:32px; height:32px; object-fit:cover; border-radius:6px;" onerror="this.style.display='none'">
+        <div class="info"><div class="sub">${url}</div></div>
+        <a href="${url}" target="_blank" rel="noopener" style="color:var(--cyan); text-decoration:none; padding:4px;">↗</a>
+        <button class="del" onclick="removeSavedLink(${idx})" title="حذف">✕</button>
+      </div>`;
+    });
+  }
+  list.innerHTML = html;
+}
+
+/* ===================== TYPE ===================== */
 function renderTypeRow(){
   const row = document.getElementById('typeRow');
   row.innerHTML = TYPE_OPTIONS.map(t=>
@@ -627,7 +809,7 @@ function updateSubFilters(){
   document.getElementById('fileSubFilters').classList.toggle('show', effectiveType === 'file');
 }
 
-/* ===================== وضع مجاني/مدفوع ===================== */
+/* ===================== PRICE MODE ===================== */
 const PRICE_MODES = [
   {id:'none', label:'بدون تفضيل'},
   {id:'free', label:'💚 مجاني فقط'},
@@ -650,7 +832,7 @@ function priceModifierText(){
   return '';
 }
 
-/* ===================== PLATFORM GRID ===================== */
+/* ===================== PLATFORM ===================== */
 function renderPlatforms(){
   const grid = document.getElementById('platformGrid');
   grid.innerHTML = '';
@@ -718,20 +900,18 @@ function langName(hl){
   return map[hl] || hl;
 }
 
-/* ===================== TIME RANGE ===================== */
+/* ===================== TIME ===================== */
 function toggleCustomRange(){
   const v = document.getElementById('timeRange').value;
   document.getElementById('customRangeRow').style.display = (v === 'custom') ? 'flex' : 'none';
 }
 
-/* ===================== TRANSLATE TOGGLE ===================== */
+/* ===================== TRANSLATE ===================== */
 function toggleAutoTranslate(){
   autoTranslate = !autoTranslate;
   document.getElementById('transToggle').classList.toggle('active', autoTranslate);
   updateTranslateVisibility();
 }
-
-/* ===================== HASHTAGS ===================== */
 function extractHashtags(text){
   const existing = (text.match(/#[\w\u0600-\u06FF]+/g) || []);
   const generated = text.trim() ? '#' + text.trim().split(/\s+/).join('_').replace(/[^\w\u0600-\u06FF_]/g,'') : '';
@@ -741,34 +921,13 @@ function updateHashtagHint(text){
   const tags = extractHashtags(text);
   document.getElementById('hashtagHint').textContent = tags.length ? '🏷️ هاشتاقات مقترحة: ' + tags.join('  ') : '';
 }
-
-/* دمج نص البحث الأساسي مع الترجمة إن وُجدت */
 function fullQueryText(){
   const translated = document.getElementById('translatedInput').value.trim();
   const base = translated || document.getElementById('query').value.trim();
   return base;
 }
 
-/* ===================== SUGGESTIONS (محلي بالكامل، لا يعتمد على شبكة خارجية) ===================== */
-/* ===================== سجل البحث (مخزَّن محليًا بالجهاز) ===================== */
-const HISTORY_KEY = 'radar_search_history';
-function getSearchHistory(){
-  try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }catch(e){ return []; }
-}
-function saveToSearchHistory(term){
-  const t = term.trim();
-  if(!t) return;
-  let history = getSearchHistory();
-  history = history.filter(h => h !== t); // شيل التكرار القديم
-  history.unshift(t); // الأحدث فوق
-  history = history.slice(0, 30); // حد أقصى 30
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-}
-function clearSearchHistory(){
-  localStorage.removeItem(HISTORY_KEY);
-  hideSuggestions();
-}
-
+/* ===================== SUGGESTIONS ===================== */
 function onQueryInput(e){
   const text = e.target.value;
   refreshEffectiveType();
@@ -783,36 +942,19 @@ function buildLocalSuggestions(text){
   const type = (currentTypeChoice === 'auto') ? detectType(t) : currentTypeChoice;
   const countryName = selectedCountry ? selectedCountry.ar : '';
   const list = [];
-
-  // سجل البحث أولاً (أعلى أولوية) — أي بحث سابق يطابق جزئيًا يلي عم تكتبه
   const history = getSearchHistory();
   const historyMatches = history.filter(h => h.toLowerCase().includes(t.toLowerCase()) && h.toLowerCase() !== t.toLowerCase());
   historyMatches.slice(0,3).forEach(h => list.push({text:h, tag:'🕘 سجلك'}));
-
   list.push({text:`"${t}"`, tag:'مطابقة دقيقة'});
-
-  if(type === 'image' || currentTypeChoice === 'auto'){
-    list.push({text:`${t} صورة عالية الدقة`, tag:'صورة'});
-  }
-  if(type === 'video' || currentTypeChoice === 'auto'){
-    list.push({text:`${t} فيديو كامل`, tag:'فيديو'});
-  }
-  if(countryName){
-    list.push({text:`${t} في ${countryName}`, tag:'حسب الدولة'});
-  }
+  if(type === 'image' || currentTypeChoice === 'auto'){ list.push({text:`${t} صورة عالية الدقة`, tag:'صورة'}); }
+  if(type === 'video' || currentTypeChoice === 'auto'){ list.push({text:`${t} فيديو كامل`, tag:'فيديو'}); }
+  if(countryName){ list.push({text:`${t} في ${countryName}`, tag:'حسب الدولة'}); }
   const tag = '#' + t.split(/\s+/).join('_').replace(/[^\w\u0600-\u06FF_]/g,'');
   if(tag.length>1) list.push({text:tag, tag:'هاشتاق'});
-
   list.push({text:`${t} حساب رسمي`, tag:'حساب'});
   list.push({text:`${t} آخر الأخبار`, tag:'محدث'});
-
-  // إزالة التكرار
   const seen = new Set();
-  return list.filter(s=>{
-    if(seen.has(s.text)) return false;
-    seen.add(s.text);
-    return true;
-  }).slice(0,8);
+  return list.filter(s=>{ if(seen.has(s.text)) return false; seen.add(s.text); return true; }).slice(0,8);
 }
 function renderSuggestions(list){
   const panel = document.getElementById('suggestPanel');
@@ -835,12 +977,9 @@ function pickSuggestion(s){
 }
 function hideSuggestions(){ document.getElementById('suggestPanel').classList.remove('show'); }
 
-/* ===================== TRANSLATION (تلقائية عبر خدمة ترجمة خارجية + إمكانية التعديل اليدوي) ===================== */
+/* ===================== TRANSLATION LOGIC ===================== */
 let translateDebounce = null;
-const LANG_NAME_EN = {en:'English', tr:'Turkish', fa:'Persian', he:'Hebrew', ru:'Russian', de:'German', fr:'French', es:'Spanish', it:'Italian', 'zh-CN':'Chinese', ja:'Japanese', hi:'Hindi', ur:'Urdu', 'pt-BR':'Portuguese'};
-
-function onTranslatedInputChange(){ /* المستخدم عدّل الترجمة يدويًا — تُستخدم كما هي */ }
-
+function onTranslatedInputChange(){ /* user edited */ }
 function updateTranslateVisibility(){
   const box = document.getElementById('translateBox');
   const hint = document.getElementById('transHint');
@@ -854,20 +993,16 @@ function updateTranslateVisibility(){
   box.classList.add('show');
   scheduleAutoTranslate();
 }
-
 function scheduleAutoTranslate(){
   clearTimeout(translateDebounce);
   translateDebounce = setTimeout(runAutoTranslate, 450);
 }
-
 async function runAutoTranslate(){
   const text = document.getElementById('query').value.trim();
   const input = document.getElementById('translatedInput');
   if(!autoTranslate || !text || !selectedCountry || !selectedCountry.hl || selectedCountry.hl === 'ar') return;
   const targetLang = selectedCountry.hl.split('-')[0];
   input.placeholder = 'جارٍ الترجمة تلقائيًا...';
-
-  // محاولة 1: خدمة ترجمة جوجل غير الرسمية
   try{
     const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`);
     if(res.ok){
@@ -875,20 +1010,17 @@ async function runAutoTranslate(){
       const translated = data?.[0]?.map(chunk => chunk[0]).join('');
       if(translated){ input.value = translated; input.placeholder = 'اكتب الترجمة هنا...'; updateHashtagHint(fullQueryText()); return; }
     }
-  }catch(err){ /* ننتقل للمحاولة التالية */ }
-
-  // محاولة 2: MyMemory كبديل احتياطي
+  }catch(err){}
   try{
     const res2 = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ar|${targetLang}`);
     const data2 = await res2.json();
     const translated2 = data2?.responseData?.translatedText;
     if(translated2){ input.value = translated2; input.placeholder = 'اكتب الترجمة هنا...'; updateHashtagHint(fullQueryText()); return; }
-  }catch(err){ /* فشلت المحاولتان */ }
-
+  }catch(err){}
   input.placeholder = 'تعذّرت الترجمة التلقائية — اكتب الترجمة هنا يدويًا';
 }
 
-/* ===================== URL BUILDERS (SafeSearch off بشكل دائم وصامت) ===================== */
+/* ===================== URL BUILDERS ===================== */
 function timeParams(){
   const v = document.getElementById('timeRange').value;
   if(v === 'custom'){
@@ -925,7 +1057,7 @@ function googleUrl(q, type, opts){
     finalQ = `${q} filetype:${ext}`;
   }
   if(type === 'comment'){
-    finalQ = `"${q}" (inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")`; // مطابقة دقيقة مع توجيه Google نحو التعليقات والردود المفهرسة
+    finalQ = `"${q}" (inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")`;
   }
   if(type === 'live'){
     finalQ = `${q} (بث مباشر OR "live now" OR livestream)`;
@@ -937,15 +1069,8 @@ function googleUrl(q, type, opts){
   let params = new URLSearchParams(paramObj);
   const tbs = [];
   const tp = timeParams(); if(tp) tbs.push(tp);
-  if(type === 'image'){
-    params.set('tbm','isch');
-    tbs.push(...googleImageTbs());
-  }
-  if(type === 'video' || type === 'live'){
-    params.set('tbm','vid');
-    const {dur} = googleVideoExtra();
-    if(dur) tbs.push(`dur:${dur}`);
-  }
+  if(type === 'image'){ params.set('tbm','isch'); tbs.push(...googleImageTbs()); }
+  if(type === 'video' || type === 'live'){ params.set('tbm','vid'); const {dur} = googleVideoExtra(); if(dur) tbs.push(`dur:${dur}`); }
   if(tbs.length) params.set('tbs', tbs.join(','));
   return `https://www.google.com/search?${params.toString()}`;
 }
@@ -962,7 +1087,7 @@ function xUrl(q){
 function youtubeUrl(q, type){
   const params = new URLSearchParams({search_query:q});
   let url = `https://www.youtube.com/results?${params.toString()}`;
-  if(type === 'live') url += '&sp=EgJAAQ%253D%253D'; // فلتر "بث مباشر" الرسمي بيوتيوب
+  if(type === 'live') url += '&sp=EgJAAQ%253D%253D';
   return url;
 }
 function yandexUrl(q, type){
@@ -970,20 +1095,11 @@ function yandexUrl(q, type){
   if(type === 'image') return `https://yandex.com/images/search?${params.toString()}`;
   return `https://yandex.com/search/?${params.toString()}`;
 }
-
-/* بعض الامتدادات (APK/EXE) غير مدعومة رسميًا بعملية filetype: في جوجل — نستخدم بحثًا مفتوحًا بالكلمات بدل تحديد مواقع معيّنة، حتى يقرر المستخدم بنفسه من أي موقع يحمّل */
 const FILE_TYPE_STRATEGY = {
-  pdf:  {mode:'filetype'},
-  doc:  {mode:'filetype'},
-  docx: {mode:'filetype'},
-  ppt:  {mode:'filetype'},
-  xls:  {mode:'filetype'},
-  apk:  {mode:'keyword'},
-  exe:  {mode:'keyword'},
-  zip:  {mode:'keyword'},
-  rar:  {mode:'keyword'},
-  mp3:  {mode:'keyword'},
-  epub: {mode:'keyword'},
+  pdf:{mode:'filetype'}, doc:{mode:'filetype'}, docx:{mode:'filetype'},
+  ppt:{mode:'filetype'}, xls:{mode:'filetype'},
+  apk:{mode:'keyword'}, exe:{mode:'keyword'}, zip:{mode:'keyword'},
+  rar:{mode:'keyword'}, mp3:{mode:'keyword'}, epub:{mode:'keyword'},
 };
 function buildFileSearchUrls(q, ext){
   const strategy = FILE_TYPE_STRATEGY[ext] || {mode:'keyword'};
@@ -994,7 +1110,6 @@ function buildFileSearchUrls(q, ext){
       badge: 'بحث ملفات مباشر (مدعوم رسميًا)',
     };
   }
-  // keyword mode: بحث مفتوح بدون تقييد بمواقع معيّنة — القرار للمستخدم
   const fullQ = `${q} (تحميل ${ext} OR download ${ext} OR "${ext} file")`;
   return {
     google: googleUrl(fullQ, 'general', {}),
@@ -1003,7 +1118,7 @@ function buildFileSearchUrls(q, ext){
   };
 }
 
-/* ===================== REVERSE IMAGE SEARCH (اعثر على المزيد من نفس النوع) ===================== */
+/* ===================== REVERSE IMAGE SEARCH ===================== */
 function extractYouTubeId(url){
   const patterns = [
     /youtu\.be\/([a-zA-Z0-9_-]{11})/,
@@ -1011,10 +1126,7 @@ function extractYouTubeId(url){
     /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
   ];
-  for(const p of patterns){
-    const m = url.match(p);
-    if(m) return m[1];
-  }
+  for(const p of patterns){ const m = url.match(p); if(m) return m[1]; }
   return null;
 }
 function clearImageInput(){
@@ -1032,66 +1144,79 @@ function openPastedLinkDirectly(){
   window.open(url, '_blank', 'noopener');
 }
 
-/* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
+/* ===================== IMPROVED FETCH OG TAGS (مقفلة) ===================== */
 async function fetchOgTags(pageUrl){
-  // نسخة فيسبوك الخفيفة للموبايل (m.facebook.com) أبسط بكود أقل تعقيدًا وأكثر ثباتًا للاستخراج من النسخة الكاملة
   const scrapeUrl = pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i, 'https://m.facebook.com');
-
-  // محاولة أولى: خدمات oEmbed عامة وسريعة (noembed / microlink) قبل اللجوء لوسطاء CORS الأبطأ
+  // المحاولات السريعة (oEmbed)
   try{
     const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
     const data = await res.json();
     if(data && data.thumbnail_url){
       return {image: data.thumbnail_url, title: data.title || null, desc: null};
     }
-  }catch(err){ /* التالي */ }
+  }catch(e){}
   try{
     const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`);
     const data = await res.json();
     if(data && data.data && data.data.image && data.data.image.url){
       return {image: data.data.image.url, title: data.data.title || null, desc: data.data.description || null};
     }
-  }catch(err){ /* التالي */ }
+  }catch(e){}
 
-  // محاولة أخيرة: وسطاء CORS لسحب og:image من كود الصفحة مباشرة (نستخدم نسخة الموبايل الخفيفة لفيسبوك هنا تحديدًا)
+  // وسطاء متعددون + User-Agent متقدم لتجاوز القفل
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    u => `https://proxy.cors.sh/${u}`,
   ];
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  };
+
   for(const buildProxyUrl of proxies){
     try{
-      const res = await fetch(buildProxyUrl(scrapeUrl));
+      const res = await fetch(buildProxyUrl(scrapeUrl), { headers });
       if(!res.ok) continue;
       const html = await res.text();
-      if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
-      const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-      const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-      const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-      if(imgMatch){
-        return {
-          image: imgMatch[1],
-          title: titleMatch ? titleMatch[1] : null,
-          desc: descMatch ? descMatch[1] : null,
-        };
+      if(!html || html.length < 200) continue;
+
+      const getMeta = (prop) => {
+        const regex1 = new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i');
+        const regex2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, 'i');
+        let m = html.match(regex1) || html.match(regex2);
+        if(m) return m[1];
+        // محاولة استخراج twitter:image كبديل
+        if(prop === 'og:image'){
+          const tw = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+                    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+          if(tw) return tw[1];
+        }
+        return null;
+      };
+
+      const img = getMeta('og:image');
+      const title = getMeta('og:title');
+      const desc = getMeta('og:description');
+
+      if(img){
+        // استبعاد الصور العامة الوهمية
+        const isGeneric = /abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net|data:image/i.test(img);
+        if(!isGeneric) {
+          return { image: img, title: title || null, desc: desc || null };
+        }
       }
-    }catch(err){ /* جرّب الوسيط التالي */ }
+    } catch(err){ /* جرّب الوكيل التالي */ }
   }
   return {image:null, title:null, desc:null};
 }
 
-/* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
-/* الضغط على هاشتاق مستخرَج من البحث العكسي يبحث عنه مباشرة عبر كل المنصات */
 function searchHashtag(tag){
   document.getElementById('query').value = tag;
   refreshEffectiveType();
   updateHashtagHint(fullQueryText());
   runSearch();
 }
-
 function openOriginalLinkHtml(url){
   return `
     <div class="result-card">
@@ -1124,13 +1249,11 @@ async function runImageSearch(){
   let captionText = '';
   let sourceLabel = '';
 
-  // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
   const ytId = extractYouTubeId(url);
   if(ytId){
     imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
     sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
   }
-  // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
   else if(/tiktok\.com/i.test(url)){
     status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
     try{
@@ -1141,7 +1264,7 @@ async function runImageSearch(){
         captionText = data.title || '';
         sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
       }
-    }catch(err){ /* فشلت المحاولة، ننتقل للاحتياطي */ }
+    }catch(err){}
     if(!imageUrl){
       try{
         const og = await fetchOgTags(url);
@@ -1150,7 +1273,7 @@ async function runImageSearch(){
           captionText = og.title || og.desc || '';
           sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
         }
-      }catch(err){ /* فشلت كل المحاولات */ }
+      }catch(err){}
     }
     if(!imageUrl){
       status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
@@ -1159,27 +1282,24 @@ async function runImageSearch(){
       return;
     }
   }
-  // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
   else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
-    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
+    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ (وسطاء متعددون)';
     try{
       const og = await fetchOgTags(url);
-      // X وفيسبوك أحيانًا يرجّعوا صورة عامة تابعة لواجهة التطبيق نفسه (abs.twimg.com / static.xx.fbcdn.net) بدل صورة المنشور الحقيقية — نتجاهلها لأنها مضلّلة
-      const isGenericAsset = og.image && (/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image) || og.image.startsWith('data:'));
-      if(og.image && !isGenericAsset){
+      const isGeneric = og.image && (/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image) || og.image.startsWith('data:'));
+      if(og.image && !isGeneric){
         imageUrl = og.image;
         captionText = og.title || og.desc || '';
         sourceLabel = 'تم جلب الصورة والوصف تلقائيًا ✅';
       }
-    }catch(err){ /* فشلت المحاولة */ }
+    }catch(err){}
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو (لو كان رابط ستوري) الستوريهات لا تعرض معاينة عامة لأنها مؤقتة بطبيعتها. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو ستوري مؤقت. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
       cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
-  // 4) غير ذلك: افترض إنه رابط صورة مباشر
   else{
     imageUrl = url;
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
@@ -1188,7 +1308,6 @@ async function runImageSearch(){
   status.textContent = sourceLabel;
   const encoded = encodeURIComponent(imageUrl);
 
-  // محركات البحث العكسي بالصورة (تجيب صورًا ومصادر مشابهة)
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
     {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
@@ -1197,9 +1316,7 @@ async function runImageSearch(){
 
   let videoEnginesHtml = '';
   if(captionText){
-    // نسخة نظيفة (بدون أرقام تفاعل) تُستخدم فقط داخل رابط البحث نفسه — العرض يبقى بالنص الكامل الأصلي
     const cleanedCaption = captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi, '').replace(/\s*\|\s*|\s*·\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    // استخراج الهاشتاقات الموجودة أصلاً بالوصف (إن وُجدت)
     const extractedTags = [...new Set(captionText.match(/#[\w\u0600-\u06FF]+/g) || [])];
     const vq = (cleanedCaption || captionText.trim());
     const videoEngines = [
@@ -1211,7 +1328,7 @@ async function runImageSearch(){
       ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات (اضغط لبحث مباشر): ${extractedTags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan); cursor:pointer; text-decoration:underline; margin-inline-end:8px;">${t}</span>`).join('')}</div>`
       : '';
     videoEnginesHtml = `
-      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج (يتضمن أرقام المشاهدات/التفاعل إن وُجدت): <b style="color:var(--cyan);">${captionText.trim()}</b></div>
+      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج: <b style="color:var(--cyan);">${captionText.trim()}</b></div>
       ${tagsHtml}
     ` + videoEngines.map(eng => `
       <div class="result-card">
@@ -1225,7 +1342,6 @@ async function runImageSearch(){
         </a>
       </div>`).join('');
   }
-
 
   cards.innerHTML = `
     <div class="result-card" style="margin-bottom:14px;">
@@ -1249,51 +1365,6 @@ async function runImageSearch(){
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
   attachLongPressSave(imageUrl);
-}
-
-/* ===================== حفظ روابط الصور (ضغط مطوّل) ===================== */
-const SAVED_LINKS_KEY = 'radar_saved_images';
-function getSavedLinks(){
-  try{ return JSON.parse(localStorage.getItem(SAVED_LINKS_KEY)) || []; }catch(e){ return []; }
-}
-function saveLinkToStorage(url){
-  let saved = getSavedLinks();
-  saved = saved.filter(u => u !== url);
-  saved.unshift(url);
-  saved = saved.slice(0, 50);
-  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
-}
-function toggleSavedLinksView(){
-  const area = document.getElementById('savedLinksArea');
-  const isShown = area.classList.contains('show');
-  if(isShown){ area.classList.remove('show'); return; }
-  renderSavedLinks();
-  area.classList.add('show');
-  area.scrollIntoView({behavior:'smooth', block:'start'});
-}
-function renderSavedLinks(){
-  const saved = getSavedLinks();
-  const list = document.getElementById('savedLinksList');
-  if(!saved.length){
-    list.innerHTML = `<div class="hint" style="margin-top:0;">ما في روابط محفوظة بعد — اضغط مطوّلاً على أي صورة مستخرَجة لحفظها.</div>`;
-    return;
-  }
-  list.innerHTML = saved.map((u,i) => `
-    <div class="result-card">
-      <a class="main-link" href="${u}" target="_blank" rel="noopener">
-        <img src="${u}" style="width:44px; height:44px; object-fit:cover; border-radius:8px; flex-shrink:0;" onerror="this.style.display='none'">
-        <div class="result-desc" style="white-space:normal; flex:1;">${u}</div>
-      </a>
-      <button onclick="removeSavedLink(${i})" title="حذف" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>`).join('');
-}
-function removeSavedLink(index){
-  let saved = getSavedLinks();
-  saved.splice(index, 1);
-  localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(saved));
-  renderSavedLinks();
 }
 
 function attachLongPressSave(url){
@@ -1329,19 +1400,13 @@ function runSearch(){
   const type = effectiveType;
   let query = fullQueryText();
 
-  // إضافة كلمة الجودة كنص فعلي (لا يوجد باراميتر مباشر للجودة عند أغلب المنصات)
   if(type === 'video'){
     const {quality} = googleVideoExtra();
     if(quality) query = `${query} ${quality}`;
   }
-  // تحيّز نحو البث المباشر بالنص أيضًا (يفيد المنصات الأصلية متل فيسبوك وX)
-  if(type === 'live'){
-    query = `${query} بث مباشر live`;
-  }
-  // تعديل مجاني/مدفوع
+  if(type === 'live'){ query = `${query} بث مباشر live`; }
   const priceMod = priceModifierText();
   if(priceMod) query = `${query} ${priceMod}`;
-
   updateHashtagHint(query);
 
   const meta = document.getElementById('resultMeta');
@@ -1358,7 +1423,6 @@ function runSearch(){
   cards.innerHTML = '';
 
   if(type === 'file'){
-    // بحث الملفات لازم يكون عالميًا بدون تقييد بموقع منصة — الملفات مش مستضافة عادةً على فيسبوك/تيليجرام/تيك توك
     const ext = document.getElementById('fileExt').value;
     const strat = buildFileSearchUrls(query, ext);
     const fileEngines = [
@@ -1376,7 +1440,9 @@ function runSearch(){
             <div class="result-desc">${eng.url}</div>
           </div>
           <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
-        </a>`;
+        </a>
+        <button class="save-btn" onclick="saveMainLink('${eng.name}','${eng.url.replace(/'/g,"\\'")}','${eng.name}')" data-url="${eng.url.replace(/'/g,"\\'")}">💾 حفظ</button>
+      `;
       cards.appendChild(card);
     });
     document.getElementById('resultsArea').classList.add('show');
@@ -1384,7 +1450,6 @@ function runSearch(){
     return;
   }
 
-  // النوع "تعليق/كلمة دقيقة" ما بيدعمه بحث المنصات الأصلي — نفرض المرور عبر Google مقيّد بموقع كل منصة
   const forceGoogleTypes = (type === 'comment');
   PLATFORMS.filter(p => p.active && selectedPlatforms.has(p.id)).forEach(p=>{
     let url, badge = '';
@@ -1397,7 +1462,7 @@ function runSearch(){
     } else {
       url = p.build(query, type);
     }
-    // زر إضافي: بحث Google مقيّد بموقع المنصة نفسها (لكل منصة عدا جوجل ونفسه ياندكس)
+
     let googleExtraHtml = '';
     if(!forceGoogleTypes && p.mode !== 'site' && p.id !== 'google' && p.id !== 'yandex' && p.domain){
       const gUrl = googleUrl(query, type, {siteDomain:p.domain});
@@ -1406,8 +1471,10 @@ function runSearch(){
           <span class="g-icon">G</span> بحث Google
         </a>`;
     }
+
     const card = document.createElement('div');
     card.className = 'result-card';
+    const safeUrl = url.replace(/'/g,"\\'");
     card.innerHTML = `
       <a class="main-link" href="${url}" target="_blank" rel="noopener">
         <div class="result-icon" style="background:${p.color}; ${p.dark?'color:#111':''}">${p.letter}</div>
@@ -1417,55 +1484,42 @@ function runSearch(){
         </div>
         <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
       </a>
-      ${googleExtraHtml}`;
+      ${googleExtraHtml}
+      <button class="save-btn" onclick="saveMainLink('${p.id}','${safeUrl}','${p.name.replace(/'/g,"\\'")}')" data-url="${safeUrl}">💾 حفظ</button>
+    `;
     cards.appendChild(card);
   });
   document.getElementById('resultsArea').classList.add('show');
   document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
-  // ملاحظة: لا تفريغ تلقائي بعد البحث — يبقى كل شيء كما هو حتى يضغط المستخدم زر إعادة الضبط يدويًا
 }
-function resetAllInputs(){
-  // نص البحث
-  document.getElementById('query').value = '';
 
-  // نوع المحتوى
+function resetAllInputs(){
+  document.getElementById('query').value = '';
   currentTypeChoice = 'auto';
   effectiveType = 'general';
   renderTypeRow();
   priceMode = 'none';
   renderPriceModeRow();
-
-  // فلاتر الصورة/الفيديو/الملف
   document.getElementById('imgColor').value = '';
   document.getElementById('imgSize').value = '';
   document.getElementById('imgType').value = '';
   document.getElementById('vidDur').value = '';
   document.getElementById('vidQuality').value = '';
   document.getElementById('fileExt').value = 'apk';
-
-  // الدولة الافتراضية
   selectedCountry = WORLDWIDE;
   document.getElementById('countryInput').value = `${countryFlag(WORLDWIDE)} ${WORLDWIDE.ar}`;
   document.getElementById('langDisplay').value = langName(WORLDWIDE.hl);
-
-  // الفترة الزمنية
   document.getElementById('timeRange').value = '';
   document.getElementById('customRangeRow').style.display = 'none';
   document.getElementById('dateFrom').value = '';
   document.getElementById('dateTo').value = '';
-
-  // الترجمة
   autoTranslate = false;
   document.getElementById('transToggle').classList.remove('active');
   document.getElementById('translatedInput').value = '';
   document.getElementById('translatedInput').placeholder = 'اكتب الترجمة هنا...';
   document.getElementById('translateBox').classList.remove('show');
-
-  // المنصات
   selectedPlatforms = new Set(PLATFORMS.filter(p=>p.active).map(p=>p.id));
   renderPlatforms();
-
-  // العناصر المساعدة
   document.getElementById('hashtagHint').textContent = '';
   document.getElementById('transHint').textContent = '';
   hideSuggestions();
@@ -1486,12 +1540,9 @@ function timeRangeLabel(){
   return labels[v] || 'أي وقت';
 }
 
-/* تسجيل Service Worker لتفعيل التثبيت كتطبيق PWA */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
-
-/* استقبال رابط تمت مشاركته من تطبيق آخر (إنستجرام/X/فيسبوك) عبر قائمة "مشاركة" بأندرويد */
 function handleSharedLink(){
   const params = new URLSearchParams(window.location.search);
   const shared = params.get('shared_url') || params.get('shared_text') || '';
@@ -1499,12 +1550,10 @@ function handleSharedLink(){
   if(urlMatch){
     const link = urlMatch[0];
     document.getElementById('imageUrlInput').value = link;
-    // تنظيف الرابط من شريط العنوان بدون إعادة تحميل الصفحة
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(()=> runImageSearch(), 300);
   }
 }
-
 init();
 handleSharedLink();
 </script>
