@@ -716,7 +716,7 @@ function renderSavedMainLinks(){
   list.innerHTML=html;
 }
 
-/* ===================== SAVED IMAGES (مع خاصية الضغط المطول للتكبير) ===================== */
+/* ===================== SAVED IMAGES ===================== */
 function getSavedImages(){ try{ return JSON.parse(localStorage.getItem(SAVED_IMAGES_KEY))||[]; }catch(e){return[];} }
 function saveImageLink(url){ let saved=getSavedImages(); saved=saved.filter(u=>u!==url); saved.unshift(url); saved=saved.slice(0,50); localStorage.setItem(SAVED_IMAGES_KEY,JSON.stringify(saved)); }
 function removeSavedImage(index){ let saved=getSavedImages(); saved.splice(index,1); localStorage.setItem(SAVED_IMAGES_KEY,JSON.stringify(saved)); renderSavedImages(); }
@@ -728,7 +728,6 @@ function toggleSavedImagesView(){
   renderSavedImages(); area.classList.add('show'); area.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// دوال عرض الصورة بحجم الشاشة
 function showFullScreenImage(src){
   const overlay=document.getElementById('imageOverlay');
   const img=document.getElementById('fullScreenImage');
@@ -758,11 +757,10 @@ function renderSavedImages(){
   html+='</div>';
   list.innerHTML=html;
 
-  // إضافة مستمعات الضغط المطول لكل صورة بعد تحميلها
-  list.querySelectorAll('.saved-image-item img').forEach((img, index) => {
+  // إضافة مستمعات الضغط المطول
+  list.querySelectorAll('.saved-image-item img').forEach((img) => {
     let pressTimer = null;
     const startPress = (e) => {
-      // منع حدث النقر الافتراضي أثناء الضغط المطول
       if(e.type === 'touchstart') e.preventDefault();
       pressTimer = setTimeout(() => {
         const url = img.src;
@@ -772,17 +770,10 @@ function renderSavedImages(){
         }
       }, 500);
     };
-    const endPress = () => {
-      if(pressTimer) {
-        clearTimeout(pressTimer);
-        pressTimer = null;
-      }
-    };
-    // للمس (الهواتف)
+    const endPress = () => { if(pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
     img.addEventListener('touchstart', startPress, {passive: false});
     img.addEventListener('touchend', endPress);
     img.addEventListener('touchmove', endPress);
-    // للفأرة (الكمبيوتر)
     img.addEventListener('mousedown', startPress);
     img.addEventListener('mouseup', endPress);
     img.addEventListener('mouseleave', endPress);
@@ -960,57 +951,70 @@ function yandexUrl(q,type){ const params=new URLSearchParams({text:q,fmode:'none
 const FILE_TYPE_STRATEGY={pdf:{mode:'filetype'},doc:{mode:'filetype'},docx:{mode:'filetype'},ppt:{mode:'filetype'},xls:{mode:'filetype'},apk:{mode:'keyword'},exe:{mode:'keyword'},zip:{mode:'keyword'},rar:{mode:'keyword'},mp3:{mode:'keyword'},epub:{mode:'keyword'}};
 function buildFileSearchUrls(q,ext){ const strategy=FILE_TYPE_STRATEGY[ext]||{mode:'keyword'}; if(strategy.mode==='filetype'){ return{google:googleUrl(q,'file',{}),yandex:`https://yandex.com/search/?text=${encodeURIComponent(q+' filetype:'+ext)}&fmode=none`,badge:'بحث ملفات مباشر'}; } const fullQ=`${q} (تحميل ${ext} OR download ${ext} OR "${ext} file")`; return{google:googleUrl(fullQ,'general',{}),yandex:`https://yandex.com/search/?text=${encodeURIComponent(fullQ)}&fmode=none`,badge:'بحث مفتوح بالكلمات'}; }
 
-/* ===================== REVERSE IMAGE SEARCH ===================== */
+/* ===================== REVERSE IMAGE SEARCH (النسخة الأصلية مع دعم كامل لفيسبوك) ===================== */
 function extractYouTubeId(url){ const patterns=[/youtu\.be\/([a-zA-Z0-9_-]{11})/,/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/]; for(const p of patterns){ const m=url.match(p); if(m)return m[1]; } return null; }
 
-async function fetchPostDetails(url){
-  let targetUrl=url;
-  if(/x\.com|twitter\.com/i.test(url)) targetUrl=url.replace(/x\.com/i,'fxtwitter.com').replace(/twitter\.com/i,'fxtwitter.com');
-  if(/instagram\.com/i.test(url)) targetUrl=url.replace(/instagram\.com/i,'ddinstagram.com');
-  // ملاحظة: تم تجربة تحويل روابط فيسبوك لنسخة الموبايل (m.facebook.com) لكنها خرّبت استخراج الريلز تحديدًا، فتم التراجع عنها
+/* ===== دالة جلب الـ og:image الأصلية ===== */
+async function fetchOgTags(pageUrl){
+  const scrapeUrl = pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i, 'https://m.facebook.com');
+  try{
+    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
+    const data = await res.json();
+    if(data && data.thumbnail_url){
+      return {image: data.thumbnail_url, title: data.title || null, desc: null};
+    }
+  }catch(err){}
+  try{
+    const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`);
+    const data = await res.json();
+    if(data && data.data && data.data.image && data.data.image.url){
+      return {image: data.data.image.url, title: data.data.title || null, desc: data.data.description || null};
+    }
+  }catch(err){}
 
-  if(/tiktok\.com/i.test(url)){
-    try{ const res=await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`); const data=await res.json(); if(data&&data.thumbnail_url) return{image:data.thumbnail_url,title:data.title||null,desc:null}; }catch(e){}
-  }
-  if(/youtube\.com|youtu\.be/i.test(url)){
-    try{ const res=await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}`); const data=await res.json(); if(data&&data.thumbnail_url) return{image:data.thumbnail_url,title:data.title||null,desc:null}; }catch(e){}
-  }
-
-  const proxies=[
-    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u=>`https://thingproxy.freeboard.io/fetch/${u}`,
-    u=>`https://proxy.cors.sh/${u}`,
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    u => `https://proxy.cors.sh/${u}`,
   ];
-  const headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'};
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  };
 
   for(const buildProxyUrl of proxies){
     try{
-      const res=await fetch(buildProxyUrl(targetUrl),{headers});
+      const res = await fetch(buildProxyUrl(scrapeUrl), { headers });
       if(!res.ok) continue;
-      const html=await res.text();
-      if(!html||html.length<200) continue;
-      const getMeta=(prop)=>{
-        const regex1=new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`,'i');
-        const regex2=new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`,'i');
-        let m=html.match(regex1)||html.match(regex2);
-        if(m)return m[1];
-        if(prop==='og:image'){
-          const tw=html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)||html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-          if(tw)return tw[1];
+      const html = await res.text();
+      if(!html || html.length < 200) continue;
+
+      const getMeta = (prop) => {
+        const regex1 = new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i');
+        const regex2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, 'i');
+        let m = html.match(regex1) || html.match(regex2);
+        if(m) return m[1];
+        if(prop === 'og:image'){
+          const tw = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+                    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+          if(tw) return tw[1];
         }
         return null;
       };
-      const img=getMeta('og:image');
-      const title=getMeta('og:title');
-      const desc=getMeta('og:description');
+
+      const img = getMeta('og:image');
+      const title = getMeta('og:title');
+      const desc = getMeta('og:description');
+
       if(img){
-        const isGeneric=/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net|data:image/i.test(img);
-        if(!isGeneric) return{image:img,title:title||null,desc:desc||null};
+        const isGeneric = /abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net|data:image/i.test(img);
+        if(!isGeneric) {
+          return { image: img, title: title || null, desc: desc || null };
+        }
       }
-    }catch(err){}
+    } catch(err){ /* جرّب الوكيل التالي */ }
   }
-  return{image:null,title:null,desc:null};
+  return {image:null, title:null, desc:null};
 }
 
 function clearImageInput(){
@@ -1035,59 +1039,119 @@ async function runImageSearch(){
 
   let imageUrl=null, captionText='', sourceLabel='';
   const ytId=extractYouTubeId(url);
-  if(ytId){ imageUrl=`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`; sourceLabel='✅ يوتيوب'; }
-  else{
-    status.textContent='جارٍ جلب بيانات المنشور...';
-    const details=await fetchPostDetails(url);
-    if(details&&details.image){
-      imageUrl=details.image;
-      captionText=details.title||details.desc||'';
-      sourceLabel='✅ تم جلب الصورة والوصف';
+  if(ytId){
+    imageUrl=`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+    sourceLabel='تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
+  }
+  else if(/tiktok\.com/i.test(url)){
+    status.textContent='جارٍ جلب بيانات الفيديو من تيك توك...';
+    try{
+      const res=await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+      const data=await res.json();
+      if(data&&data.thumbnail_url){
+        imageUrl=data.thumbnail_url;
+        captionText=data.title||'';
+        sourceLabel='تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
+      }
+    }catch(err){}
+    if(!imageUrl){
+      try{
+        const og=await fetchOgTags(url);
+        if(og.image){
+          imageUrl=og.image;
+          captionText=og.title||og.desc||'';
+          sourceLabel='تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
+        }
+      }catch(err){}
+    }
+    if(!imageUrl){
+      status.innerHTML='⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
+      cards.innerHTML=openOriginalLinkHtml(url);
+      document.getElementById('imageResultsArea').classList.add('show');
+      return;
     }
   }
-
-  if(!imageUrl){
-    status.innerHTML='⚠️ لم نتمكن من استخراج صورة. الأسباب: منشور نصي، محتوى خاص/مؤقت، أو ستوري. استخدم "افتح الرابط مباشرة".';
-    cards.innerHTML=openOriginalLinkHtml(url);
-    document.getElementById('imageResultsArea').classList.add('show');
-    return;
+  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
+    status.textContent='جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
+    try{
+      const og=await fetchOgTags(url);
+      const isGeneric=og.image&&(/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image)||og.image.startsWith('data:'));
+      if(og.image&&!isGeneric){
+        imageUrl=og.image;
+        captionText=og.title||og.desc||'';
+        sourceLabel='تم جلب الصورة والوصف تلقائيًا ✅';
+      }
+    }catch(err){}
+    if(!imageUrl){
+      status.innerHTML='⚠️ لم نتمكن من استخراج صورة لهذا المنشور. الأسباب: منشور نصي فقط، محتوى خاص/مؤقت (ستوري)، أو يتطلب تسجيل دخول. اضغط "افتح الرابط مباشرة" لرؤيته في المتصفح ثم خذ سكرين شوت يدويًا.';
+      cards.innerHTML=openOriginalLinkHtml(url);
+      document.getElementById('imageResultsArea').classList.add('show');
+      return;
+    }
+  }
+  else{
+    imageUrl=url;
+    sourceLabel='بحث عكسي بالرابط المُدخل';
   }
 
   status.textContent=sourceLabel;
   const encoded=encodeURIComponent(imageUrl);
+
   const engines=[
-    {name:'ياندكس — بحث عكسي', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'وجوه/ستايل'},
-    {name:'جوجل — بحث عكسي', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'مصدر ومشابه'},
-    {name:'TinEye — بحث عكسي', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'نفس الصورة بالضبط'},
+    {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
+    {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
+    {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
 
-  let videoHtml='';
+  let videoEnginesHtml='';
   if(captionText){
-    const cleaned=captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi,'').replace(/\s*\|\s*|\s*·\s*/g,' ').replace(/\s+/g,' ').trim();
-    const tags=[...new Set(captionText.match(/#[\w\u0600-\u06FF]+/g)||[])];
-    const vq=cleaned||captionText.trim();
+    const cleanedCaption=captionText.replace(/[\d.,]+[KMk]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|تفاعل|إعجاب)/gi,'').replace(/\s*\|\s*|\s*·\s*/g,' ').replace(/\s+/g,' ').trim();
+    const extractedTags=[...new Set(captionText.match(/#[\w\u0600-\u06FF]+/g)||[])];
+    const vq=(cleanedCaption||captionText.trim());
     const videoEngines=[
-      {name:'يوتيوب — مشابهة', color:'#FF0000', letter:'▶', url:youtubeUrl(vq,'general')},
-      {name:'تيك توك — مشابهة', color:'#010101', letter:'♪', url:googleUrl(vq,'video',{siteDomain:'tiktok.com'})},
-      {name:'جوجل فيديو', color:'#4285F4', letter:'G', url:googleUrl(vq,'video',{})},
+      {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url:youtubeUrl(vq,'general')},
+      {name:'تيك توك — فيديوهات مشابهة', color:'#010101', letter:'♪', url:googleUrl(vq,'video',{siteDomain:'tiktok.com'})},
+      {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url:googleUrl(vq,'video',{})},
     ];
-    const tagsHtml=tags.length?`<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات: ${tags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan);cursor:pointer;text-decoration:underline;margin-inline-end:8px;">${t}</span>`).join('')}</div>`:'';
-    videoHtml=`
-      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف: <b style="color:var(--cyan);">${captionText.trim()}</b></div>
+    const tagsHtml=extractedTags.length
+      ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات (اضغط لبحث مباشر): ${extractedTags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan); cursor:pointer; text-decoration:underline; margin-inline-end:8px;">${t}</span>`).join('')}</div>`
+      : '';
+    videoEnginesHtml=`
+      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج: <b style="color:var(--cyan);">${captionText.trim()}</b></div>
       ${tagsHtml}
-      ${videoEngines.map(eng=>`<div class="result-card"><a class="main-link" href="${eng.url}" target="_blank" rel="noopener"><div class="result-icon" style="background:${eng.color}">${eng.letter}</div><div class="result-body"><div class="result-title">${eng.name}</div><div class="result-desc">${eng.url}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>`).join('')}`;
+      ${videoEngines.map(eng=>`
+        <div class="result-card">
+          <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+            <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+            <div class="result-body">
+              <div class="result-title">${eng.name}</div>
+              <div class="result-desc">${eng.url}</div>
+            </div>
+            <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+          </a>
+        </div>`).join('')}`;
   }
 
   cards.innerHTML=`
     <div class="result-card" style="margin-bottom:14px;">
-      <div class="result-body" style="display:flex;align-items:center;gap:12px;">
-        <img id="extractedThumb" src="${imageUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;flex-shrink:0;-webkit-user-select:none;user-select:none;" onerror="this.style.display='none'">
+      <div class="result-body" style="display:flex; align-items:center; gap:12px;">
+        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
         <div class="result-desc" style="white-space:normal;">${imageUrl}</div>
       </div>
-      <div class="hint" style="margin-top:8px;margin-bottom:0;">📌 اضغط مطوّلاً على الصورة لحفظها</div>
+      <div class="hint" style="margin-top:8px; margin-bottom:0;">📌 اضغط مطوّلاً على الصورة لحفظ رابطها بالمحفوظات</div>
     </div>
-    ${engines.map(eng=>`<div class="result-card"><a class="main-link" href="${eng.url}" target="_blank" rel="noopener"><div class="result-icon" style="background:${eng.color}">${eng.letter}</div><div class="result-body"><div class="result-title">${eng.name} <span class="badge">${eng.badge}</span></div><div class="result-desc">${eng.url}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>`).join('')}
-    ${videoHtml}
+    ${engines.map(eng=>`
+      <div class="result-card">
+        <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+          <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+          <div class="result-body">
+            <div class="result-title">${eng.name} <span class="badge">${eng.badge}</span></div>
+            <div class="result-desc">${eng.url}</div>
+          </div>
+          <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+        </a>
+      </div>`).join('')}
+    ${videoEnginesHtml}
   `;
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1098,7 +1162,7 @@ function attachLongPressSave(url){
   const el=document.getElementById('extractedThumb');
   if(!el)return;
   let pressTimer=null;
-  const start=()=>{ pressTimer=setTimeout(()=>{ saveImageLink(url); const status=document.getElementById('imageSearchStatus'); const prev=status.textContent; status.textContent='✅ تم حفظ الصورة'; if(navigator.vibrate)navigator.vibrate(30); setTimeout(()=>{ if(status.textContent==='✅ تم حفظ الصورة') status.textContent=prev; },2000); },550); };
+  const start=()=>{ pressTimer=setTimeout(()=>{ saveImageLink(url); const status=document.getElementById('imageSearchStatus'); const prev=status.textContent; status.textContent='✅ تم حفظ رابط الصورة بالمحفوظات'; if(navigator.vibrate)navigator.vibrate(30); setTimeout(()=>{ if(status.textContent==='✅ تم حفظ رابط الصورة بالمحفوظات') status.textContent=prev; },2000); },550); };
   const cancel=()=>{ if(pressTimer)clearTimeout(pressTimer); };
   el.addEventListener('touchstart',start,{passive:true}); el.addEventListener('touchend',cancel); el.addEventListener('touchmove',cancel);
   el.addEventListener('mousedown',start); el.addEventListener('mouseup',cancel); el.addEventListener('mouseleave',cancel);
