@@ -143,27 +143,20 @@
   }
 
 
-  /* ===== إضافات الواجهة والمحـفوظات ===== */
-  .search-box > input[type="text"]{flex:1; width:100%; background:none; border:none; outline:none; color:var(--text); font-family:'Tajawal',sans-serif; font-size:16px; padding:16px 10px;}
-  .search-box > input[type="text"]::placeholder{color:var(--muted-2);}
-  #imageUrlInput{padding:16px 10px !important; font-family:'Tajawal',sans-serif !important; font-size:16px !important;}
-  #extractedThumb + .result-desc{display:none !important;}
-  .saved-search-actions{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;}
-  .saved-search-item{display:flex; align-items:center; gap:10px;}
-  .saved-search-open{flex:1; min-width:0; background:none; border:none; color:var(--text); text-align:right; font-family:'Tajawal',sans-serif; cursor:pointer; padding:4px;}
-  .saved-search-open:hover{color:var(--cyan);}
-
-  /* شبكة صور محفوظات البحث العكسي: 1.2 × 1.2 سم */
-  .saved-images-grid{display:grid; grid-template-columns:repeat(auto-fill, 1.2cm); gap:12px; align-items:start; justify-content:start; direction:rtl; padding:4px;}
-  .saved-image-tile{position:relative; width:1.2cm; height:1.2cm; overflow:visible;}
-  .saved-image-thumb{width:1.2cm; height:1.2cm; display:block; object-fit:cover; border-radius:6px; cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; box-shadow:0 0 0 1px var(--line), 0 4px 10px rgba(0,0,0,.3); transition:transform .22s ease, opacity .22s ease;}
-  .saved-image-thumb:active{transform:scale(.94);}
-  .saved-image-delete{position:absolute; top:-7px; left:-7px; width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,.35); background:#d9364f; color:#fff; display:flex; align-items:center; justify-content:center; padding:0; font-size:11px; line-height:1; cursor:pointer; z-index:2; box-shadow:0 2px 7px rgba(0,0,0,.45);}
-  .saved-image-delete:hover{background:#ff4964; transform:scale(1.08);}
-  .saved-image-modal{position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(2,4,8,.82); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); opacity:0; visibility:hidden; transition:opacity .35s ease, visibility .35s ease;}
-  .saved-image-modal.show{opacity:1; visibility:visible;}
-  .saved-image-modal img{display:block; max-width:min(92vw,900px); max-height:88vh; object-fit:contain; border-radius:16px; box-shadow:0 26px 80px rgba(0,0,0,.72), 0 0 0 1px rgba(255,255,255,.15); opacity:0; transform:scale(.74); transition:opacity .35s ease, transform .42s cubic-bezier(.2,.8,.2,1);}
-  .saved-image-modal.show img{opacity:1; transform:scale(1);}
+/* ===== تحسينات RADAR المضافة ===== */
+.search-box>input[type="text"]{flex:1;width:100%;background:none;border:none;outline:none;color:var(--text);font-family:'Tajawal',sans-serif;font-size:16px;padding:16px 10px}
+.search-box>input[type="text"]::placeholder{color:var(--muted-2)}
+#imageUrlInput{padding:16px 10px!important;font-family:'Tajawal',sans-serif!important;font-size:16px!important}
+#extractedThumb+.result-desc{display:none!important}
+.saved-search-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.saved-search-item{display:flex;align-items:center;gap:10px}.saved-search-open{flex:1;min-width:0;background:none;border:0;color:var(--text);text-align:right;font-family:'Tajawal',sans-serif;cursor:pointer;padding:4px}
+.saved-images-grid{display:grid;grid-template-columns:repeat(auto-fill,1.2cm);gap:12px;align-items:start;justify-content:start;direction:rtl;padding:6px}.saved-image-tile{position:relative;width:1.2cm;height:1.2cm}.saved-image-thumb{width:1.2cm;height:1.2cm;display:block;object-fit:cover;border-radius:7px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;box-shadow:0 0 0 1px var(--line),0 4px 10px #0005;transition:.22s}.saved-image-thumb:active{transform:scale(.94)}.saved-image-delete{position:absolute;top:-7px;left:-7px;width:17px;height:17px;border-radius:50%;border:1px solid #ffffff59;background:#d9364f;color:#fff;display:flex;align-items:center;justify-content:center;padding:0;font-size:12px;cursor:pointer;z-index:2}
+.saved-image-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#020408d1;backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:opacity .35s,visibility .35s}.saved-image-modal.show{opacity:1;visibility:visible}.saved-image-modal img{max-width:min(92vw,900px);max-height:88vh;object-fit:contain;border-radius:16px;box-shadow:0 26px 80px #000b;opacity:0;transform:scale(.74);transition:opacity .35s,transform .42s cubic-bezier(.2,.8,.2,1)}.saved-image-modal.show img{opacity:1;transform:scale(1)}.suggest-loading{padding:11px 16px;color:var(--muted);font-size:12px}
+/* الاختيار الذهبي مع وميض دائري متحرك */
+.type-chip{position:relative;isolation:isolate;overflow:visible}
+.type-chip.active{color:#fff4c2!important;border-color:#d8a62a!important;background:linear-gradient(135deg,rgba(255,205,70,.22),rgba(112,74,0,.28))!important;box-shadow:0 0 0 1px rgba(255,210,77,.18),0 0 17px rgba(255,190,31,.3)!important}
+.type-chip.active::before{content:'';position:absolute;inset:-3px;border-radius:inherit;padding:2px;background:conic-gradient(from var(--gold-angle,0deg),transparent 0 18%,#fff4ad 24%,#ffc83d 31%,transparent 39% 72%,#d99b12 82%,transparent 91%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;animation:goldOrbit 1.8s linear infinite;filter:drop-shadow(0 0 4px #ffca3a)}
+@property --gold-angle{syntax:'<angle>';initial-value:0deg;inherits:false}@keyframes goldOrbit{to{--gold-angle:360deg}}
+@supports not (background:conic-gradient(from 0deg,red,blue)){.type-chip.active{animation:goldPulse 1.2s ease-in-out infinite alternate}@keyframes goldPulse{to{box-shadow:0 0 18px #eeb52b!important}}}
 
 </style>
 </head>
@@ -242,13 +235,7 @@
       </button>
       <div class="suggest-panel" id="suggestPanel"></div>
     </div>
-
-    <!-- محفوظات منفصلة للبحث الرئيسي -->
-    <div class="saved-search-actions">
-      <div class="toggle" onclick="saveCurrentMainSearch()" style="cursor:pointer;"><span style="font-size:16px;">📌</span><span>حفظ البحث الحالي</span></div>
-      <div class="toggle" onclick="toggleMainSavedView()" style="cursor:pointer;"><span style="font-size:16px;">🗂️</span><span>محفوظات البحث الرئيسي</span></div>
-    </div>
-    <div class="results" id="mainSavedArea"><div id="mainSavedList" style="margin-top:12px;"></div></div>
+    <div class="saved-search-actions"><div class="toggle" onclick="saveCurrentMainSearch()"><span>📌</span><span>حفظ البحث الحالي</span></div><div class="toggle" onclick="toggleMainSavedView()"><span>🗂️</span><span>محفوظات البحث الرئيسي</span></div></div><div class="results" id="mainSavedArea"><div id="mainSavedList" style="margin-top:12px"></div></div>
 
     <!-- نوع المحتوى -->
     <div class="type-row" id="typeRow"></div>
@@ -1536,75 +1523,33 @@ function handleSharedLink(){
   }
 }
 
-
-/* ===================== إضافات المحفوظات وسلوك الهيستوري ===================== */
-const MAIN_SAVED_KEY = 'radar_main_saved_searches';
-function getMainSavedSearches(){try{return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY))||[];}catch(e){return[];}}
-function saveCurrentMainSearch(){const input=document.getElementById('query');const term=input.value.trim();if(!term){input.focus();return;}let saved=getMainSavedSearches().filter(item=>item!==term);saved.unshift(term);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(saved.slice(0,50)));renderMainSavedSearches();const area=document.getElementById('mainSavedArea');area.classList.add('show');area.scrollIntoView({behavior:'smooth',block:'nearest'});}
-function toggleMainSavedView(){const area=document.getElementById('mainSavedArea');if(area.classList.contains('show')){area.classList.remove('show');return;}renderMainSavedSearches();area.classList.add('show');area.scrollIntoView({behavior:'smooth',block:'nearest'});}
-function renderMainSavedSearches(){const list=document.getElementById('mainSavedList');const saved=getMainSavedSearches();if(!saved.length){list.innerHTML='<div class="hint" style="margin-top:0;">لا توجد عمليات بحث رئيسية محفوظة بعد.</div>';return;}list.innerHTML=saved.map((term,index)=>`<div class="result-card saved-search-item"><button class="saved-search-open" onclick="openMainSavedSearch(${index})"><div class="result-title">${escapeRadarHtml(term)}</div><div class="hint" style="margin-top:3px;">اضغط لاستعادته في خانة البحث</div></button><button onclick="removeMainSavedSearch(${index})" title="حذف" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`).join('');}
-function openMainSavedSearch(index){const term=getMainSavedSearches()[index];if(typeof term!=='string')return;const input=document.getElementById('query');input.value=term;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();hideSuggestions();}
-function removeMainSavedSearch(index){const saved=getMainSavedSearches();saved.splice(index,1);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(saved));renderMainSavedSearches();}
-function escapeRadarHtml(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-function escapeRadarAttr(value){return escapeRadarHtml(value);}
-
-/* الهيستوري يظهر فقط بعد كتابة حرفين */
-const originalRenderSuggestions=renderSuggestions;
-renderSuggestions=function(list){const q=document.getElementById('query');if(!q||q.value.trim().length<2){hideSuggestions();return;}originalRenderSuggestions(list);};
-const originalBuildLocalSuggestions=buildLocalSuggestions;
-buildLocalSuggestions=function(text){const trimmed=String(text||'').trim();if(trimmed.length<2)return[];return originalBuildLocalSuggestions(trimmed);};
-
-/* محفوظات البحث العكسي: صور مصغرة فقط بلا أي روابط ظاهرة */
-renderSavedLinks=function(){
-  const saved=getSavedLinks();
-  const list=document.getElementById('savedLinksList');
-  if(!saved.length){list.innerHTML='<div class="hint" style="margin-top:0;">ما في صور محفوظة بعد، اضغط مطوّلاً على أي صورة مستخرَجة لحفظها.</div>';return;}
-  list.innerHTML=`<div class="saved-images-grid">${saved.map((u,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-saved-index="${i}" src="${escapeRadarAttr(u)}" alt="صورة محفوظة" draggable="false" onerror="removeBrokenSavedImage(this)"><button class="saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})" title="حذف الصورة" aria-label="حذف الصورة">×</button></div>`).join('')}</div>`;
-  attachSavedImageZoom();
-};
-
-function removeBrokenSavedImage(img){
-  const index=Number(img.dataset.savedIndex);
-  if(!Number.isInteger(index)) return;
-  const saved=getSavedLinks();
-  if(index<0 || index>=saved.length) return;
-  saved.splice(index,1);
-  localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(saved));
-  renderSavedLinks();
-}
-function attachSavedImageZoom(){
-  document.querySelectorAll('.saved-image-thumb').forEach(img=>{
-    let timer=null;
-    let opened=false;
-    const start=()=>{opened=false;timer=setTimeout(()=>{opened=true;openSavedImageModal(img.src);if(navigator.vibrate)navigator.vibrate(25);},550);};
-    const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
-    img.addEventListener('pointerdown',start);
-    img.addEventListener('pointerup',cancel);
-    img.addEventListener('pointercancel',cancel);
-    img.addEventListener('pointerleave',cancel);
-    img.addEventListener('contextmenu',e=>e.preventDefault());
-    img.addEventListener('click',e=>{e.preventDefault();if(opened)opened=false;});
-  });
-}
-function openSavedImageModal(src){
-  const modal=document.getElementById('savedImageModal');
-  const image=document.getElementById('savedImageModalImg');
-  image.src=src;
-  modal.setAttribute('aria-hidden','false');
-  requestAnimationFrame(()=>modal.classList.add('show'));
-}
-function closeSavedImageModal(){
-  const modal=document.getElementById('savedImageModal');
-  modal.classList.remove('show');
-  modal.setAttribute('aria-hidden','true');
-  setTimeout(()=>{if(!modal.classList.contains('show'))document.getElementById('savedImageModalImg').removeAttribute('src');},380);
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSavedImageModal();});
+/* ===== وظائف التحسينات ===== */
+const MAIN_SAVED_KEY='radar_main_saved_searches';
+function escRadar(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function getMainSavedSearches(){try{return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY))||[]}catch(e){return[]}}
+function saveCurrentMainSearch(){const q=document.getElementById('query'),t=q.value.trim();if(!t){q.focus();return}let a=getMainSavedSearches().filter(x=>x!==t);a.unshift(t);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a.slice(0,50)));renderMainSavedSearches();document.getElementById('mainSavedArea').classList.add('show')}
+function toggleMainSavedView(){const a=document.getElementById('mainSavedArea');if(a.classList.contains('show')){a.classList.remove('show');return}renderMainSavedSearches();a.classList.add('show')}
+function renderMainSavedSearches(){const l=document.getElementById('mainSavedList'),a=getMainSavedSearches();if(!a.length){l.innerHTML='<div class="hint">لا توجد عمليات بحث محفوظة.</div>';return}l.innerHTML=a.map((t,i)=>`<div class="result-card saved-search-item"><button class="saved-search-open" onclick="openMainSavedSearch(${i})"><div class="result-title">${escRadar(t)}</div></button><button onclick="removeMainSavedSearch(${i})" style="background:none;border:0;color:var(--muted);cursor:pointer;font-size:20px">×</button></div>`).join('')}
+function openMainSavedSearch(i){const t=getMainSavedSearches()[i];if(typeof t!=='string')return;const q=document.getElementById('query');q.value=t;q.dispatchEvent(new Event('input',{bubbles:true}));q.focus()}
+function removeMainSavedSearch(i){const a=getMainSavedSearches();a.splice(i,1);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a));renderMainSavedSearches()}
+let smartSuggestTimer=null,smartSuggestRequest=0;
+function normalizeSuggestion(v){return String(v||'').toLowerCase().normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim()}
+function historySuggestions(t){const n=normalizeSuggestion(t);return getSearchHistory().map((text,index)=>({text,index,n:normalizeSuggestion(text)})).filter(x=>x.n.startsWith(n)||x.n.includes(n)).sort((a,b)=>Number(!a.n.startsWith(n))-Number(!b.n.startsWith(n))||a.index-b.index).slice(0,5).map(x=>({text:x.text,tag:'🕘 من سجلك'}))}
+async function fetchSmartSuggestions(t){for(const u of [`https://suggestqueries.google.com/complete/search?client=firefox&hl=ar&q=${encodeURIComponent(t)}`,`https://duckduckgo.com/ac/?q=${encodeURIComponent(t)}&type=list`]){try{const r=await fetch(u,{cache:'no-store'});if(!r.ok)continue;const d=await r.json();let a=Array.isArray(d)&&Array.isArray(d[1])?d[1]:Array.isArray(d)?d.map(x=>typeof x==='string'?x:x&&x.phrase).filter(Boolean):[];if(a.length)return a.slice(0,8)}catch(e){}}return[]}
+function mergeSmart(h,r){const seen=new Set(),o=[];[...h,...r.map(text=>({text,tag:'اقتراح ذكي'}))].forEach(x=>{const k=normalizeSuggestion(x.text);if(k&&!seen.has(k)){seen.add(k);o.push(x)}});return o.slice(0,8)}
+function onQueryInput(e){const t=e.target.value.trim();refreshEffectiveType();updateHashtagHint(fullQueryText());updateTranslateVisibility();if(autoTranslate)scheduleAutoTranslate();clearTimeout(smartSuggestTimer);const req=++smartSuggestRequest;if(t.length<2){hideSuggestions();return}const h=historySuggestions(t);if(h.length)renderSuggestions(h);else{const p=document.getElementById('suggestPanel');p.innerHTML='<div class="suggest-loading">جارٍ جلب اقتراحات ذكية...</div>';p.classList.add('show')}smartSuggestTimer=setTimeout(async()=>{const r=await fetchSmartSuggestions(t);if(req!==smartSuggestRequest||document.getElementById('query').value.trim()!==t)return;const m=mergeSmart(h,r);m.length?renderSuggestions(m):hideSuggestions()},220)}
+/* ضغطة تفعل الخيار وضغطة ثانية تلغيه وتعود للتلقائي */
+function pickType(id){currentTypeChoice=(currentTypeChoice===id&&id!=='auto')?'auto':id;renderTypeRow();refreshEffectiveType()}
+renderSavedLinks=function(){const a=getSavedLinks(),l=document.getElementById('savedLinksList');if(!a.length){l.innerHTML='<div class="hint">ما في صور محفوظة بعد.</div>';return}l.innerHTML=`<div class="saved-images-grid">${a.map((u,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-saved-index="${i}" src="${escRadar(u)}" draggable="false" onerror="removeBrokenSavedImage(this)"><button class="saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})">×</button></div>`).join('')}</div>`;attachSavedImageZoom()}
+function removeBrokenSavedImage(img){const i=Number(img.dataset.savedIndex),a=getSavedLinks();if(!Number.isInteger(i)||i<0||i>=a.length)return;a.splice(i,1);localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(a));renderSavedLinks()}
+function attachSavedImageZoom(){document.querySelectorAll('.saved-image-thumb').forEach(img=>{let tm=null,opened=false;const st=()=>{opened=false;tm=setTimeout(()=>{opened=true;openSavedImageModal(img.src);if(navigator.vibrate)navigator.vibrate(25)},550)},cn=()=>{if(tm){clearTimeout(tm);tm=null}};img.addEventListener('pointerdown',st);img.addEventListener('pointerup',cn);img.addEventListener('pointercancel',cn);img.addEventListener('pointerleave',cn);img.addEventListener('contextmenu',e=>e.preventDefault());img.addEventListener('click',e=>{e.preventDefault();if(opened)opened=false})})}
+function openSavedImageModal(src){const m=document.getElementById('savedImageModal');document.getElementById('savedImageModalImg').src=src;m.setAttribute('aria-hidden','false');requestAnimationFrame(()=>m.classList.add('show'))}
+function closeSavedImageModal(){const m=document.getElementById('savedImageModal');m.classList.remove('show');m.setAttribute('aria-hidden','true');setTimeout(()=>{if(!m.classList.contains('show'))document.getElementById('savedImageModalImg').removeAttribute('src')},380)}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSavedImageModal()});
 
 init();
 handleSharedLink();
 </script>
 <div class="saved-image-modal" id="savedImageModal" aria-hidden="true" onclick="closeSavedImageModal()"><img id="savedImageModalImg" alt="صورة محفوظة مكبرة"></div>
-
 </body>
 </html>
