@@ -967,6 +967,8 @@ async function fetchPostDetails(url){
   let targetUrl=url;
   if(/x\.com|twitter\.com/i.test(url)) targetUrl=url.replace(/x\.com/i,'fxtwitter.com').replace(/twitter\.com/i,'fxtwitter.com');
   if(/instagram\.com/i.test(url)) targetUrl=url.replace(/instagram\.com/i,'ddinstagram.com');
+  // نسخة فيسبوك الخفيفة للموبايل أبسط بكود أقل وأكثر ثباتًا للاستخراج من النسخة الكاملة
+  if(/^https?:\/\/(www\.)?facebook\.com/i.test(url)) targetUrl=url.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com');
 
   if(/tiktok\.com/i.test(url)){
     try{ const res=await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`); const data=await res.json(); if(data&&data.thumbnail_url) return{image:data.thumbnail_url,title:data.title||null,desc:null}; }catch(e){}
