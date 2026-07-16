@@ -141,6 +141,23 @@
     .search-row{flex-direction:column;}
     .go-btn{padding:14px; justify-content:center;}
   }
+
+
+  /* ===== إضافات الواجهة: توحيد حقول البحث ومحفوظات منفصلة ===== */
+  .search-box > input[type="text"]{flex:1; width:100%; background:none; border:none; outline:none; color:var(--text); font-family:'Tajawal',sans-serif; font-size:16px; padding:16px 10px;}
+  .search-box > input[type="text"]::placeholder{color:var(--muted-2);}
+  #imageUrlInput{padding:16px 10px !important; font-family:'Tajawal',sans-serif !important; font-size:16px !important;}
+  #extractedThumb + .result-desc{display:none !important;}
+  .saved-search-actions{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;}
+  .saved-search-item{display:flex; align-items:center; gap:10px;}
+  .saved-search-open{flex:1; min-width:0; background:none; border:none; color:var(--text); text-align:right; font-family:'Tajawal',sans-serif; cursor:pointer; padding:4px;}
+  .saved-search-open:hover{color:var(--cyan);}
+  .saved-thumb-wrap{display:flex; align-items:center; gap:12px; width:100%; min-width:0;}
+  .saved-thumb{width:58px; height:58px; object-fit:cover; border-radius:10px; flex-shrink:0; cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; box-shadow:0 0 0 1px var(--line);}
+  .saved-image-url{display:block; flex:1; min-width:0; max-height:0; opacity:0; overflow:hidden; transform:translateY(7px); pointer-events:none; color:var(--cyan); direction:ltr; text-align:left; overflow-wrap:anywhere; transition:max-height .38s ease, opacity .28s ease, transform .38s ease;}
+  .saved-image-url.revealed{max-height:120px; opacity:1; transform:translateY(0); pointer-events:auto;}
+  .saved-image-help{font-size:10px; color:var(--muted-2); margin-top:6px;}
+
 </style>
 </head>
 <body>
@@ -217,6 +234,19 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg>
       </button>
       <div class="suggest-panel" id="suggestPanel"></div>
+    </div>
+
+    <!-- محفوظات منفصلة للبحث الرئيسي -->
+    <div class="saved-search-actions">
+      <div class="toggle" onclick="saveCurrentMainSearch()" style="cursor:pointer;">
+        <span style="font-size:16px;">📌</span><span>حفظ البحث الحالي</span>
+      </div>
+      <div class="toggle" onclick="toggleMainSavedView()" style="cursor:pointer;">
+        <span style="font-size:16px;">🗂️</span><span>محفوظات البحث الرئيسي</span>
+      </div>
+    </div>
+    <div class="results" id="mainSavedArea">
+      <div id="mainSavedList" style="margin-top:12px;"></div>
     </div>
 
     <!-- نوع المحتوى -->
@@ -1503,6 +1533,133 @@ function handleSharedLink(){
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(()=> runImageSearch(), 300);
   }
+}
+
+
+/* ===================== إضافات المحفوظات وسلوك الهيستوري ===================== */
+const MAIN_SAVED_KEY = 'radar_main_saved_searches';
+
+function getMainSavedSearches(){
+  try{ return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY)) || []; }catch(e){ return []; }
+}
+function saveCurrentMainSearch(){
+  const input = document.getElementById('query');
+  const term = input.value.trim();
+  if(!term){ input.focus(); return; }
+  let saved = getMainSavedSearches().filter(item => item !== term);
+  saved.unshift(term);
+  localStorage.setItem(MAIN_SAVED_KEY, JSON.stringify(saved.slice(0,50)));
+  renderMainSavedSearches();
+  const area = document.getElementById('mainSavedArea');
+  area.classList.add('show');
+  area.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function toggleMainSavedView(){
+  const area = document.getElementById('mainSavedArea');
+  if(area.classList.contains('show')){ area.classList.remove('show'); return; }
+  renderMainSavedSearches();
+  area.classList.add('show');
+  area.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function renderMainSavedSearches(){
+  const list = document.getElementById('mainSavedList');
+  const saved = getMainSavedSearches();
+  if(!saved.length){
+    list.innerHTML = '<div class="hint" style="margin-top:0;">لا توجد عمليات بحث رئيسية محفوظة بعد.</div>';
+    return;
+  }
+  list.innerHTML = saved.map((term,index) => `
+    <div class="result-card saved-search-item">
+      <button class="saved-search-open" onclick="openMainSavedSearch(${index})">
+        <div class="result-title">${escapeRadarHtml(term)}</div>
+        <div class="hint" style="margin-top:3px;">اضغط لاستعادته في خانة البحث</div>
+      </button>
+      <button onclick="removeMainSavedSearch(${index})" title="حذف" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+function openMainSavedSearch(index){
+  const term = getMainSavedSearches()[index];
+  if(typeof term !== 'string') return;
+  const input = document.getElementById('query');
+  input.value = term;
+  input.dispatchEvent(new Event('input', {bubbles:true}));
+  input.focus();
+  hideSuggestions();
+}
+function removeMainSavedSearch(index){
+  const saved = getMainSavedSearches();
+  saved.splice(index,1);
+  localStorage.setItem(MAIN_SAVED_KEY, JSON.stringify(saved));
+  renderMainSavedSearches();
+}
+function escapeRadarHtml(value){
+  return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function escapeRadarAttr(value){ return escapeRadarHtml(value); }
+
+/* لا يظهر سجل البحث ثابتاً عند التركيز، ويبدأ فقط بعد كتابة حرفين */
+const originalRenderSuggestions = renderSuggestions;
+renderSuggestions = function(list){
+  const q = document.getElementById('query');
+  if(!q || q.value.trim().length < 2){ hideSuggestions(); return; }
+  originalRenderSuggestions(list);
+};
+const originalBuildLocalSuggestions = buildLocalSuggestions;
+buildLocalSuggestions = function(text){
+  const trimmed = String(text || '').trim();
+  if(trimmed.length < 2) return [];
+  return originalBuildLocalSuggestions(trimmed);
+};
+
+/* عرض محفوظات البحث العكسي كصور فقط، وإظهار الرابط بالضغط المطوّل */
+renderSavedLinks = function(){
+  const saved = getSavedLinks();
+  const list = document.getElementById('savedLinksList');
+  if(!saved.length){
+    list.innerHTML = '<div class="hint" style="margin-top:0;">ما في صور محفوظة بعد، اضغط مطوّلاً على أي صورة مستخرَجة لحفظها.</div>';
+    return;
+  }
+  list.innerHTML = saved.map((u,i) => `
+    <div class="result-card">
+      <div class="saved-thumb-wrap">
+        <img class="saved-thumb" data-saved-index="${i}" src="${escapeRadarAttr(u)}" alt="صورة محفوظة" draggable="false" onerror="this.style.display='none'">
+        <a id="savedImageUrl${i}" class="saved-image-url" href="${escapeRadarAttr(u)}" target="_blank" rel="noopener">${escapeRadarHtml(u)}</a>
+      </div>
+      <button onclick="removeSavedLink(${i})" title="حذف" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="saved-image-help">اضغط مطوّلاً على الصورة لإظهار الرابط، واضغط عليها مرة لإخفائه.</div>`).join('');
+  attachSavedImageReveal();
+};
+function attachSavedImageReveal(){
+  document.querySelectorAll('.saved-thumb').forEach(img => {
+    let timer = null;
+    let longPressed = false;
+    const link = document.getElementById('savedImageUrl' + img.dataset.savedIndex);
+    const start = e => {
+      longPressed = false;
+      timer = setTimeout(() => {
+        longPressed = true;
+        document.querySelectorAll('.saved-image-url.revealed').forEach(other => { if(other !== link) other.classList.remove('revealed'); });
+        link.classList.add('revealed');
+        if(navigator.vibrate) navigator.vibrate(25);
+      }, 550);
+    };
+    const cancel = () => { if(timer){ clearTimeout(timer); timer = null; } };
+    img.addEventListener('pointerdown', start);
+    img.addEventListener('pointerup', cancel);
+    img.addEventListener('pointercancel', cancel);
+    img.addEventListener('pointerleave', cancel);
+    img.addEventListener('contextmenu', e => e.preventDefault());
+    img.addEventListener('click', e => {
+      e.preventDefault();
+      if(longPressed){ longPressed = false; return; }
+      link.classList.remove('revealed');
+    });
+  });
 }
 
 init();
