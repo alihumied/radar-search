@@ -153,10 +153,10 @@
   .saved-search-open{flex:1; min-width:0; background:none; border:none; color:var(--text); text-align:right; font-family:'Tajawal',sans-serif; cursor:pointer; padding:4px;}
   .saved-search-open:hover{color:var(--cyan);}
 
-  /* شبكة صور محفوظات البحث العكسي: 0.80 × 0.80 سم */
-  .saved-images-grid{display:grid; grid-template-columns:repeat(auto-fill, .8cm); gap:12px; align-items:start; justify-content:start; direction:rtl; padding:4px;}
-  .saved-image-tile{position:relative; width:.8cm; height:.8cm; overflow:visible;}
-  .saved-image-thumb{width:.8cm; height:.8cm; display:block; object-fit:cover; border-radius:6px; cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; box-shadow:0 0 0 1px var(--line), 0 4px 10px rgba(0,0,0,.3); transition:transform .22s ease, opacity .22s ease;}
+  /* شبكة صور محفوظات البحث العكسي: 1.2 × 1.2 سم */
+  .saved-images-grid{display:grid; grid-template-columns:repeat(auto-fill, 1.2cm); gap:12px; align-items:start; justify-content:start; direction:rtl; padding:4px;}
+  .saved-image-tile{position:relative; width:1.2cm; height:1.2cm; overflow:visible;}
+  .saved-image-thumb{width:1.2cm; height:1.2cm; display:block; object-fit:cover; border-radius:6px; cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; box-shadow:0 0 0 1px var(--line), 0 4px 10px rgba(0,0,0,.3); transition:transform .22s ease, opacity .22s ease;}
   .saved-image-thumb:active{transform:scale(.94);}
   .saved-image-delete{position:absolute; top:-7px; left:-7px; width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,.35); background:#d9364f; color:#fff; display:flex; align-items:center; justify-content:center; padding:0; font-size:11px; line-height:1; cursor:pointer; z-index:2; box-shadow:0 2px 7px rgba(0,0,0,.45);}
   .saved-image-delete:hover{background:#ff4964; transform:scale(1.08);}
@@ -1559,9 +1559,19 @@ renderSavedLinks=function(){
   const saved=getSavedLinks();
   const list=document.getElementById('savedLinksList');
   if(!saved.length){list.innerHTML='<div class="hint" style="margin-top:0;">ما في صور محفوظة بعد، اضغط مطوّلاً على أي صورة مستخرَجة لحفظها.</div>';return;}
-  list.innerHTML=`<div class="saved-images-grid">${saved.map((u,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-saved-index="${i}" src="${escapeRadarAttr(u)}" alt="صورة محفوظة" draggable="false" onerror="this.style.opacity='.25'"><button class="saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})" title="حذف الصورة" aria-label="حذف الصورة">×</button></div>`).join('')}</div>`;
+  list.innerHTML=`<div class="saved-images-grid">${saved.map((u,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-saved-index="${i}" src="${escapeRadarAttr(u)}" alt="صورة محفوظة" draggable="false" onerror="removeBrokenSavedImage(this)"><button class="saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})" title="حذف الصورة" aria-label="حذف الصورة">×</button></div>`).join('')}</div>`;
   attachSavedImageZoom();
 };
+
+function removeBrokenSavedImage(img){
+  const index=Number(img.dataset.savedIndex);
+  if(!Number.isInteger(index)) return;
+  const saved=getSavedLinks();
+  if(index<0 || index>=saved.length) return;
+  saved.splice(index,1);
+  localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(saved));
+  renderSavedLinks();
+}
 function attachSavedImageZoom(){
   document.querySelectorAll('.saved-image-thumb').forEach(img=>{
     let timer=null;
