@@ -142,21 +142,17 @@
     .go-btn{padding:14px; justify-content:center;}
   }
 
-
-/* ===== تحسينات RADAR المضافة ===== */
-.search-box>input[type="text"]{flex:1;width:100%;background:none;border:none;outline:none;color:var(--text);font-family:'Tajawal',sans-serif;font-size:16px;padding:16px 10px}
-.search-box>input[type="text"]::placeholder{color:var(--muted-2)}
-#imageUrlInput{padding:16px 10px!important;font-family:'Tajawal',sans-serif!important;font-size:16px!important}
-#extractedThumb+.result-desc{display:none!important}
-.saved-search-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.saved-search-item{display:flex;align-items:center;gap:10px}.saved-search-open{flex:1;min-width:0;background:none;border:0;color:var(--text);text-align:right;font-family:'Tajawal',sans-serif;cursor:pointer;padding:4px}
-.saved-images-grid{display:grid;grid-template-columns:repeat(auto-fill,1.2cm);gap:12px;align-items:start;justify-content:start;direction:rtl;padding:6px}.saved-image-tile{position:relative;width:1.2cm;height:1.2cm}.saved-image-thumb{width:1.2cm;height:1.2cm;display:block;object-fit:cover;border-radius:7px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;box-shadow:0 0 0 1px var(--line),0 4px 10px #0005;transition:.22s}.saved-image-thumb:active{transform:scale(.94)}.saved-image-delete{position:absolute;top:-7px;left:-7px;width:17px;height:17px;border-radius:50%;border:1px solid #ffffff59;background:#d9364f;color:#fff;display:flex;align-items:center;justify-content:center;padding:0;font-size:12px;cursor:pointer;z-index:2}
-.saved-image-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#020408d1;backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:opacity .35s,visibility .35s}.saved-image-modal.show{opacity:1;visibility:visible}.saved-image-modal img{max-width:min(92vw,900px);max-height:88vh;object-fit:contain;border-radius:16px;box-shadow:0 26px 80px #000b;opacity:0;transform:scale(.74);transition:opacity .35s,transform .42s cubic-bezier(.2,.8,.2,1)}.saved-image-modal.show img{opacity:1;transform:scale(1)}.suggest-loading{padding:11px 16px;color:var(--muted);font-size:12px}
-/* الاختيار الذهبي مع وميض دائري متحرك */
-.type-chip{position:relative;isolation:isolate;overflow:visible}
-.type-chip.active{color:#fff4c2!important;border-color:#d8a62a!important;background:linear-gradient(135deg,rgba(255,205,70,.22),rgba(112,74,0,.28))!important;box-shadow:0 0 0 1px rgba(255,210,77,.18),0 0 17px rgba(255,190,31,.3)!important}
-.type-chip.active::before{content:'';position:absolute;inset:-3px;border-radius:inherit;padding:2px;background:conic-gradient(from var(--gold-angle,0deg),transparent 0 18%,#fff4ad 24%,#ffc83d 31%,transparent 39% 72%,#d99b12 82%,transparent 91%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;animation:goldOrbit 1.8s linear infinite;filter:drop-shadow(0 0 4px #ffca3a)}
-@property --gold-angle{syntax:'<angle>';initial-value:0deg;inherits:false}@keyframes goldOrbit{to{--gold-angle:360deg}}
-@supports not (background:conic-gradient(from 0deg,red,blue)){.type-chip.active{animation:goldPulse 1.2s ease-in-out infinite alternate}@keyframes goldPulse{to{box-shadow:0 0 18px #eeb52b!important}}}
+/* ===== RADAR additions ===== */
+:root{--theme-icon:#2e6bff}
+body.light-theme{--bg-0:#f4f7fc;--bg-1:#ffffff;--bg-2:#eef3fb;--panel:#ffffff;--line:#cad5e6;--text:#152033;--muted:#5e6d83;--muted-2:#7f8ba0;--off:#b6c1d1;background:radial-gradient(ellipse 900px 500px at 15% -10%,rgba(46,107,255,.12),transparent 60%),radial-gradient(ellipse 700px 500px at 100% 10%,rgba(63,212,255,.09),transparent 55%),#f4f7fc;--theme-icon:#fff}
+body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-shadow:0 12px 38px rgba(34,61,105,.12)}
+.theme-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--bg-1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--theme-icon);box-shadow:0 6px 18px rgba(0,0,0,.22);transition:transform .25s,background .3s,color .3s,border-color .3s;flex-shrink:0}.theme-btn:hover{transform:rotate(18deg) scale(1.05)}.theme-btn svg{width:21px;height:21px;fill:currentColor}.theme-actions{display:flex;align-items:center;gap:10px}
+.search-box>input[type=text]{flex:1;width:100%;background:none;border:0;outline:0;color:var(--text);font-family:Tajawal,sans-serif;font-size:16px;padding:16px 10px}#imageUrlInput{padding:16px 10px!important;font-family:Tajawal,sans-serif!important;font-size:16px!important}
+.extracted-preview-card{display:flex!important;align-items:center!important;justify-content:center!important;padding:16px!important;min-height:calc(4cm + 32px)}#extractedThumb{width:4cm!important;height:4cm!important;object-fit:cover!important;border-radius:14px!important;display:block!important;box-shadow:0 12px 30px #0007,0 0 0 1px var(--line)!important;-webkit-touch-callout:none}#extractedThumb+.result-desc{display:none!important}
+.saved-images-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;align-items:start;justify-content:start;direction:rtl;padding:10px}.saved-image-tile{position:relative;width:1.5cm;height:1.5cm}.saved-image-thumb{width:1.5cm;height:1.5cm;display:block;object-fit:cover;border-radius:9px;cursor:pointer;-webkit-touch-callout:none;box-shadow:0 0 0 1px var(--line),0 5px 13px #0006}.saved-corner-btn{position:absolute;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0;color:#fff;cursor:pointer;z-index:3;box-shadow:0 2px 8px #0008;font-size:12px;text-decoration:none}.saved-image-delete{top:-7px;left:-7px;border:1px solid #ffffff66;background:#d9364f}.saved-image-source{top:-7px;right:-7px;border:1px solid #ffeba08c;background:linear-gradient(135deg,#d8a62a,#946400)}
+.saved-image-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#020408d1;backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:.35s}.saved-image-modal.show{opacity:1;visibility:visible}.saved-image-modal img{max-width:min(92vw,900px);max-height:88vh;object-fit:contain;border-radius:16px;opacity:0;transform:scale(.74);transition:opacity .35s,transform .42s cubic-bezier(.2,.8,.2,1)}.saved-image-modal.show img{opacity:1;transform:scale(1)}
+.type-chip{position:relative;isolation:isolate;overflow:visible}.type-chip.active{color:#fff4c2!important;border-color:#d8a62a!important;background:linear-gradient(135deg,#ffcd4638,#704a0047)!important;box-shadow:0 0 17px #ffbe1f4d!important}.type-chip.active:before{content:'';position:absolute;inset:-3px;border-radius:inherit;padding:2px;background:conic-gradient(from var(--ga,0deg),transparent 0 18%,#fff4ad 24%,#ffc83d 31%,transparent 39% 72%,#d99b12 82%,transparent 91%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;animation:goldOrbit 1.8s linear infinite}@property --ga{syntax:'<angle>';initial-value:0deg;inherits:false}@keyframes goldOrbit{to{--ga:360deg}}
+.saved-search-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.suggest-loading{padding:11px 16px;color:var(--muted);font-size:12px}
 
 </style>
 </head>
@@ -168,7 +164,7 @@
       <div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="#fff"/></svg></div>
       <div><h1>RADAR</h1><p>Deep Cross-Platform Search</p></div>
     </div>
-    <div class="status"><span class="dot"></span> SafeSearch: متوقف دائماً</div>
+    <div class="theme-actions"><button class="theme-btn" id="themeBtn" onclick="toggleAppTheme()" title="تغيير الثيم: أزرق أو أبيض" aria-label="تغيير ثيم التطبيق"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 18V4a8 8 0 0 1 0 16Z"/></svg></button><div class="status"><span class="dot"></span> SafeSearch: متوقف دائماً</div></div>
   </header>
 
   <div class="core">
@@ -234,8 +230,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg>
       </button>
       <div class="suggest-panel" id="suggestPanel"></div>
-    </div>
-    <div class="saved-search-actions"><div class="toggle" onclick="saveCurrentMainSearch()"><span>📌</span><span>حفظ البحث الحالي</span></div><div class="toggle" onclick="toggleMainSavedView()"><span>🗂️</span><span>محفوظات البحث الرئيسي</span></div></div><div class="results" id="mainSavedArea"><div id="mainSavedList" style="margin-top:12px"></div></div>
+    </div><div class="saved-search-actions"><div class="toggle" onclick="saveCurrentMainSearch()"><span>📌</span><span>حفظ البحث الحالي</span></div><div class="toggle" onclick="toggleMainSavedView()"><span>🗂️</span><span>محفوظات البحث الرئيسي</span></div></div><div class="results" id="mainSavedArea"><div id="mainSavedList" style="margin-top:12px"></div></div>
 
     <!-- نوع المحتوى -->
     <div class="type-row" id="typeRow"></div>
@@ -1246,12 +1241,10 @@ async function runImageSearch(){
 
 
   cards.innerHTML = `
-    <div class="result-card" style="margin-bottom:14px;">
-      <div class="result-body" style="display:flex; align-items:center; gap:12px;">
+    <div class="result-card extracted-preview-card" style="margin-bottom:14px;">
+      <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
         <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
-        <div class="result-desc" style="white-space:normal;">${imageUrl}</div>
       </div>
-      <div class="hint" style="margin-top:8px; margin-bottom:0;">📌 اضغط مطوّلاً على الصورة لحفظ رابطها بالمحفوظات</div>
     </div>
   ` + engines.map(eng => `
     <div class="result-card">
@@ -1266,7 +1259,7 @@ async function runImageSearch(){
     </div>`).join('') + videoEnginesHtml;
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
-  attachLongPressSave(imageUrl);
+  attachLongPressSave(imageUrl, url);
 }
 
 /* ===================== حفظ روابط الصور (ضغط مطوّل) ===================== */
@@ -1523,33 +1516,32 @@ function handleSharedLink(){
   }
 }
 
-/* ===== وظائف التحسينات ===== */
-const MAIN_SAVED_KEY='radar_main_saved_searches';
-function escRadar(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function getMainSavedSearches(){try{return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY))||[]}catch(e){return[]}}
-function saveCurrentMainSearch(){const q=document.getElementById('query'),t=q.value.trim();if(!t){q.focus();return}let a=getMainSavedSearches().filter(x=>x!==t);a.unshift(t);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a.slice(0,50)));renderMainSavedSearches();document.getElementById('mainSavedArea').classList.add('show')}
-function toggleMainSavedView(){const a=document.getElementById('mainSavedArea');if(a.classList.contains('show')){a.classList.remove('show');return}renderMainSavedSearches();a.classList.add('show')}
-function renderMainSavedSearches(){const l=document.getElementById('mainSavedList'),a=getMainSavedSearches();if(!a.length){l.innerHTML='<div class="hint">لا توجد عمليات بحث محفوظة.</div>';return}l.innerHTML=a.map((t,i)=>`<div class="result-card saved-search-item"><button class="saved-search-open" onclick="openMainSavedSearch(${i})"><div class="result-title">${escRadar(t)}</div></button><button onclick="removeMainSavedSearch(${i})" style="background:none;border:0;color:var(--muted);cursor:pointer;font-size:20px">×</button></div>`).join('')}
-function openMainSavedSearch(i){const t=getMainSavedSearches()[i];if(typeof t!=='string')return;const q=document.getElementById('query');q.value=t;q.dispatchEvent(new Event('input',{bubbles:true}));q.focus()}
-function removeMainSavedSearch(i){const a=getMainSavedSearches();a.splice(i,1);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a));renderMainSavedSearches()}
-let smartSuggestTimer=null,smartSuggestRequest=0;
-function normalizeSuggestion(v){return String(v||'').toLowerCase().normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim()}
-function historySuggestions(t){const n=normalizeSuggestion(t);return getSearchHistory().map((text,index)=>({text,index,n:normalizeSuggestion(text)})).filter(x=>x.n.startsWith(n)||x.n.includes(n)).sort((a,b)=>Number(!a.n.startsWith(n))-Number(!b.n.startsWith(n))||a.index-b.index).slice(0,5).map(x=>({text:x.text,tag:'🕘 من سجلك'}))}
-async function fetchSmartSuggestions(t){for(const u of [`https://suggestqueries.google.com/complete/search?client=firefox&hl=ar&q=${encodeURIComponent(t)}`,`https://duckduckgo.com/ac/?q=${encodeURIComponent(t)}&type=list`]){try{const r=await fetch(u,{cache:'no-store'});if(!r.ok)continue;const d=await r.json();let a=Array.isArray(d)&&Array.isArray(d[1])?d[1]:Array.isArray(d)?d.map(x=>typeof x==='string'?x:x&&x.phrase).filter(Boolean):[];if(a.length)return a.slice(0,8)}catch(e){}}return[]}
-function mergeSmart(h,r){const seen=new Set(),o=[];[...h,...r.map(text=>({text,tag:'اقتراح ذكي'}))].forEach(x=>{const k=normalizeSuggestion(x.text);if(k&&!seen.has(k)){seen.add(k);o.push(x)}});return o.slice(0,8)}
-function onQueryInput(e){const t=e.target.value.trim();refreshEffectiveType();updateHashtagHint(fullQueryText());updateTranslateVisibility();if(autoTranslate)scheduleAutoTranslate();clearTimeout(smartSuggestTimer);const req=++smartSuggestRequest;if(t.length<2){hideSuggestions();return}const h=historySuggestions(t);if(h.length)renderSuggestions(h);else{const p=document.getElementById('suggestPanel');p.innerHTML='<div class="suggest-loading">جارٍ جلب اقتراحات ذكية...</div>';p.classList.add('show')}smartSuggestTimer=setTimeout(async()=>{const r=await fetchSmartSuggestions(t);if(req!==smartSuggestRequest||document.getElementById('query').value.trim()!==t)return;const m=mergeSmart(h,r);m.length?renderSuggestions(m):hideSuggestions()},220)}
-/* ضغطة تفعل الخيار وضغطة ثانية تلغيه وتعود للتلقائي */
-function pickType(id){currentTypeChoice=(currentTypeChoice===id&&id!=='auto')?'auto':id;renderTypeRow();refreshEffectiveType()}
-renderSavedLinks=function(){const a=getSavedLinks(),l=document.getElementById('savedLinksList');if(!a.length){l.innerHTML='<div class="hint">ما في صور محفوظة بعد.</div>';return}l.innerHTML=`<div class="saved-images-grid">${a.map((u,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-saved-index="${i}" src="${escRadar(u)}" draggable="false" onerror="removeBrokenSavedImage(this)"><button class="saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})">×</button></div>`).join('')}</div>`;attachSavedImageZoom()}
-function removeBrokenSavedImage(img){const i=Number(img.dataset.savedIndex),a=getSavedLinks();if(!Number.isInteger(i)||i<0||i>=a.length)return;a.splice(i,1);localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(a));renderSavedLinks()}
-function attachSavedImageZoom(){document.querySelectorAll('.saved-image-thumb').forEach(img=>{let tm=null,opened=false;const st=()=>{opened=false;tm=setTimeout(()=>{opened=true;openSavedImageModal(img.src);if(navigator.vibrate)navigator.vibrate(25)},550)},cn=()=>{if(tm){clearTimeout(tm);tm=null}};img.addEventListener('pointerdown',st);img.addEventListener('pointerup',cn);img.addEventListener('pointercancel',cn);img.addEventListener('pointerleave',cn);img.addEventListener('contextmenu',e=>e.preventDefault());img.addEventListener('click',e=>{e.preventDefault();if(opened)opened=false})})}
-function openSavedImageModal(src){const m=document.getElementById('savedImageModal');document.getElementById('savedImageModalImg').src=src;m.setAttribute('aria-hidden','false');requestAnimationFrame(()=>m.classList.add('show'))}
-function closeSavedImageModal(){const m=document.getElementById('savedImageModal');m.classList.remove('show');m.setAttribute('aria-hidden','true');setTimeout(()=>{if(!m.classList.contains('show'))document.getElementById('savedImageModalImg').removeAttribute('src')},380)}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSavedImageModal()});
+/* theme */
+const THEME_KEY='radar_app_theme';
+function applyAppTheme(theme){document.body.classList.toggle('light-theme',theme==='light');localStorage.setItem(THEME_KEY,theme);const b=document.getElementById('themeBtn');if(b)b.title=theme==='light'?'تفعيل الثيم الأزرق':'تفعيل الثيم الأبيض';}
+function toggleAppTheme(){applyAppTheme(document.body.classList.contains('light-theme')?'dark':'light');}
+applyAppTheme(localStorage.getItem(THEME_KEY)==='light'?'light':'dark');
+/* type second click cancels */
+pickType=function(id){currentTypeChoice=(currentTypeChoice===id&&id!=='auto')?'auto':id;renderTypeRow();refreshEffectiveType();};
+/* image saves with original source */
+function normSaved(x){return typeof x==='string'?{imageUrl:x,sourceUrl:x}:{imageUrl:x.imageUrl||x.url||'',sourceUrl:x.sourceUrl||x.originalUrl||x.imageUrl||x.url||''};}
+getSavedLinks=function(){try{return(JSON.parse(localStorage.getItem(SAVED_LINKS_KEY))||[]).map(normSaved).filter(x=>x.imageUrl)}catch(e){return[]}};
+saveLinkToStorage=function(imageUrl,sourceUrl){let a=getSavedLinks().filter(x=>x.imageUrl!==imageUrl);a.unshift({imageUrl,sourceUrl:sourceUrl||imageUrl});localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(a.slice(0,50)))};
+function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+removeSavedLink=function(i){const a=getSavedLinks();a.splice(i,1);localStorage.setItem(SAVED_LINKS_KEY,JSON.stringify(a));renderSavedLinks()};
+renderSavedLinks=function(){const a=getSavedLinks(),l=document.getElementById('savedLinksList');if(!a.length){l.innerHTML='<div class="hint">ما في صور محفوظة بعد.</div>';return}l.innerHTML=`<div class="saved-images-grid">${a.map((x,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-i="${i}" src="${esc(x.imageUrl)}" draggable="false" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})">×</button></div>`).join('')}</div>`;attachSavedZoom()};
+function removeBroken(img){removeSavedLink(Number(img.dataset.i))}
+attachLongPressSave=function(imageUrl,sourceUrl){const el=document.getElementById('extractedThumb');if(!el)return;let tm;const st=()=>tm=setTimeout(()=>{saveLinkToStorage(imageUrl,sourceUrl);const x=document.getElementById('imageSearchStatus'),p=x.textContent;x.textContent='✅ تم حفظ الصورة مع رابط المنشور الأصلي';if(navigator.vibrate)navigator.vibrate(30);setTimeout(()=>{if(x.textContent.includes('تم حفظ'))x.textContent=p},2000)},550),cn=()=>clearTimeout(tm);el.addEventListener('pointerdown',st);['pointerup','pointercancel','pointerleave'].forEach(e=>el.addEventListener(e,cn));el.addEventListener('contextmenu',e=>e.preventDefault())};
+function attachSavedZoom(){document.querySelectorAll('.saved-image-thumb').forEach(img=>{let tm;const st=()=>tm=setTimeout(()=>openSavedModal(img.src),550),cn=()=>clearTimeout(tm);img.addEventListener('pointerdown',st);['pointerup','pointercancel','pointerleave'].forEach(e=>img.addEventListener(e,cn));img.addEventListener('contextmenu',e=>e.preventDefault())})}
+function openSavedModal(src){document.getElementById('savedImageModalImg').src=src;requestAnimationFrame(()=>document.getElementById('savedImageModal').classList.add('show'))}function closeSavedImageModal(){document.getElementById('savedImageModal').classList.remove('show')}
+/* main saved and smart suggestions */
+const MAIN_SAVED_KEY='radar_main_saved_searches';function getMainSavedSearches(){try{return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY))||[]}catch(e){return[]}}function saveCurrentMainSearch(){const q=document.getElementById('query'),t=q.value.trim();if(!t)return;let a=getMainSavedSearches().filter(x=>x!==t);a.unshift(t);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a.slice(0,50)));renderMainSaved();document.getElementById('mainSavedArea').classList.add('show')}function toggleMainSavedView(){const a=document.getElementById('mainSavedArea');if(a.classList.contains('show'))return a.classList.remove('show');renderMainSaved();a.classList.add('show')}function renderMainSaved(){const a=getMainSavedSearches(),l=document.getElementById('mainSavedList');l.innerHTML=a.length?a.map((t,i)=>`<div class="result-card" style="display:flex"><button onclick="openMainSaved(${i})" style="flex:1;background:none;border:0;color:var(--text);text-align:right">${esc(t)}</button><button onclick="removeMainSaved(${i})" style="background:none;border:0;color:var(--muted);font-size:20px">×</button></div>`).join(''):'<div class="hint">لا توجد عمليات بحث محفوظة.</div>'}function openMainSaved(i){const q=document.getElementById('query');q.value=getMainSavedSearches()[i];q.dispatchEvent(new Event('input',{bubbles:true}))}function removeMainSaved(i){const a=getMainSavedSearches();a.splice(i,1);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a));renderMainSaved()}
+let ssTimer,ssReq=0;function ns(v){return String(v||'').toLowerCase().replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim()}function hs(t){const n=ns(t);return getSearchHistory().filter(x=>ns(x).startsWith(n)||ns(x).includes(n)).slice(0,5).map(text=>({text,tag:'🕘 من سجلك'}))}async function fs(t){for(const u of [`https://suggestqueries.google.com/complete/search?client=firefox&hl=ar&q=${encodeURIComponent(t)}`,`https://duckduckgo.com/ac/?q=${encodeURIComponent(t)}&type=list`])try{const r=await fetch(u),d=await r.json(),a=Array.isArray(d[1])?d[1]:d.map(x=>x.phrase).filter(Boolean);if(a.length)return a}catch(e){}return[]}
+onQueryInput=function(e){const t=e.target.value.trim();refreshEffectiveType();updateHashtagHint(fullQueryText());updateTranslateVisibility();clearTimeout(ssTimer);const rq=++ssReq;if(t.length<2)return hideSuggestions();const h=hs(t);if(h.length)renderSuggestions(h);ssTimer=setTimeout(async()=>{const r=await fs(t);if(rq!==ssReq)return;const seen=new Set(),m=[...h,...r.map(text=>({text,tag:'اقتراح ذكي'}))].filter(x=>{const k=ns(x.text);if(seen.has(k))return false;seen.add(k);return true}).slice(0,8);m.length?renderSuggestions(m):hideSuggestions()},220)};
 
 init();
 handleSharedLink();
 </script>
-<div class="saved-image-modal" id="savedImageModal" aria-hidden="true" onclick="closeSavedImageModal()"><img id="savedImageModalImg" alt="صورة محفوظة مكبرة"></div>
+<div class="saved-image-modal" id="savedImageModal" onclick="closeSavedImageModal()"><img id="savedImageModalImg" alt="صورة محفوظة مكبرة"></div>
 </body>
 </html>
