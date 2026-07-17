@@ -149,7 +149,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .theme-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--bg-1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--theme-icon);box-shadow:0 6px 18px rgba(0,0,0,.22);transition:transform .25s,background .3s,color .3s,border-color .3s;flex-shrink:0}.theme-btn:hover{transform:rotate(18deg) scale(1.05)}.theme-btn svg{width:21px;height:21px;fill:currentColor}.theme-actions{display:flex;align-items:center;gap:10px}
 .search-box>input[type=text]{flex:1;width:100%;background:none;border:0;outline:0;color:var(--text);font-family:Tajawal,sans-serif;font-size:16px;padding:16px 10px}#imageUrlInput{padding:16px 10px!important;font-family:Tajawal,sans-serif!important;font-size:16px!important}
 .extracted-preview-card{display:flex!important;align-items:center!important;justify-content:center!important;padding:16px!important;min-height:calc(4cm + 32px)}#extractedThumb{width:4cm!important;height:4cm!important;object-fit:cover!important;border-radius:14px!important;display:block!important;box-shadow:0 12px 30px #0007,0 0 0 1px var(--line)!important;-webkit-touch-callout:none}#extractedThumb+.result-desc{display:none!important}
-.saved-images-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;align-items:start;justify-content:start;direction:rtl;padding:10px}.saved-image-tile{position:relative;width:1.5cm;height:1.5cm}.saved-image-thumb{width:1.5cm;height:1.5cm;display:block;object-fit:cover;border-radius:9px;cursor:pointer;-webkit-touch-callout:none;box-shadow:0 0 0 1px var(--line),0 5px 13px #0006}.saved-corner-btn{position:absolute;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0;color:#fff;cursor:pointer;z-index:3;box-shadow:0 2px 8px #0008;font-size:12px;text-decoration:none;opacity:0;visibility:hidden;pointer-events:none;transform:scale(.55);transition:opacity .22s ease,transform .24s ease,visibility .22s ease}.saved-image-tile.selected .saved-corner-btn{opacity:1;visibility:visible;pointer-events:auto;transform:scale(1)}.saved-image-tile.selected .saved-image-thumb{box-shadow:0 0 0 2px #d8a62a,0 0 15px #ffc83d66,0 5px 13px #0006}.saved-image-thumb{will-change:transform,opacity,filter;touch-action:pan-y;transition:transform .34s cubic-bezier(.2,.8,.2,1),opacity .3s ease,filter .3s ease,box-shadow .25s ease}.saved-image-thumb.gesture-moving{transition:none;filter:saturate(1.18) brightness(1.08)}.saved-image-thumb.gesture-fade{opacity:.14;filter:blur(.7px) saturate(.72)}.saved-image-thumb.gesture-near{filter:brightness(1.1) saturate(1.12)}.saved-image-thumb.gesture-reset{transition:transform .48s cubic-bezier(.18,.9,.25,1.25),opacity .42s ease,filter .42s ease}.saved-image-delete{top:-7px;left:-7px;border:1px solid #ffffff66;background:#d9364f}.saved-image-source{top:-7px;right:-7px;border:1px solid #ffeba08c;background:linear-gradient(135deg,#d8a62a,#946400)}
+.saved-images-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;align-items:start;justify-content:start;direction:rtl;padding:10px}.saved-image-tile{position:relative;width:1.5cm;height:1.5cm}.saved-image-thumb{width:1.5cm;height:1.5cm;display:block;object-fit:cover;border-radius:9px;cursor:pointer;-webkit-touch-callout:none;box-shadow:0 0 0 1px var(--line),0 5px 13px #0006}.saved-corner-btn{position:absolute;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0;color:#fff;cursor:pointer;z-index:3;box-shadow:0 2px 8px #0008;font-size:12px;text-decoration:none;opacity:0;visibility:hidden;pointer-events:none;transform:scale(.55);transition:opacity .22s ease,transform .24s ease,visibility .22s ease}.saved-image-tile.selected .saved-corner-btn{opacity:1;visibility:visible;pointer-events:auto;transform:scale(1)}.saved-image-tile.selected .saved-image-thumb{box-shadow:0 0 0 2px #d8a62a,0 0 15px #ffc83d66,0 5px 13px #0006}.saved-image-thumb{will-change:transform,opacity,filter;touch-action:pan-y;transition:transform .34s cubic-bezier(.2,.8,.2,1),opacity .3s ease,filter .3s ease}.saved-image-thumb.gesture-moving{transition:none;filter:saturate(1.18) brightness(1.08)}.saved-image-thumb.gesture-fade{opacity:.14;filter:blur(.7px) saturate(.72)}.saved-image-thumb.gesture-near{filter:brightness(1.1) saturate(1.12)}.saved-image-thumb.gesture-reset{transition:transform .48s cubic-bezier(.18,.9,.25,1.25),opacity .42s ease,filter .42s ease}.saved-image-delete{top:-7px;left:-7px;border:1px solid #ffffff66;background:#d9364f}.saved-image-source{top:-7px;right:-7px;border:1px solid #ffeba08c;background:linear-gradient(135deg,#d8a62a,#946400)}
 .saved-image-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#020408d1;backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:.35s}.saved-image-modal.show{opacity:1;visibility:visible}.saved-image-modal img{max-width:min(92vw,900px);max-height:88vh;object-fit:contain;border-radius:16px;opacity:0;transform:scale(.74);transition:opacity .35s,transform .42s cubic-bezier(.2,.8,.2,1)}.saved-image-modal.show img{opacity:1;transform:scale(1)}
 .type-chip{position:relative;isolation:isolate;overflow:visible}.type-chip.active{color:#fff4c2!important;border-color:#d8a62a!important;background:linear-gradient(135deg,#ffcd4638,#704a0047)!important;box-shadow:0 0 17px #ffbe1f4d!important}.type-chip.active:before{content:'';position:absolute;inset:-3px;border-radius:inherit;padding:2px;background:conic-gradient(from var(--ga,0deg),transparent 0 18%,#fff4ad 24%,#ffc83d 31%,transparent 39% 72%,#d99b12 82%,transparent 91%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;animation:goldOrbit 1.8s linear infinite}@property --ga{syntax:'<angle>';initial-value:0deg;inherits:false}@keyframes goldOrbit{to{--ga:360deg}}
 .saved-search-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.suggest-loading{padding:11px 16px;color:var(--muted);font-size:12px}
@@ -1047,53 +1047,15 @@ function openPastedLinkDirectly(){
 
 /* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
 async function fetchOgTags(pageUrl){
-  // نسخة فيسبوك الخفيفة للموبايل (m.facebook.com) أبسط بكود أقل تعقيدًا وأكثر ثباتًا للاستخراج من النسخة الكاملة
-  const scrapeUrl = pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i, 'https://m.facebook.com');
-
-  // محاولة أولى: خدمات oEmbed عامة وسريعة (noembed / microlink) قبل اللجوء لوسطاء CORS الأبطأ
-  try{
-    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`);
-    const data = await res.json();
-    if(data && data.thumbnail_url){
-      return {image: data.thumbnail_url, title: data.title || null, desc: null};
-    }
-  }catch(err){ /* التالي */ }
-  try{
-    const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`);
-    const data = await res.json();
-    if(data && data.data && data.data.image && data.data.image.url){
-      return {image: data.data.image.url, title: data.data.title || null, desc: data.data.description || null};
-    }
-  }catch(err){ /* التالي */ }
-
-  // محاولة أخيرة: وسطاء CORS لسحب og:image من كود الصفحة مباشرة (نستخدم نسخة الموبايل الخفيفة لفيسبوك هنا تحديدًا)
-  const proxies = [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  ];
-  for(const buildProxyUrl of proxies){
-    try{
-      const res = await fetch(buildProxyUrl(scrapeUrl));
-      if(!res.ok) continue;
-      const html = await res.text();
-      if(!html || html.length < 200) continue; // رد فاضي أو صفحة تسجيل دخول قصيرة جدًا
-      const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-                     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-      const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-                        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-      const descMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-                       || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
-      if(imgMatch){
-        return {
-          image: imgMatch[1],
-          title: titleMatch ? titleMatch[1] : null,
-          desc: descMatch ? descMatch[1] : null,
-        };
-      }
-    }catch(err){ /* جرّب الوسيط التالي */ }
-  }
-  return {image:null, title:null, desc:null};
+  const scrapeUrl=pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com');
+  const candidates=[];let title=null,desc=null;
+  const add=(url,w=0,h=0)=>{if(url&&/^https?:\/\//i.test(url)&&!candidates.some(x=>x.url===url))candidates.push({url,w:Number(w)||0,h:Number(h)||0})};
+  try{const r=await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=m.title||title;desc=m.description||desc}}catch(e){}
+  try{const r=await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=d.title||title}}catch(e){}
+  const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`];
+  for(const make of proxies){try{const r=await fetch(make(scrapeUrl));if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=doc.querySelector('meta[property="og:title"]')?.content||title;desc=doc.querySelector('meta[property="og:description"]')?.content||desc;if(candidates.length)break}catch(e){}}
+  const image=await pickBestPublicImage(candidates.map(x=>x.url));
+  return {image,title,desc,candidates};
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
@@ -1140,8 +1102,8 @@ async function runImageSearch(){
   // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
   const ytId = extractYouTubeId(url);
   if(ytId){
-    imageUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-    sourceLabel = 'تم جلب الصورة المصغّرة من يوتيوب تلقائيًا ✅';
+    imageUrl = await pickBestPublicImage([`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,`https://img.youtube.com/vi/${ytId}/sddefault.jpg`,`https://img.youtube.com/vi/${ytId}/hq720.jpg`,`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`]);
+    sourceLabel = 'تم جلب أعلى دقة متاحة علنًا من يوتيوب ✅';
   }
   // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
   else if(/tiktok\.com/i.test(url)){
@@ -1198,7 +1160,9 @@ async function runImageSearch(){
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
   }
 
-  status.textContent = sourceLabel;
+  imageUrl = await maximizePlatformImage(imageUrl, url);
+  const imageInfo = await probePublicImage(imageUrl);
+  status.textContent = sourceLabel + (imageInfo.ok ? ` · ${imageInfo.width}×${imageInfo.height}px` : '');
   const encoded = encodeURIComponent(imageUrl);
 
   // محركات البحث العكسي بالصورة (تجيب صورًا ومصادر مشابهة)
@@ -1532,29 +1496,19 @@ removeSavedLink=function(i){const a=getSavedLinks();a.splice(i,1);localStorage.s
 renderSavedLinks=function(){const a=getSavedLinks(),l=document.getElementById('savedLinksList');if(!a.length){l.innerHTML='<div class="hint">ما في صور محفوظة بعد.</div>';return}l.innerHTML=`<div class="saved-images-grid">${a.map((x,i)=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-i="${i}" src="${esc(x.imageUrl)}" draggable="false" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${i})">×</button></div>`).join('')}</div>`;attachSavedZoom()};
 function removeBroken(img){removeSavedLink(Number(img.dataset.i))}
 attachLongPressSave=function(imageUrl,sourceUrl){const el=document.getElementById('extractedThumb');if(!el)return;let tm;const st=()=>tm=setTimeout(()=>{saveLinkToStorage(imageUrl,sourceUrl);const x=document.getElementById('imageSearchStatus'),p=x.textContent;x.textContent='✅ تم حفظ الصورة مع رابط المنشور الأصلي';if(navigator.vibrate)navigator.vibrate(30);setTimeout(()=>{if(x.textContent.includes('تم حفظ'))x.textContent=p},2000)},550),cn=()=>clearTimeout(tm);el.addEventListener('pointerdown',st);['pointerup','pointercancel','pointerleave'].forEach(e=>el.addEventListener(e,cn));el.addEventListener('contextmenu',e=>e.preventDefault())};
-function attachSavedZoom(){
- const thumbs=[...document.querySelectorAll('.saved-image-thumb')];
- thumbs.forEach(img=>{
-  let holdTimer=null,stopTimer=null,startX=0,startY=0,lastX=0,lastY=0,lastTime=0,moved=false,longPressed=false;
-  const tile=img.closest('.saved-image-tile');
-  const clearHold=()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null}if(stopTimer){clearTimeout(stopTimer);stopTimer=null}};
-  const enlarge=()=>{longPressed=true;resetGestureImages(thumbs);openSavedModal(img.src);if(navigator.vibrate)navigator.vibrate(25)};
-  const armStopZoom=()=>{if(stopTimer)clearTimeout(stopTimer);stopTimer=setTimeout(()=>{if(img.hasPointerCapture&&img.hasPointerCapture(activePointerId))enlarge()},520)};
-  let activePointerId=null;
-  img.addEventListener('pointerdown',e=>{activePointerId=e.pointerId;startX=lastX=e.clientX;startY=lastY=e.clientY;lastTime=performance.now();moved=false;longPressed=false;holdTimer=setTimeout(enlarge,550);if(img.setPointerCapture)img.setPointerCapture(e.pointerId)});
-  img.addEventListener('pointermove',e=>{if(activePointerId!==e.pointerId)return;const now=performance.now(),dx=e.clientX-startX,dy=e.clientY-startY,stepX=e.clientX-lastX,stepY=e.clientY-lastY,dt=Math.max(8,now-lastTime),speed=Math.min(2.4,Math.hypot(stepX,stepY)/dt),distance=Math.hypot(dx,dy);if(distance>7){moved=true;if(holdTimer){clearTimeout(holdTimer);holdTimer=null}}const scale=Math.min(1.9,1+distance/125+speed*.22),rotate=Math.max(-12,Math.min(12,dx/12));img.classList.add('gesture-moving');img.style.transform=`translate3d(${dx*.18}px,${dy*.18}px,0) scale(${scale}) rotate(${rotate}deg)`;img.style.opacity=String(Math.max(.22,1-distance/170));thumbs.forEach(other=>{if(other===img)return;const r=other.getBoundingClientRect(),d=Math.hypot(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2));other.classList.toggle('gesture-near',d<105);other.classList.toggle('gesture-fade',d>=105&&d<230);if(d<125)other.style.transform=`scale(${1+Math.max(0,125-d)/230})`});lastX=e.clientX;lastY=e.clientY;lastTime=now;if(moved)armStopZoom()});
-  const finish=e=>{if(activePointerId!==null&&e.pointerId!==undefined&&activePointerId!==e.pointerId)return;clearHold();resetGestureImages(thumbs);activePointerId=null};
-  img.addEventListener('pointerup',finish);img.addEventListener('pointercancel',finish);img.addEventListener('lostpointercapture',finish);
-  img.addEventListener('click',e=>{e.preventDefault();if(longPressed){longPressed=false;return}if(moved){moved=false;return}const wasSelected=tile.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>x.classList.remove('selected'));if(!wasSelected)tile.classList.add('selected')});
-  img.addEventListener('contextmenu',e=>e.preventDefault());
- });
-}
+function attachSavedZoom(){const thumbs=[...document.querySelectorAll('.saved-image-thumb')];thumbs.forEach(img=>{let hold=null,stop=null,startX=0,startY=0,lastX=0,lastY=0,lastT=0,moved=false,longPressed=false,pid=null;const tile=img.closest('.saved-image-tile'),reset=()=>resetGestureImages(thumbs),zoom=()=>{longPressed=true;reset();openSavedModal(img.src);if(navigator.vibrate)navigator.vibrate(25)};img.addEventListener('pointerdown',e=>{pid=e.pointerId;startX=lastX=e.clientX;startY=lastY=e.clientY;lastT=performance.now();moved=false;longPressed=false;hold=setTimeout(zoom,550);img.setPointerCapture?.(pid)});img.addEventListener('pointermove',e=>{if(e.pointerId!==pid)return;const now=performance.now(),dx=e.clientX-startX,dy=e.clientY-startY,dt=Math.max(8,now-lastT),speed=Math.min(2.4,Math.hypot(e.clientX-lastX,e.clientY-lastY)/dt),dist=Math.hypot(dx,dy);if(dist>7){moved=true;clearTimeout(hold)}const scale=Math.min(1.9,1+dist/125+speed*.22);img.classList.add('gesture-moving');img.style.transform=`translate3d(${dx*.18}px,${dy*.18}px,0) scale(${scale}) rotate(${Math.max(-12,Math.min(12,dx/12))}deg)`;img.style.opacity=String(Math.max(.22,1-dist/170));thumbs.forEach(o=>{if(o===img)return;const r=o.getBoundingClientRect(),d=Math.hypot(e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2);o.classList.toggle('gesture-near',d<105);o.classList.toggle('gesture-fade',d>=105&&d<230);if(d<125)o.style.transform=`scale(${1+Math.max(0,125-d)/230})`});lastX=e.clientX;lastY=e.clientY;lastT=now;if(moved){clearTimeout(stop);stop=setTimeout(zoom,520)}});const finish=e=>{if(pid!==null&&e.pointerId!==undefined&&e.pointerId!==pid)return;clearTimeout(hold);clearTimeout(stop);reset();pid=null};['pointerup','pointercancel','lostpointercapture'].forEach(n=>img.addEventListener(n,finish));img.addEventListener('click',e=>{e.preventDefault();if(longPressed){longPressed=false;return}if(moved){moved=false;return}const selected=tile.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>x.classList.remove('selected'));if(!selected)tile.classList.add('selected')});img.addEventListener('contextmenu',e=>e.preventDefault())})}
 function resetGestureImages(thumbs){thumbs.forEach(x=>{x.classList.remove('gesture-moving','gesture-fade','gesture-near');x.classList.add('gesture-reset');x.style.transform='';x.style.opacity='';setTimeout(()=>x.classList.remove('gesture-reset'),500)})}
 function openSavedModal(src){document.getElementById('savedImageModalImg').src=src;requestAnimationFrame(()=>document.getElementById('savedImageModal').classList.add('show'))}function closeSavedImageModal(){document.getElementById('savedImageModal').classList.remove('show')}
 /* main saved and smart suggestions */
 const MAIN_SAVED_KEY='radar_main_saved_searches';function getMainSavedSearches(){try{return JSON.parse(localStorage.getItem(MAIN_SAVED_KEY))||[]}catch(e){return[]}}function saveCurrentMainSearch(){const q=document.getElementById('query'),t=q.value.trim();if(!t)return;let a=getMainSavedSearches().filter(x=>x!==t);a.unshift(t);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a.slice(0,50)));renderMainSaved();document.getElementById('mainSavedArea').classList.add('show')}function toggleMainSavedView(){const a=document.getElementById('mainSavedArea');if(a.classList.contains('show'))return a.classList.remove('show');renderMainSaved();a.classList.add('show')}function renderMainSaved(){const a=getMainSavedSearches(),l=document.getElementById('mainSavedList');l.innerHTML=a.length?a.map((t,i)=>`<div class="result-card" style="display:flex"><button onclick="openMainSaved(${i})" style="flex:1;background:none;border:0;color:var(--text);text-align:right">${esc(t)}</button><button onclick="removeMainSaved(${i})" style="background:none;border:0;color:var(--muted);font-size:20px">×</button></div>`).join(''):'<div class="hint">لا توجد عمليات بحث محفوظة.</div>'}function openMainSaved(i){const q=document.getElementById('query');q.value=getMainSavedSearches()[i];q.dispatchEvent(new Event('input',{bubbles:true}))}function removeMainSaved(i){const a=getMainSavedSearches();a.splice(i,1);localStorage.setItem(MAIN_SAVED_KEY,JSON.stringify(a));renderMainSaved()}
 let ssTimer,ssReq=0;function ns(v){return String(v||'').toLowerCase().replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim()}function hs(t){const n=ns(t);return getSearchHistory().filter(x=>ns(x).startsWith(n)||ns(x).includes(n)).slice(0,5).map(text=>({text,tag:'🕘 من سجلك'}))}async function fs(t){for(const u of [`https://suggestqueries.google.com/complete/search?client=firefox&hl=ar&q=${encodeURIComponent(t)}`,`https://duckduckgo.com/ac/?q=${encodeURIComponent(t)}&type=list`])try{const r=await fetch(u),d=await r.json(),a=Array.isArray(d[1])?d[1]:d.map(x=>x.phrase).filter(Boolean);if(a.length)return a}catch(e){}return[]}
 onQueryInput=function(e){const t=e.target.value.trim();refreshEffectiveType();updateHashtagHint(fullQueryText());updateTranslateVisibility();clearTimeout(ssTimer);const rq=++ssReq;if(t.length<2)return hideSuggestions();const h=hs(t);if(h.length)renderSuggestions(h);ssTimer=setTimeout(async()=>{const r=await fs(t);if(rq!==ssReq)return;const seen=new Set(),m=[...h,...r.map(text=>({text,tag:'اقتراح ذكي'}))].filter(x=>{const k=ns(x.text);if(seen.has(k))return false;seen.add(k);return true}).slice(0,8);m.length?renderSuggestions(m):hideSuggestions()},220)};
+
+/* اختيار أعلى صورة متاحة علنًا فعليًا بحسب أبعاد البكسل، من دون تكبير صناعي */
+function probePublicImage(url,timeout=5000){return new Promise(resolve=>{if(!url)return resolve({ok:false,url,width:0,height:0,area:0});const img=new Image(),timer=setTimeout(()=>resolve({ok:false,url,width:0,height:0,area:0}),timeout);img.onload=()=>{clearTimeout(timer);const width=img.naturalWidth||0,height=img.naturalHeight||0;resolve({ok:width>0&&height>0,url,width,height,area:width*height})};img.onerror=()=>{clearTimeout(timer);resolve({ok:false,url,width:0,height:0,area:0})};img.referrerPolicy='no-referrer';img.src=url})}
+async function pickBestPublicImage(urls){const unique=[...new Set((urls||[]).filter(Boolean))],results=await Promise.all(unique.map(u=>probePublicImage(u)));const good=results.filter(x=>x.ok&&x.width>120&&x.height>90).sort((a,b)=>b.area-a.area);return good[0]?.url||unique[0]||null}
+function platformQualityCandidates(imageUrl,pageUrl){const a=[imageUrl];try{const u=new URL(imageUrl);if(/pbs\.twimg\.com$/i.test(u.hostname)){u.searchParams.set('name','orig');a.unshift(u.toString())}if(/img\.youtube\.com$/i.test(u.hostname)){const m=u.pathname.match(/\/vi\/([^/]+)\//);if(m)a.unshift(`https://img.youtube.com/vi/${m[1]}/maxresdefault.jpg`,`https://img.youtube.com/vi/${m[1]}/sddefault.jpg`)}if(/tiktokcdn|tiktokcdn-us|byteoversea/i.test(u.hostname)){a.unshift(imageUrl.replace(/:\d{2,4}:\d{2,4}(?=\.(?:jpe?g|webp))/i,':1080:1920'))}}catch(e){}return a}
+async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPublicImage(platformQualityCandidates(imageUrl,pageUrl))||imageUrl}
 
 init();
 handleSharedLink();
