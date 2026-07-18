@@ -1079,7 +1079,7 @@ function openOriginalLinkHtml(url){
           <div class="result-desc">${url}</div>
         </div>
         <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
-      </a><div class="fallback-actions"><button type="button" class="save-original-url-btn" onclick="saveCurrentFallbackUrl(event,this)" title="حفظ الرابط في روابط"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg></button></div>
+      </a><div class="fallback-actions"><button type="button" class="save-original-url-btn" data-action="save-fallback-url" data-url="${encodeURIComponent(url)}" title="حفظ الرابط في روابط" aria-label="حفظ الرابط في روابط"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg></button></div>
     </div>`;
 }
 
@@ -1516,19 +1516,28 @@ onQueryInput=function(e){const t=e.target.value.trim();refreshEffectiveType();up
 
 const SAVED_URLS_KEY='radar_saved_unopened_urls';
 function getSavedUrls(){try{const x=JSON.parse(localStorage.getItem(SAVED_URLS_KEY));return Array.isArray(x)?x:[]}catch(e){return[]}}
-function saveCurrentFallbackUrl(event,button){
- event.preventDefault();event.stopPropagation();
- const url=document.getElementById('imageUrlInput').value.trim();
- if(!url){document.getElementById('imageSearchStatus').textContent='⚠️ لا يوجد رابط لحفظه';return false}
+function saveFallbackUrlNow(button){
+ let url='';
+ try{url=decodeURIComponent(button.getAttribute('data-url')||'')}catch(e){url=button.getAttribute('data-url')||''}
+ if(!url)url=document.getElementById('imageUrlInput').value.trim();
  let saved=getSavedUrls().filter(x=>x!==url);saved.unshift(url);
- localStorage.setItem(SAVED_URLS_KEY,JSON.stringify(saved.slice(0,100)));
- button.classList.add('saved-ok');button.innerHTML='<span style="font-size:21px">✓</span>';
+ try{localStorage.setItem(SAVED_URLS_KEY,JSON.stringify(saved.slice(0,100)))}catch(e){}
+ button.classList.add('saved-ok');
+ button.innerHTML='<span style="font-size:21px">✓</span>';
  document.getElementById('imageSearchStatus').textContent='✅ تم حفظ الرابط في روابط';
- renderSavedUrls();document.getElementById('savedUrlsArea').classList.add('show');
- if(navigator.vibrate)navigator.vibrate(25);return false;
+ renderSavedUrls(saved.slice(0,100));
+ const area=document.getElementById('savedUrlsArea');area.classList.add('show');
+ if(navigator.vibrate)navigator.vibrate(25);
+ setTimeout(()=>area.scrollIntoView({behavior:'smooth',block:'nearest'}),40);
 }
+document.addEventListener('click',function(event){
+ const button=event.target.closest('[data-action="save-fallback-url"]');
+ if(!button)return;
+ event.preventDefault();event.stopPropagation();
+ saveFallbackUrlNow(button);
+},true);
 function toggleSavedUrlsView(){const a=document.getElementById('savedUrlsArea');if(a.classList.contains('show')){a.classList.remove('show');return}renderSavedUrls();a.classList.add('show')}
-function renderSavedUrls(){const l=document.getElementById('savedUrlsList'),a=getSavedUrls();l.innerHTML=a.length?a.map((u,i)=>`<div class="result-card saved-url-card"><span class="red-pin">📌</span><a class="saved-url-open" href="${escapeSavedAttr(u)}" target="_blank" rel="noopener">${escapeSavedAttr(u)}</a><button class="saved-url-delete" onclick="removeSavedUrl(${i})">×</button></div>`).join(''):'<div class="hint">لا توجد روابط محفوظة بعد.</div>'}
+function renderSavedUrls(items){const l=document.getElementById('savedUrlsList'),a=Array.isArray(items)?items:getSavedUrls();l.innerHTML=a.length?a.map((u,i)=>`<div class="result-card saved-url-card"><span class="red-pin">📌</span><a class="saved-url-open" href="${escapeSavedAttr(u)}" target="_blank" rel="noopener">${escapeSavedAttr(u)}</a><button class="saved-url-delete" onclick="removeSavedUrl(${i})">×</button></div>`).join(''):'<div class="hint">لا توجد روابط محفوظة بعد.</div>'}
 function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.setItem(SAVED_URLS_KEY,JSON.stringify(a));renderSavedUrls()}
 function openInlineSavedFocus(src){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');if(!l||!p)return;p.src=src;document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';requestAnimationFrame(()=>l.classList.add('show'))}
 function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus');if(!l)return;l.classList.remove('show');document.documentElement.style.overflow='';document.body.style.overflow=''}
