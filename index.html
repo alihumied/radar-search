@@ -1642,19 +1642,41 @@ function openInlineSavedFocus(src){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
   if(!l||!p)return;
   p.src=src;
-  const actions=document.getElementById('savedInlineFocusActions');
   const isRemote = /^https?:\/\//i.test(src);
-  if(actions){
-    if(isRemote){
-      const encoded = encodeURIComponent(src);
-      document.getElementById('savedInlineFocusYandex').href = `https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
-      document.getElementById('savedInlineFocusGoogle').href = `https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`;
-      actions.style.display = 'flex';
-    }else{
-      actions.style.display = 'none';
-    }
+  const yandexBtn = document.getElementById('savedInlineFocusYandex');
+  const googleBtn = document.getElementById('savedInlineFocusGoogle');
+  if(isRemote){
+    const encoded = encodeURIComponent(src);
+    yandexBtn.href = `https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
+    googleBtn.href = `https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`;
+    yandexBtn.style.display = '';
+    googleBtn.style.display = '';
+  }else{
+    yandexBtn.style.display = 'none';
+    googleBtn.style.display = 'none';
   }
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';requestAnimationFrame(()=>l.classList.add('show'))
+}
+async function saveZoomedImage(){
+  const p = document.getElementById('savedInlineFocusImg');
+  const btn = document.getElementById('savedInlineFocusSave');
+  if(!p || !p.src) return;
+  try{
+    await saveLinkToStorage(p.src, p.src);
+    if(navigator.vibrate) navigator.vibrate(30);
+    if(btn){
+      const old = btn.textContent;
+      btn.textContent = '✅ تم الحفظ';
+      setTimeout(()=>{ btn.textContent = old; }, 1500);
+    }
+    renderSavedLinks();
+  }catch(err){
+    if(btn){
+      const old = btn.textContent;
+      btn.textContent = '⚠️ تعذّر الحفظ';
+      setTimeout(()=>{ btn.textContent = old; }, 1500);
+    }
+  }
 }
 function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus');if(!l)return;l.classList.remove('show');document.documentElement.style.overflow='';document.body.style.overflow=''}
 function openImageZoomPage(imageUrl){
@@ -1673,6 +1695,6 @@ init();
 handleSharedLink();
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 </body>
 </html>
