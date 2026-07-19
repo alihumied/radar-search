@@ -1794,21 +1794,24 @@ function selectPlatformDataType(key){
   platformDataState.type = key;
   renderPlatformDataTypeRow();
 }
+let platformDataPollTimer = null;
 async function runPlatformDataFetch(){
   const status = document.getElementById('platformDataStatus');
   const cards = document.getElementById('platformDataCards');
   const url = document.getElementById('platformDataUrlInput').value.trim();
   const p = PLATFORM_DATA_PROVIDERS[platformDataState.provider];
+  if(platformDataPollTimer){ clearTimeout(platformDataPollTimer); platformDataPollTimer = null; }
   if(!url){ status.textContent = '⚠️ الصق رابط أولاً'; return; }
   if(p.matches && !p.matches(url)){ status.textContent = `⚠️ الرابط لازم يكون من ${p.label}`; return; }
   if(!p.workerUrl || p.workerUrl.includes('YOUR-WORKER')){
     status.textContent = '⚠️ الخادم الوسيط لسا ما تجهز — قريبًا';
     return;
   }
-  status.textContent = `⏳ جاري جلب ${p.types[platformDataState.type].label}...`;
+  const type = platformDataState.type;
+  status.textContent = `⏳ جاري جلب ${p.types[type].label}...`;
   cards.innerHTML = '';
   try{
-    const res = await fetch(`${p.workerUrl}/${platformDataState.type}`, {
+    const res = await fetch(`${p.workerUrl}/${type}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
@@ -1818,21 +1821,63 @@ async function runPlatformDataFetch(){
       status.textContent = `⚠️ ${data?.error || `HTTP ${res.status}`}`;
       return;
     }
-    if(data && data._note){
-      // نتيجة فاضية مع تفاصيل تشخيصية من الـ Worker
-      cards.innerHTML = '';
-      status.innerHTML = `⚠️ ${esc(data._note)}<br><span style="font-size:11px; opacity:.7; direction:ltr; display:inline-block; margin-top:4px;">status: ${esc(data._debug?.finalStatus||'?')} · محاولات: ${data._debug?.attempts||'?'}</span>`;
-      return;
-    }
-    if(data && data.error){
+    if(data?.error){
       status.textContent = `⚠️ ${data.error}`;
       return;
     }
-    renderPlatformDataResults(data, p, platformDataState.type);
-    status.textContent = `✅ تم جلب ${Array.isArray(data)?data.length:1} عنصر`;
+    if(data?.pending && data?.snapshot_id){
+      // طلب غير متزامن (منشورات/صور) — التطبيق نفسه يتابع كل بضع ثواني
+      pollPlatformData(p, type, data.snapshot_id, 0);
+      return;
+    }
+    if(data?.ready){
+      finishPlatformDataFetch(data.result, p, type);
+      return;
+    }
+    status.textContent = '⚠️ استجابة غير متوقعة من الخادم';
   }catch(err){
     status.textContent = `⚠️ تعذّر الجلب: ${err.message}`;
   }
+}
+async function pollPlatformData(p, type, snapshotId, elapsedSeconds){
+  const status = document.getElementById('platformDataStatus');
+  const maxSeconds = 120;
+  if(elapsedSeconds >= maxSeconds){
+    status.textContent = '⚠️ انتهى وقت الانتظار (دقيقتين) — جرّب رابط ثاني أو حاول بوقت لاحق';
+    return;
+  }
+  status.textContent = `⏳ جاري التحضير من فيسبوك... (${elapsedSeconds}ث)`;
+  try{
+    const res = await fetch(`${p.workerUrl}/poll?id=${encodeURIComponent(snapshotId)}&type=${type}`);
+    const data = await res.json().catch(()=>null);
+    if(!res.ok || data?.error){
+      status.textContent = `⚠️ ${data?.error || `HTTP ${res.status}`}`;
+      return;
+    }
+    if(data?.ready){
+      if(data.error){
+        status.textContent = '⚠️ Bright Data رجع خطأ أثناء المعالجة';
+        return;
+      }
+      finishPlatformDataFetch(data.result, p, type);
+      return;
+    }
+    // لسا شغّال — نسأل تاني بعد 3 ثواني
+    platformDataPollTimer = setTimeout(()=> pollPlatformData(p, type, snapshotId, elapsedSeconds + 3), 3000);
+  }catch(err){
+    status.textContent = `⚠️ تعذّر التحقق: ${err.message}`;
+  }
+}
+function finishPlatformDataFetch(result, p, type){
+  const status = document.getElementById('platformDataStatus');
+  const items = Array.isArray(result) ? result : (result ? [result] : []);
+  if(!items.length){
+    status.textContent = '⚠️ ما لقينا نتائج لهالرابط (الصفحة فاضية أو الرابط ما تحلّل صح)';
+    document.getElementById('platformDataCards').innerHTML = '';
+    return;
+  }
+  renderPlatformDataResults(items, p, type);
+  status.textContent = `✅ تم جلب ${items.length} عنصر`;
 }
 function renderPlatformDataResults(data, provider, type){
   const cards = document.getElementById('platformDataCards');
