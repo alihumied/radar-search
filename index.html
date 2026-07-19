@@ -168,6 +168,35 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   </header>
 
   <div class="core">
+    <div class="section-title" style="margin:0 0 12px;"><h2>📘 بيانات المنصات (تجريبي)</h2></div>
+    <div class="hint" style="margin-top:0; margin-bottom:8px;">جلب منشورات وتعليقات وصور مباشرة من رابط — منفصل تمامًا عن البحث العكسي والبحث الرئيسي</div>
+
+    <div class="toggles" id="platformDataProviderRow" style="margin-bottom:10px;"></div>
+    <div class="toggles" id="platformDataTypeRow" style="margin-bottom:10px;"></div>
+
+    <div class="search-row" style="z-index:1;">
+      <div class="search-box" style="padding:0 18px; min-height:58px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="platformDataUrlInput" placeholder="https://www.facebook.com/..." style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
+        <button onclick="document.getElementById('platformDataUrlInput').value=''" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <button class="go-btn" onclick="runPlatformDataFetch()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        جلب
+      </button>
+    </div>
+    <div class="toggles" style="margin-top:10px;">
+      <div class="toggle" onclick="copyPlatformUrlToReverseSearch()" style="cursor:pointer;"><span style="font-size:15px;">↪️</span><span>نسخ للبحث العكسي</span></div>
+    </div>
+    <div class="hint" id="platformDataStatus" style="margin-top:8px;"></div>
+    <div class="results" id="platformDataResultsArea">
+      <div id="platformDataCards" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <div class="core">
     <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
 
     <div class="hint" style="margin-top:0; margin-bottom:8px;">عندك رابط فيديو/صورة؟</div>
@@ -324,30 +353,6 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   <div class="results" id="resultsArea">
     <div class="result-meta" id="resultMeta"></div>
     <div id="resultCards"></div>
-  </div>
-
-  <div class="section-title" style="margin-top:26px;"><h2>📘 بيانات المنصات (تجريبي)</h2></div>
-  <div class="hint" style="margin-top:0; margin-bottom:8px;">جلب منشورات وتعليقات وصور مباشرة من رابط — منفصل تمامًا عن البحث العكسي والبحث الرئيسي</div>
-
-  <div class="toggles" id="platformDataProviderRow" style="margin-bottom:10px;"></div>
-  <div class="toggles" id="platformDataTypeRow" style="margin-bottom:10px;"></div>
-
-  <div class="search-row" style="z-index:1;">
-    <div class="search-box" style="padding:0 18px; min-height:58px;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input type="text" id="platformDataUrlInput" placeholder="https://www.facebook.com/..." style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:14px; padding:18px 10px;" autocomplete="off">
-      <button onclick="document.getElementById('platformDataUrlInput').value=''" title="تفريغ الخانة" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:6px; flex-shrink:0; display:flex; align-items:center;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <button class="go-btn" onclick="runPlatformDataFetch()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      جلب
-    </button>
-  </div>
-  <div class="hint" id="platformDataStatus" style="margin-top:8px;"></div>
-  <div class="results" id="platformDataResultsArea">
-    <div id="platformDataCards" style="margin-top:12px;"></div>
   </div>
 
   <footer>RADAR — بحث موجّه نحو الروابط العامة للمنصات · لا يقوم بأي تجاوز لخصوصية أو اختراق حسابات</footer>
@@ -1554,13 +1559,35 @@ function handleSharedLink(){
   const params = new URLSearchParams(window.location.search);
   const shared = params.get('shared_url') || params.get('shared_text') || '';
   const urlMatch = shared.match(/https?:\/\/\S+/);
-  if(urlMatch){
-    const link = urlMatch[0];
-    document.getElementById('imageUrlInput').value = link;
-    // تنظيف الرابط من شريط العنوان بدون إعادة تحميل الصفحة
-    window.history.replaceState({}, '', window.location.pathname);
-    setTimeout(()=> runImageSearch(), 300);
+  if(!urlMatch) return;
+  const link = urlMatch[0];
+  window.history.replaceState({}, '', window.location.pathname);
+
+  // إذا الرابط من منصة عندها مزوّد بيانات مفعّل (worker جاهز)، وجّه لقسم "بيانات المنصات"
+  const matchedProvider = Object.entries(PLATFORM_DATA_PROVIDERS).find(([key, p]) =>
+    p.matches && p.matches(link) && p.workerUrl && !p.workerUrl.includes('YOUR-WORKER')
+  );
+  if(matchedProvider){
+    const [key] = matchedProvider;
+    selectPlatformDataProvider(key);
+    document.getElementById('platformDataUrlInput').value = link;
+    document.getElementById('platformDataUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
+    setTimeout(()=> runPlatformDataFetch(), 300);
+    return;
   }
+
+  // غير هيك، السلوك القديم: البحث العكسي
+  document.getElementById('imageUrlInput').value = link;
+  setTimeout(()=> runImageSearch(), 300);
+}
+function copyPlatformUrlToReverseSearch(){
+  const url = document.getElementById('platformDataUrlInput').value.trim();
+  if(!url){ document.getElementById('platformDataStatus').textContent = '⚠️ ما في رابط بالخانة لنسخه'; return; }
+  document.getElementById('imageUrlInput').value = url;
+  document.getElementById('imageUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
+  const status = document.getElementById('platformDataStatus');
+  status.textContent = '✅ انتقل الرابط لخانة البحث العكسي بالأسفل';
+  setTimeout(()=>{ if(status.textContent.includes('انتقل')) status.textContent=''; }, 2500);
 }
 
 /* theme */
@@ -1716,7 +1743,6 @@ function platformQualityCandidates(imageUrl,pageUrl){const a=[imageUrl];try{cons
 async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPublicImage(platformQualityCandidates(imageUrl,pageUrl))||imageUrl}
 
 init();
-handleSharedLink();
 
 /* ===================== بيانات المنصات (فيسبوك + قابل للتوسعة لاحقًا) ===================== */
 // كل منصة جديدة = عنصر واحد بهالكائن، بدون تعديل أي كود ثاني
@@ -1815,6 +1841,7 @@ function renderPlatformDataResults(data, provider, type){
 }
 renderPlatformDataProviderRow();
 renderPlatformDataTypeRow();
+handleSharedLink();
 
 </script>
 
