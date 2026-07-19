@@ -1383,13 +1383,76 @@ function attachLongPressSave(url){
 }
 
 /* ===================== RUN SEARCH ===================== */
+function detectProfileScope(text){
+  const patterns = [
+    { platform:'facebook',  domain:'facebook.com',  re:/https?:\/\/(?:www\.|m\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.\-_]+)/i },
+    { platform:'instagram', domain:'instagram.com',  re:/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/i },
+    { platform:'x',         domain:'x.com',          re:/https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]+)/i },
+    { platform:'tiktok',    domain:'tiktok.com',     re:/https?:\/\/(?:www\.)?tiktok\.com\/(@[A-Za-z0-9._]+)/i },
+  ];
+  for(const p of patterns){
+    const m = text.match(p.re);
+    if(m){
+      const scopePath = `${p.domain}/${m[1]}`;
+      const remainder = text.replace(m[0], '').trim();
+      return { platform:p.platform, scopePath, remainder };
+    }
+  }
+  return null;
+}
+function renderProfileScopedSearch(scope, type){
+  saveToSearchHistory(document.getElementById('query').value.trim());
+  const meta = document.getElementById('resultMeta');
+  meta.innerHTML = `
+    <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
+    <div class="meta-chip">النوع: <b>${typeLabelAr(type)}</b></div>`;
+  const cards = document.getElementById('resultCards');
+  cards.innerHTML = '';
+  const keyword = scope.remainder || '';
+  const gUrl = googleUrl(keyword, type, {siteDomain: scope.scopePath});
+  const yQuery = keyword ? `site:${scope.scopePath} ${keyword}` : `site:${scope.scopePath}`;
+  const yUrl = `https://yandex.com/search/?${new URLSearchParams({text:yQuery, fmode:'none'})}`;
+  const items = [
+    {name:'جوجل — داخل هالبروفايل بس', color:'#4285F4', letter:'G', url:gUrl, badge:'مقيّد بالـ ID'},
+    {name:'ياندكس — داخل هالبروفايل بس', color:'#FF3333', letter:'Я', url:yUrl, badge:'مقيّد بالـ ID'},
+    {name:'فتح البروفايل مباشرة', color:'#94a3b8', letter:'👤', url:`https://${scope.scopePath}`, badge:'رابط أصلي'},
+  ];
+  items.forEach(eng=>{
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = `
+      <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
+        <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
+        <div class="result-body">
+          <div class="result-title">${esc(eng.name)} <span class="badge">${esc(eng.badge)}</span></div>
+          <div class="result-desc">${esc(eng.url)}</div>
+        </div>
+        <svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+      </a>`;
+    cards.appendChild(card);
+  });
+  if(!keyword){
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.style.marginTop = '10px';
+    hint.textContent = '💡 ضيفي كلمة بعد الرابط (مثلاً: عقار) للبحث عن منشورات/تعليقات هالشخص تحتوي عليها تحديدًا.';
+    cards.appendChild(hint);
+  }
+  document.getElementById('resultsArea').classList.add('show');
+  document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+}
 function runSearch(){
   const baseQuery = document.getElementById('query').value.trim();
   if(!baseQuery){ document.getElementById('query').focus(); return; }
-  saveToSearchHistory(baseQuery);
   hideSuggestions();
   refreshEffectiveType();
   const type = effectiveType;
+  const profileScope = detectProfileScope(baseQuery);
+  if(profileScope){
+    renderProfileScopedSearch(profileScope, type);
+    return;
+  }
+  saveToSearchHistory(baseQuery);
   let query = fullQueryText();
 
   // إضافة كلمة الجودة كنص فعلي (لا يوجد باراميتر مباشر للجودة عند أغلب المنصات)
