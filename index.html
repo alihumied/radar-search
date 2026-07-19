@@ -1402,20 +1402,29 @@ function detectProfileScope(text){
 }
 function renderProfileScopedSearch(scope, type){
   saveToSearchHistory(document.getElementById('query').value.trim());
+  const keyword = scope.remainder || '';
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    <div class="meta-chip">النوع: <b>${typeLabelAr(type)}</b></div>`;
+    ${keyword ? `<div class="meta-chip">كلمة إضافية: <b>${esc(keyword)}</b></div>` : ''}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
-  const keyword = scope.remainder || '';
-  const gUrl = googleUrl(keyword, type, {siteDomain: scope.scopePath});
-  const yQuery = keyword ? `site:${scope.scopePath} ${keyword}` : `site:${scope.scopePath}`;
-  const yUrl = `https://yandex.com/search/?${new URLSearchParams({text:yQuery, fmode:'none'})}`;
+
+  const kwPart = keyword ? ` "${keyword}"` : '';
+  const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
+
+  const postsQ = `site:${scope.scopePath}${kwPart}`;
+  const commentsQ = `site:${scope.scopePath}${kwPart} ${commentSignal}`;
+
+  const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
+  const yUrl = (q) => `https://yandex.com/search/?${new URLSearchParams({text:q, fmode:'none'})}`;
+
   const items = [
-    {name:'جوجل — داخل هالبروفايل بس', color:'#4285F4', letter:'G', url:gUrl, badge:'مقيّد بالـ ID'},
-    {name:'ياندكس — داخل هالبروفايل بس', color:'#FF3333', letter:'Я', url:yUrl, badge:'مقيّد بالـ ID'},
-    {name:'فتح البروفايل مباشرة', color:'#94a3b8', letter:'👤', url:`https://${scope.scopePath}`, badge:'رابط أصلي'},
+    {name:'📝 منشورات — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:'مقيّد بالـ ID'},
+    {name:'📝 منشورات — ياندكس', color:'#FF3333', letter:'Я', url:yUrl(postsQ), badge:'مقيّد بالـ ID'},
+    {name:'💬 تعليقات — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:'مقيّد بالـ ID'},
+    {name:'💬 تعليقات — ياندكس', color:'#FF3333', letter:'Я', url:yUrl(commentsQ), badge:'مقيّد بالـ ID'},
+    {name:'👤 فتح البروفايل مباشرة', color:'#94a3b8', letter:'👤', url:`https://${scope.scopePath}`, badge:'رابط أصلي'},
   ];
   items.forEach(eng=>{
     const card = document.createElement('div');
@@ -1431,13 +1440,6 @@ function renderProfileScopedSearch(scope, type){
       </a>`;
     cards.appendChild(card);
   });
-  if(!keyword){
-    const hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.style.marginTop = '10px';
-    hint.textContent = '💡 ضيفي كلمة بعد الرابط (مثلاً: عقار) للبحث عن منشورات/تعليقات هالشخص تحتوي عليها تحديدًا.';
-    cards.appendChild(hint);
-  }
   document.getElementById('resultsArea').classList.add('show');
   document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
