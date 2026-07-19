@@ -1818,7 +1818,7 @@ async function runPlatformDataFetch(){
     });
     const data = await res.json().catch(()=>null);
     if(!res.ok){
-      status.textContent = `⚠️ ${data?.error || `HTTP ${res.status}`}`;
+      status.innerHTML = `⚠️ ${esc(data?.error || `HTTP ${res.status}`)}${data?.detail ? `<br><span style="font-size:11px; opacity:.7; direction:ltr; display:inline-block; margin-top:4px; word-break:break-all;">${esc(String(data.detail).slice(0,300))}</span>` : ''}`;
       return;
     }
     if(data?.error){
@@ -1851,7 +1851,7 @@ async function pollPlatformData(p, type, snapshotId, elapsedSeconds){
     const res = await fetch(`${p.workerUrl}/poll?id=${encodeURIComponent(snapshotId)}&type=${type}`);
     const data = await res.json().catch(()=>null);
     if(!res.ok || data?.error){
-      status.textContent = `⚠️ ${data?.error || `HTTP ${res.status}`}`;
+      status.innerHTML = `⚠️ ${esc(data?.error || `HTTP ${res.status}`)}${data?.detail ? `<br><span style="font-size:11px; opacity:.7; direction:ltr; display:inline-block; margin-top:4px; word-break:break-all;">${esc(String(data.detail).slice(0,300))}</span>` : ''}`;
       return;
     }
     if(data?.ready){
