@@ -1443,12 +1443,52 @@ function renderProfileScopedSearch(scope, type){
   document.getElementById('resultsArea').classList.add('show');
   document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
 }
-function runSearch(){
+async function resolveShareLinkAndSearch(fullText, shareUrl, type){
+  const meta = document.getElementById('resultMeta');
+  const cards = document.getElementById('resultCards');
+  meta.innerHTML = '';
+  cards.innerHTML = '<div class="hint">⏳ جاري تحليل الرابط المختصر...</div>';
+  document.getElementById('resultsArea').classList.add('show');
+  document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+
+  const workerUrl = PLATFORM_DATA_PROVIDERS.facebook.workerUrl;
+  try{
+    const res = await fetch(`${workerUrl}/resolve?url=${encodeURIComponent(shareUrl)}`);
+    const data = await res.json();
+    const resolved = data?.resolvedUrl;
+    const scope = resolved ? detectProfileScope(fullText.replace(shareUrl, resolved)) : null;
+    if(scope){
+      renderProfileScopedSearch(scope, type);
+    }else{
+      showShareLinkGuidance();
+    }
+  }catch(err){
+    showShareLinkGuidance();
+  }
+}
+function showShareLinkGuidance(){
+  document.getElementById('resultMeta').innerHTML = '';
+  document.getElementById('resultCards').innerHTML = `
+    <div class="hint" style="margin-top:0;">
+      ⚠️ رابط المشاركة هذا مختصر وما قدرنا نحلّه لرابط بروفايل واضح تلقائيًا.<br><br>
+      للحصول على الرابط الحقيقي: افتحي بروفايل الشخص بتطبيق فيسبوك ← اضغطي (⋮) بجانب اسمه ← "مشاركة الملف الشخصي" ← رح تظهر شاشة فيها "رابط صفحة [الاسم]" برابط يبدأ بـ facebook.com/username مباشرة (مو /share/) — انسخي هذا وجربي من جديد.
+    </div>`;
+  document.getElementById('resultsArea').classList.add('show');
+}
+async function runSearch(){
   const baseQuery = document.getElementById('query').value.trim();
   if(!baseQuery){ document.getElementById('query').focus(); return; }
   hideSuggestions();
   refreshEffectiveType();
   const type = effectiveType;
+
+  // رابط مشاركة مختصر (facebook.com/share/xxx) — نحلّه لرابط بروفايل حقيقي أول (مجاني، بدون API مدفوع)
+  const shareMatch = baseQuery.match(/https?:\/\/(?:www\.)?facebook\.com\/share\/[A-Za-z0-9]+\/?/i);
+  if(shareMatch){
+    await resolveShareLinkAndSearch(baseQuery, shareMatch[0], type);
+    return;
+  }
+
   const profileScope = detectProfileScope(baseQuery);
   if(profileScope){
     renderProfileScopedSearch(profileScope, type);
