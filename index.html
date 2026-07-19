@@ -1813,8 +1813,21 @@ async function runPlatformDataFetch(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
     });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await res.json().catch(()=>null);
+    if(!res.ok){
+      status.textContent = `⚠️ ${data?.error || `HTTP ${res.status}`}`;
+      return;
+    }
+    if(data && data._note){
+      // نتيجة فاضية مع تفاصيل تشخيصية من الـ Worker
+      cards.innerHTML = '';
+      status.innerHTML = `⚠️ ${esc(data._note)}<br><span style="font-size:11px; opacity:.7; direction:ltr; display:inline-block; margin-top:4px;">status: ${esc(data._debug?.finalStatus||'?')} · محاولات: ${data._debug?.attempts||'?'}</span>`;
+      return;
+    }
+    if(data && data.error){
+      status.textContent = `⚠️ ${data.error}`;
+      return;
+    }
     renderPlatformDataResults(data, p, platformDataState.type);
     status.textContent = `✅ تم جلب ${Array.isArray(data)?data.length:1} عنصر`;
   }catch(err){
