@@ -16,7 +16,7 @@
     --blue:#2e6bff; --blue-2:#1747c9; --cyan:#3fd4ff; --text:#e7edf7;
     --muted:#7c8aa3; --muted-2:#4c5870; --off:#3a4256;
   }
-  *{box-sizing:border-box; margin:0; padding:0;}
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; -webkit-user-drag:none;}
   body{
     background:
       radial-gradient(ellipse 900px 500px at 15% -10%, rgba(46,107,255,0.16), transparent 60%),
@@ -1841,6 +1841,7 @@ function attachSavedZoom(){
       pid = e.pointerId; startX = e.clientX; startY = e.clientY;
       moved = false; longPressed = false;
       hold = setTimeout(zoom, 550);
+      img.setPointerCapture?.(pid);
     });
     img.addEventListener('pointermove', e=>{
       if(e.pointerId !== pid) return;
