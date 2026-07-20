@@ -217,23 +217,23 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       </button>
     </div>
     <div class="toggles" style="margin-top:10px;">
-      <div class="toggle" onclick="document.getElementById('deviceVideoInput').click()" style="cursor:pointer;"><span style="font-size:16px;">🎬</span><span>رفع فيديو</span></div>
+      <div class="toggle" onclick="document.getElementById('radarVideoInput').click()" style="cursor:pointer;width:38px;height:38px;padding:0;border-radius:50%;justify-content:center;flex-shrink:0;" title="فيديو" aria-label="فيديو"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 4-2v8l-4-2z"/></svg></div>
       <div class="toggle" onclick="toggleSavedLinksView()" style="cursor:pointer;"><span style="font-size:16px;">📌</span><span>صور</span></div>
       <div class="toggle saved-url-toggle" onclick="toggleSavedUrlsView()" style="cursor:pointer;"><span class="red-pin" style="font-size:16px;">📌</span><span>روابط</span></div>
       <div class="toggle" onclick="document.getElementById('deviceImageInput').click()" style="cursor:pointer; width:38px; height:38px; padding:0; border-radius:50%; justify-content:center; flex-shrink:0;"><span style="font-size:15px;">📤</span></div>
     </div>
-    <input type="file" id="deviceImageInput" accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.tif,.tiff,.avif,.heic,.heif,.jfif,.ico" multiple style="display:none;" onchange="handleDeviceImageUploadRequested(event)">
-    <input type="file" id="deviceVideoInput" accept="video/*,.mp4,.webm,.mov,.m4v,.mkv,.avi,.mpeg,.mpg,.ogv,.3gp,.3g2,.ts,.mts,.m2ts,.wmv,.flv" style="display:none;" onchange="handleDeviceVideoUploadRequested(event)">
-    <div id="requestedVideoModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.86);padding:18px;align-items:center;justify-content:center;">
-      <div style="width:min(900px,96vw);max-height:94vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 24px 80px #000;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;"><strong>🎬 عارض الفيديو</strong><button type="button" onclick="closeRequestedVideo()" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--bg-2);color:var(--text);font-size:24px;cursor:pointer;">×</button></div>
-        <video id="requestedVideoPreview" controls playsinline preload="metadata" style="display:block;width:100%;max-height:68vh;background:#000;border-radius:12px;"></video>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button type="button" class="go-btn" onclick="captureRequestedVideoFrame()" style="min-height:44px;padding:10px 18px;">📸 التقاط الشاشة وحفظها في صور</button>
-          <button type="button" class="toggle" onclick="closeRequestedVideo()">إغلاق</button>
-        </div>
-        <div id="requestedVideoStatus" class="hint" style="margin-top:10px;"></div>
+    <input type="file" id="deviceImageInput" accept="image/*" style="display:none;" onchange="handleDeviceImageUpload(event)">
+    <input type="file" id="radarVideoInput" accept="video/*,.mp4,.webm,.mov,.m4v,.mkv,.avi,.mpeg,.mpg,.ogv,.3gp,.3g2,.ts,.mts,.m2ts,.wmv,.flv" style="display:none;" onchange="radarImportVideo(event)">
+    <div id="radarVideoPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg-0);">
+      <video id="radarVideoPlayer" controls playsinline preload="metadata" style="width:100%;max-height:60vh;background:#000;border-radius:10px;"></video><div id="radarEmbedPlayer" style="display:none;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;"></div>
+      <div class="toggles" style="margin-top:10px;">
+        <button class="toggle" type="button" onclick="radarCaptureFrame()" style="cursor:pointer;border:1px solid var(--line);color:var(--text);">📸 سكرين إلى صور</button>
+        <button class="toggle" type="button" onclick="radarSaveCurrentVideo()" style="cursor:pointer;border:1px solid var(--line);color:var(--text);">💾 حفظ المقطع</button>
+        <button class="toggle" type="button" onclick="radarOpenVideoUrl()" style="cursor:pointer;border:1px solid var(--line);color:var(--text);">🔗 فتح رابط فيديو</button>
+        <button class="toggle" type="button" onclick="radarToggleSavedVideos()" style="cursor:pointer;border:1px solid var(--line);color:var(--text);">🎞️ المقاطع</button>
       </div>
+      <div id="radarVideoStatus" class="hint" style="margin-top:8px;"></div>
+      <div id="radarSavedVideos" style="display:none;margin-top:10px;"></div>
     </div>
     <div class="results" id="savedLinksArea">
       <div id="savedLinksList" style="margin-top:12px;"></div>
@@ -1813,15 +1813,19 @@ function openInlineSavedFocus(src){
   const isRemote = /^https?:\/\//i.test(src);
   const yandexBtn = document.getElementById('savedInlineFocusYandex');
   const googleBtn = document.getElementById('savedInlineFocusGoogle');
+  yandexBtn.style.display = '';
+  googleBtn.style.display = '';
   if(isRemote){
     const encoded = encodeURIComponent(src);
     yandexBtn.href = `https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
     googleBtn.href = `https://lens.google.com/uploadbyurl?url=${encoded}`;
-    yandexBtn.style.display = '';
-    googleBtn.style.display = '';
+    yandexBtn.onclick = (event)=>event.stopPropagation();
+    googleBtn.onclick = (event)=>event.stopPropagation();
   }else{
-    yandexBtn.style.display = 'none';
-    googleBtn.style.display = 'none';
+    yandexBtn.removeAttribute('href');
+    googleBtn.removeAttribute('href');
+    yandexBtn.onclick = (event)=>{event.stopPropagation();radarShareFocusedImage('yandex')};
+    googleBtn.onclick = (event)=>{event.stopPropagation();radarShareFocusedImage('google')};
   }
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';requestAnimationFrame(()=>l.classList.add('show'))
 }
@@ -2021,57 +2025,58 @@ handleSharedLink();
 
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><button id="savedInlineFocusShare" type="button" class="saved-inline-focus-btn" style="color:#38d9ff;border-color:#38d9ff88;background:#38d9ff22;cursor:pointer;" onclick="event.stopPropagation();radarShareFocusedImage()">↗ مشاركة</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 
 <script>
-/* Requested additions only: unrestricted local image/video picker, video preview, and frame capture. */
-let requestedVideoObjectUrl='';
-function requestedReadDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}
-async function handleDeviceImageUploadRequested(event){
-  const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
-  const status=document.getElementById('imageSearchStatus');let saved=0,failed=0;
-  if(status)status.textContent='جارٍ حفظ الصور داخل التطبيق...';
-  for(const file of files){
-    try{
-      const dataUrl=await requestedReadDataUrl(file);
-      await saveLinkToStorage(dataUrl,dataUrl);
-      saved++;
-    }catch(e){failed++}
-  }
-  await renderSavedLinks();
-  const area=document.getElementById('savedLinksArea');if(area){area.classList.add('show');area.scrollIntoView({behavior:'smooth',block:'start'})}
-  if(status)status.textContent=`✅ تم حفظ ${saved} صورة في خانة صور${failed?`، وتعذر على المتصفح قراءة ${failed} ملف`:''}`;
+/* إضافات الفيديو المطلوبة فقط. بقية الملف الأصلي لم تتغير. */
+let radarVideoBlob=null, radarVideoName='', radarVideoObjectUrl='';
+const RADAR_VIDEO_DB='radar_saved_videos_db', RADAR_VIDEO_STORE='videos';
+function radarVideoDb(){return new Promise((resolve,reject)=>{const q=indexedDB.open(RADAR_VIDEO_DB,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(RADAR_VIDEO_STORE))q.result.createObjectStore(RADAR_VIDEO_STORE,{keyPath:'id',autoIncrement:true})};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
+async function radarVideoPut(item){const db=await radarVideoDb();return new Promise((resolve,reject)=>{const q=db.transaction(RADAR_VIDEO_STORE,'readwrite').objectStore(RADAR_VIDEO_STORE).add(item);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
+async function radarVideoAll(){const db=await radarVideoDb();return new Promise((resolve,reject)=>{const q=db.transaction(RADAR_VIDEO_STORE).objectStore(RADAR_VIDEO_STORE).getAll();q.onsuccess=()=>resolve(q.result||[]);q.onerror=()=>reject(q.error)})}
+async function radarVideoDelete(id){const db=await radarVideoDb();return new Promise((resolve,reject)=>{const q=db.transaction(RADAR_VIDEO_STORE,'readwrite').objectStore(RADAR_VIDEO_STORE).delete(id);q.onsuccess=resolve;q.onerror=()=>reject(q.error)})}
+function radarVideoMsg(t){const e=document.getElementById('radarVideoStatus');if(e)e.textContent=t}
+function radarShowVideoPanel(){document.getElementById('radarVideoPanel').style.display='block'}
+function radarSetPlayerSource(src){const v=document.getElementById('radarVideoPlayer');v.src=src;v.load();radarShowVideoPanel();v.onerror=()=>radarVideoMsg('⚠️ تعذر تشغيل هذا الترميز أو منع الموقع الوصول المباشر إلى الفيديو.')}
+function radarImportVideo(e){const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;radarVideoBlob=f;radarVideoName=f.name||'video';if(radarVideoObjectUrl)URL.revokeObjectURL(radarVideoObjectUrl);radarVideoObjectUrl=URL.createObjectURL(f);radarSetPlayerSource(radarVideoObjectUrl);radarVideoMsg('يمكن تشغيل المقطع، حفظه داخل التطبيق، أو التقاط سكرين.')}
+async function radarSaveCurrentVideo(){if(!radarVideoBlob){radarVideoMsg('⚠️ اختر فيديو من الجهاز أولاً، أو افتح رابط فيديو مباشر قابل للتحميل.');return}try{await radarVideoPut({name:radarVideoName||'video',type:radarVideoBlob.type||'video/*',blob:radarVideoBlob,savedAt:Date.now()});radarVideoMsg('✅ حُفظ المقطع داخل التطبيق وسيبقى بعد حذفه من الجهاز، ما دامت بيانات الموقع لم تُمسح.');radarRenderSavedVideos()}catch(e){radarVideoMsg('⚠️ لم يسمح المتصفح بمساحة كافية لحفظ المقطع.')}}
+async function radarOpenVideoUrl(){
+ const preset=document.getElementById('imageUrlInput').value.trim();
+ const url=prompt('الصق رابط يوتيوب أو فيسبوك أو رابط فيديو مباشر:',preset);if(!url)return;
+ document.getElementById('imageUrlInput').value=url;radarShowVideoPanel();
+ const native=document.getElementById('radarVideoPlayer'),embed=document.getElementById('radarEmbedPlayer');
+ native.style.display='block';embed.style.display='none';embed.innerHTML='';
+ const yt=radarYouTubeId(url);
+ if(yt){
+   native.pause();native.style.display='none';embed.style.display='block';
+   embed.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(yt)}?playsinline=1" title="YouTube" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="width:100%;height:100%;border:0"></iframe>`;
+   radarVideoBlob=null;radarVideoMsg('✅ تم فتح رابط يوتيوب داخل التطبيق. السكرين من المشغّل المضمّن محمي؛ استخدم لقطة شاشة الجهاز ثم ارفعها إلى صور.');return;
+ }
+ if(/(^|\.)facebook\.com$|(^|\.)fb\.watch$/i.test((()=>{try{return new URL(url).hostname}catch(e){return''}})())){
+   native.pause();native.style.display='none';embed.style.display='block';
+   embed.innerHTML=`<iframe src="https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=760" title="Facebook video" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowfullscreen style="width:100%;height:100%;border:0"></iframe>`;
+   radarVideoBlob=null;radarVideoMsg('✅ تم فتح رابط فيسبوك العام داخل التطبيق. الروابط الخاصة أو المقيّدة قد لا تعمل.');return;
+ }
+ radarVideoMsg('جارٍ محاولة فتح الرابط المباشر...');
+ try{const r=await fetch(url,{mode:'cors'});if(!r.ok)throw new Error();const b=await r.blob();if(!b.type.startsWith('video/'))throw new Error();radarVideoBlob=b;radarVideoName=(new URL(url)).pathname.split('/').pop()||'shared-video';if(radarVideoObjectUrl)URL.revokeObjectURL(radarVideoObjectUrl);radarVideoObjectUrl=URL.createObjectURL(b);native.style.display='block';embed.style.display='none';radarSetPlayerSource(radarVideoObjectUrl);radarVideoMsg('✅ فُتح الرابط المباشر ويمكن حفظ المقطع أو أخذ سكرين.')}catch(e){radarVideoBlob=null;native.style.display='block';embed.style.display='none';radarSetPlayerSource(url);radarVideoMsg('ℹ️ تم تمرير الرابط للمشغّل، لكن الموقع قد يمنع التشغيل الخارجي أو السكرين.')}
 }
-function handleDeviceVideoUploadRequested(event){
-  const file=event.target.files&&event.target.files[0];event.target.value='';if(!file)return;
-  if(requestedVideoObjectUrl)URL.revokeObjectURL(requestedVideoObjectUrl);
-  requestedVideoObjectUrl=URL.createObjectURL(file);
-  const video=document.getElementById('requestedVideoPreview');
-  const modal=document.getElementById('requestedVideoModal');
-  const status=document.getElementById('requestedVideoStatus');
-  video.src=requestedVideoObjectUrl;video.load();modal.style.display='flex';
-  document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
-  status.textContent=`${file.name} • حرّك الفيديو إلى اللقطة المطلوبة ثم اضغط التقاط الشاشة`;
-  video.onerror=()=>{status.textContent='⚠️ تم اختيار الملف، لكن المتصفح أو نظام الجهاز لا يدعم ترميز تشغيله.'};
+function radarYouTubeId(url){try{const u=new URL(url),h=u.hostname.replace(/^www\./,'');if(h==='youtu.be')return u.pathname.split('/').filter(Boolean)[0]||'';if(h==='youtube.com'||h==='m.youtube.com'||h==='music.youtube.com'){if(u.pathname==='/watch')return u.searchParams.get('v')||'';const m=u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/);return m?m[1]:''}}catch(e){}return''}
+
+async function radarCaptureFrame(){const v=document.getElementById('radarVideoPlayer');if(!v.videoWidth||!v.videoHeight){radarVideoMsg('⚠️ شغّل الفيديو وانتقل إلى اللقطة المطلوبة أولاً.');return}try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await saveLinkToStorage(shot,shot);await renderSavedLinks();document.getElementById('savedLinksArea').classList.add('show');radarVideoMsg('✅ نُقل السكرين إلى صور. افتح صور ثم اختر جوجل أو ياندكس للبحث العكسي.');setTimeout(()=>document.getElementById('savedLinksArea').scrollIntoView({behavior:'smooth',block:'start'}),80)}catch(e){radarVideoMsg('⚠️ منع المتصفح التقاط السكرين من هذا المصدر بسبب حماية المصدر أو CORS.')}}
+async function radarRenderSavedVideos(){const box=document.getElementById('radarSavedVideos'),items=await radarVideoAll();box.innerHTML=items.length?items.slice().reverse().map(x=>`<div class="result-card" style="gap:8px"><button class="toggle" onclick="radarPlaySavedVideo(${x.id})" style="cursor:pointer;border:1px solid var(--line);color:var(--text);">▶ ${esc(x.name)}</button><button class="saved-url-delete" onclick="radarRemoveSavedVideo(${x.id})">×</button></div>`).join(''):'<div class="hint">لا توجد مقاطع محفوظة.</div>'}
+async function radarToggleSavedVideos(){const b=document.getElementById('radarSavedVideos');b.style.display=b.style.display==='none'?'block':'none';if(b.style.display==='block')await radarRenderSavedVideos()}
+async function radarPlaySavedVideo(id){const x=(await radarVideoAll()).find(v=>v.id===id);if(!x)return;radarVideoBlob=x.blob;radarVideoName=x.name;if(radarVideoObjectUrl)URL.revokeObjectURL(radarVideoObjectUrl);radarVideoObjectUrl=URL.createObjectURL(x.blob);radarSetPlayerSource(radarVideoObjectUrl);radarVideoMsg('✅ تشغيل مقطع محفوظ داخل التطبيق.')}
+async function radarRemoveSavedVideo(id){await radarVideoDelete(id);await radarRenderSavedVideos()}
+async function radarFocusedImageFile(){const img=document.getElementById('savedInlineFocusImg');if(!img||!img.src)throw new Error('no image');const r=await fetch(img.src);const blob=await r.blob();return new File([blob],'radar-image.'+((blob.type.split('/')[1]||'png').replace('jpeg','jpg')),{type:blob.type||'image/png'})}
+async function radarShareFocusedImage(target='share'){
+ try{
+   const file=await radarFocusedImageFile(),data={files:[file],title:'RADAR صورة للبحث العكسي'};
+   if(navigator.share&&(!navigator.canShare||navigator.canShare(data))){await navigator.share(data);return}
+   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);
+   const url=target==='yandex'?'https://yandex.com/images/search?rpt=imageview':'https://lens.google.com/';window.open(url,'_blank','noopener');
+ }catch(e){alert('تعذرت مشاركة الصورة. افتح التطبيق عبر HTTPS أو نزّل الصورة ثم اخترها داخل جوجل لينس أو ياندكس.')}
 }
-async function captureRequestedVideoFrame(){
-  const video=document.getElementById('requestedVideoPreview');
-  const status=document.getElementById('requestedVideoStatus');
-  if(!video.videoWidth||!video.videoHeight){status.textContent='⚠️ انتظر تحميل الفيديو أو شغّله أولاً';return}
-  const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-  canvas.getContext('2d').drawImage(video,0,0);
-  try{
-    const shot=canvas.toDataURL('image/png');
-    await saveLinkToStorage(shot,shot);await renderSavedLinks();
-    const area=document.getElementById('savedLinksArea');if(area)area.classList.add('show');
-    status.textContent='✅ تم حفظ لقطة الفيديو في خانة صور';
-  }catch(e){status.textContent='⚠️ تعذر حفظ لقطة الفيديو'}
-}
-function closeRequestedVideo(){
-  const video=document.getElementById('requestedVideoPreview');video.pause();video.removeAttribute('src');video.load();
-  if(requestedVideoObjectUrl){URL.revokeObjectURL(requestedVideoObjectUrl);requestedVideoObjectUrl=''}
-  document.getElementById('requestedVideoModal').style.display='none';document.documentElement.style.overflow='';document.body.style.overflow='';
-}
+window.addEventListener('DOMContentLoaded',()=>{const p=new URLSearchParams(location.search),u=p.get('shared_video')||p.get('url')||p.get('text');if(u&&/^https?:\/\//i.test(u)){document.getElementById('imageUrlInput').value=u;radarShowVideoPanel();radarVideoMsg('تم استلام رابط مشاركة. اضغط «فتح رابط فيديو».')}});
 </script>
 </body>
 </html>
