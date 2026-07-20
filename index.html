@@ -1201,7 +1201,7 @@ async function runImageSearch(){
   // محركات البحث العكسي بالصورة (تجيب صورًا ومصادر مشابهة)
   const engines = [
     {name:'ياندكس — بحث عكسي بالصورة', color:'#FF3333', letter:'Я', url:`https://yandex.com/images/search?rpt=imageview&url=${encoded}`, badge:'الأقوى بمطابقة الوجوه/الستايل'},
-    {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`, badge:'يدور على المصدر والمشابه'},
+    {name:'جوجل — بحث عكسي بالصورة', color:'#4285F4', letter:'G', url:`https://lens.google.com/uploadbyurl?url=${encoded}`, badge:'يدور على المصدر والمشابه'},
     {name:'TinEye — بحث عكسي بالصورة', color:'#2B2B2B', letter:'T', url:`https://tineye.com/search?url=${encoded}`, badge:'الأدق لإيجاد نفس الصورة بالضبط (حتى المعدّلة)'},
   ];
 
@@ -1804,7 +1804,7 @@ function openInlineSavedFocus(src){
   if(isRemote){
     const encoded = encodeURIComponent(src);
     yandexBtn.href = `https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
-    googleBtn.href = `https://www.google.com/searchbyimage?image_url=${encoded}&safe=off`;
+    googleBtn.href = `https://lens.google.com/uploadbyurl?url=${encoded}`;
     yandexBtn.style.display = '';
     googleBtn.style.display = '';
   }else{
