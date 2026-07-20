@@ -1283,6 +1283,7 @@ function idbOpen(){
       }
     };
     req.onsuccess = e => resolve(e.target.result);
+    req.onblocked = () => reject(new Error('قاعدة البيانات مقفولة بتبويب ثاني مفتوح للتطبيق — سكّري باقي التبويبات وجربي من جديد'));
     req.onerror = e => reject(e.target.error);
   });
   return _idbPromise;
@@ -1886,6 +1887,9 @@ function openInlineSavedFocus(src){
   }
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';requestAnimationFrame(()=>l.classList.add('show'))
 }
+function renderSavedLinksIfVisible(){
+  if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
+}
 async function saveZoomedImage(){
   const p = document.getElementById('savedInlineFocusImg');
   const btn = document.getElementById('savedInlineFocusSave');
@@ -1898,7 +1902,7 @@ async function saveZoomedImage(){
       btn.textContent = '✅ تم الحفظ';
       setTimeout(()=>{ btn.textContent = old; }, 1500);
     }
-    renderSavedLinks();
+    renderSavedLinksIfVisible();
   }catch(err){
     if(btn){
       const old = btn.textContent;
@@ -1962,6 +1966,9 @@ function openVideoPlayer(source){
   renderVideoSpeedRow();
   updateSaveVideoBtnState();
   videoEl.onloadedmetadata = updateVideoResolutionBadge;
+  videoEl.onerror = () => {
+    document.getElementById('videoCaptureStatus').textContent = '⚠️ تعذّر فتح هالفيديو (صيغة غير مدعومة أو الملف تالف). جرّبي فيديو ثاني.';
+  };
 
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
@@ -2009,7 +2016,7 @@ async function captureVideoFrame(){
     await saveLinkToStorage(dataUrl, dataUrl);
     if(navigator.vibrate) navigator.vibrate(30);
     status.textContent = '✅ تم حفظ السكرين شوت — بتلاقيه بمعرض "📌 صور"';
-    renderSavedLinks();
+    if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
     setTimeout(()=>{ if(status.textContent.includes('تم حفظ')) status.textContent = ''; }, 2000);
   }catch(err){
     status.textContent = '⚠️ تعذّر التقاط الصورة من الفيديو';
@@ -2038,7 +2045,7 @@ async function saveCurrentVideo(){
     if(navigator.vibrate) navigator.vibrate(30);
     btn.textContent = '✅ تم الحفظ';
     setTimeout(()=> updateSaveVideoBtnState(), 1500);
-    renderSavedVideos();
+    if(document.getElementById('savedVideosArea').classList.contains('show')) renderSavedVideos();
   }catch(err){
     status.textContent = '⚠️ تعذّر حفظ الفيديو (ممكن يكون كبير على المساحة المتاحة)';
   }
