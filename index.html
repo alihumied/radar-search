@@ -1414,8 +1414,8 @@ async function renderSavedVideos(){
   l.innerHTML = a.map(x => `
     <div class="saved-image-tile">
       <img class="saved-image-thumb" src="${esc(x.poster || '')}" style="${x.poster ? '' : 'background:#111a26;'}" draggable="false" onclick="openSavedVideo(${x.id})">
-      <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099;" onclick="event.stopPropagation();openSavedVideo(${x.id})">▶</div>
-      <button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedVideo(${x.id})" title="حذف">×</button>
+      <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openSavedVideo(${x.id})">▶</div>
+      <button class="saved-corner-btn saved-image-delete" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();removeSavedVideo(${x.id})" title="حذف">×</button>
     </div>`).join('');
 }
 async function openSavedVideo(id){
@@ -1831,8 +1831,39 @@ function handleMediaUpload(event){
   reader.readAsDataURL(file);
 }
 async function saveCurrentExtractedImage(){const b=document.getElementById('saveExtractedImageBtn'),status=document.getElementById('imageSearchStatus');if(!currentExtractedImage){status.textContent='⚠️ نفّذ البحث العكسي أولاً حتى تظهر الصورة';return}await saveLinkToStorage(currentExtractedImage.imageUrl,currentExtractedImage.sourceUrl);const old=status.textContent;status.textContent='✅ تم حفظ الصورة مع رابط المنشور الأصلي';if(navigator.vibrate)navigator.vibrate(30);if(b){b.style.transform='scale(.84)';setTimeout(()=>b.style.transform='scale(1.04)',180)}setTimeout(()=>{if(status.textContent.includes('تم حفظ'))status.textContent=old},2000)}
-function attachSavedZoom(){const thumbs=[...document.querySelectorAll('.saved-image-thumb')];thumbs.forEach(img=>{let hold=null,stop=null,startX=0,startY=0,lastX=0,lastY=0,lastT=0,moved=false,longPressed=false,pid=null;const tile=img.closest('.saved-image-tile'),reset=()=>resetGestureImages(thumbs),zoom=()=>{longPressed=true;reset();openInlineSavedFocus(img.currentSrc||img.src);if(navigator.vibrate)navigator.vibrate(25)};img.addEventListener('pointerdown',e=>{pid=e.pointerId;startX=lastX=e.clientX;startY=lastY=e.clientY;lastT=performance.now();moved=false;longPressed=false;hold=setTimeout(zoom,550);img.setPointerCapture?.(pid)});img.addEventListener('pointermove',e=>{if(e.pointerId!==pid)return;const now=performance.now(),dx=e.clientX-startX,dy=e.clientY-startY,dt=Math.max(8,now-lastT),speed=Math.min(2.4,Math.hypot(e.clientX-lastX,e.clientY-lastY)/dt),dist=Math.hypot(dx,dy);if(dist>7){moved=true;clearTimeout(hold)}const scale=Math.min(1.9,1+dist/125+speed*.22);img.classList.add('gesture-moving');img.style.transform=`translate3d(${dx*.18}px,${dy*.18}px,0) scale(${scale}) rotate(${Math.max(-12,Math.min(12,dx/12))}deg)`;img.style.opacity=String(Math.max(.22,1-dist/170));thumbs.forEach(o=>{if(o===img)return;const r=o.getBoundingClientRect(),d=Math.hypot(e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2);o.classList.toggle('gesture-near',d<105);o.classList.toggle('gesture-fade',d>=105&&d<230);if(d<125)o.style.transform=`scale(${1+Math.max(0,125-d)/230})`});lastX=e.clientX;lastY=e.clientY;lastT=now;if(moved){clearTimeout(stop);stop=setTimeout(zoom,520)}});const finish=e=>{if(pid!==null&&e.pointerId!==undefined&&e.pointerId!==pid)return;clearTimeout(hold);clearTimeout(stop);reset();pid=null};['pointerup','pointercancel','lostpointercapture'].forEach(n=>img.addEventListener(n,finish));img.addEventListener('click',e=>{e.preventDefault();if(longPressed){longPressed=false;return}if(moved){moved=false;return}const selected=tile.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>x.classList.remove('selected'));if(!selected)tile.classList.add('selected')});img.addEventListener('contextmenu',e=>e.preventDefault())})}
-function resetGestureImages(thumbs){thumbs.forEach(x=>{x.classList.remove('gesture-moving','gesture-fade','gesture-near');x.classList.add('gesture-reset');x.style.transform='';x.style.opacity='';setTimeout(()=>x.classList.remove('gesture-reset'),500)})}
+function attachSavedZoom(){
+  const thumbs = [...document.querySelectorAll('.saved-image-thumb')];
+  thumbs.forEach(img=>{
+    let hold=null, startX=0, startY=0, moved=false, longPressed=false, pid=null;
+    const tile = img.closest('.saved-image-tile');
+    const zoom = ()=>{ longPressed=true; openInlineSavedFocus(img.currentSrc||img.src); if(navigator.vibrate) navigator.vibrate(25); };
+    img.addEventListener('pointerdown', e=>{
+      pid = e.pointerId; startX = e.clientX; startY = e.clientY;
+      moved = false; longPressed = false;
+      hold = setTimeout(zoom, 550);
+    });
+    img.addEventListener('pointermove', e=>{
+      if(e.pointerId !== pid) return;
+      // فقط مسافة بسيطة بدون أي قياس تخطيط (getBoundingClientRect) — يمنع تجمّد اللمس
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if(dist > 10 && !moved){ moved = true; clearTimeout(hold); }
+    });
+    const finish = e=>{
+      if(pid !== null && e.pointerId !== undefined && e.pointerId !== pid) return;
+      clearTimeout(hold); pid = null;
+    };
+    ['pointerup','pointercancel','lostpointercapture'].forEach(n=> img.addEventListener(n, finish));
+    img.addEventListener('click', e=>{
+      e.preventDefault();
+      if(longPressed){ longPressed=false; return; }
+      if(moved){ moved=false; return; }
+      const selected = tile.classList.contains('selected');
+      document.querySelectorAll('.saved-image-tile.selected').forEach(x=> x.classList.remove('selected'));
+      if(!selected) tile.classList.add('selected');
+    });
+    img.addEventListener('contextmenu', e=> e.preventDefault());
+  });
+}
 let savedZoomScale=1,savedZoomX=0,savedZoomY=0,savedZoomPointers=new Map(),savedZoomStartDistance=0,savedZoomStartScale=1,savedZoomLastX=0,savedZoomLastY=0;
 function applySavedZoom(){const img=document.getElementById('savedImageModalImg');img.style.transform=`translate3d(${savedZoomX}px,${savedZoomY}px,0) scale(${savedZoomScale})`}
 function resetSavedZoom(){savedZoomScale=1;savedZoomX=0;savedZoomY=0;savedZoomPointers.clear();applySavedZoom()}
