@@ -217,15 +217,12 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       </button>
     </div>
     <div class="toggles" style="margin-top:10px;">
-      <div class="toggle" onclick="document.getElementById('mediaUploadInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📤</span><span>رفع صورة/فيديو</span></div>
+      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;"><span style="font-size:16px;">⚡</span><span>انتقل</span></div>
       <div class="toggle" onclick="toggleSavedLinksView()" style="cursor:pointer;"><span style="font-size:16px;">📌</span><span>صور</span></div>
-      <div class="toggle" onclick="toggleSavedVideosView()" style="cursor:pointer;"><span style="font-size:16px;">🎬</span><span>فيديو</span></div>
       <div class="toggle saved-url-toggle" onclick="toggleSavedUrlsView()" style="cursor:pointer;"><span class="red-pin" style="font-size:16px;">📌</span><span>روابط</span></div>
+      <div class="toggle" onclick="document.getElementById('deviceImageInput').click()" style="cursor:pointer; width:38px; height:38px; padding:0; border-radius:50%; justify-content:center; flex-shrink:0;"><span style="font-size:15px;">📤</span></div>
     </div>
-    <input type="file" id="mediaUploadInput" accept="image/*,video/*" style="display:none;" onchange="handleMediaUpload(event)">
-    <div class="results" id="savedVideosArea">
-      <div class="saved-images-grid" id="savedVideosList" style="margin-top:12px;"></div>
-    </div>
+    <input type="file" id="deviceImageInput" accept="image/*" style="display:none;" onchange="handleDeviceImageUpload(event)">
     <div class="results" id="savedLinksArea">
       <div id="savedLinksList" style="margin-top:12px;"></div>
     </div>
@@ -1264,7 +1261,7 @@ async function runImageSearch(){
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
 const SAVED_LINKS_KEY = 'radar_saved_images'; // legacy localStorage key (للترحيل فقط)
-const IDB_NAME = 'radar_db', IDB_VERSION = 2, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos';
+const IDB_NAME = 'radar_db', IDB_VERSION = 1, IDB_STORE = 'saved_images';
 let _idbPromise = null;
 function idbOpen(){
   if(_idbPromise) return _idbPromise;
@@ -1276,10 +1273,6 @@ function idbOpen(){
       if(!db.objectStoreNames.contains(IDB_STORE)){
         const store = db.createObjectStore(IDB_STORE, {keyPath:'id', autoIncrement:true});
         store.createIndex('ts', 'ts', {unique:false});
-      }
-      if(!db.objectStoreNames.contains(IDB_VIDEO_STORE)){
-        const vstore = db.createObjectStore(IDB_VIDEO_STORE, {keyPath:'id', autoIncrement:true});
-        vstore.createIndex('ts', 'ts', {unique:false});
       }
     };
     req.onsuccess = e => resolve(e.target.result);
@@ -1319,35 +1312,6 @@ async function idbDeleteImage(id){
   return new Promise((resolve, reject)=>{
     const tx = db.transaction(IDB_STORE, 'readwrite');
     tx.objectStore(IDB_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function idbGetAllVideos(){
-  try{
-    const db = await idbOpen();
-    return await new Promise((resolve, reject)=>{
-      const tx = db.transaction(IDB_VIDEO_STORE, 'readonly');
-      const req = tx.objectStore(IDB_VIDEO_STORE).getAll();
-      req.onsuccess = () => resolve(req.result.sort((a,b)=>(b.ts||0)-(a.ts||0)));
-      req.onerror = () => reject(req.error);
-    });
-  }catch(e){ return []; }
-}
-async function idbAddVideo(blob, posterDataUrl){
-  const db = await idbOpen();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
-    tx.objectStore(IDB_VIDEO_STORE).add({blob, poster: posterDataUrl || '', ts: Date.now()});
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function idbDeleteVideo(id){
-  const db = await idbOpen();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
-    tx.objectStore(IDB_VIDEO_STORE).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -1395,39 +1359,6 @@ async function removeSavedLink(id){
   renderSavedLinks();
 }
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
-
-async function toggleSavedVideosView(){
-  const area = document.getElementById('savedVideosArea');
-  const isShown = area.classList.contains('show');
-  if(isShown){ area.classList.remove('show'); return; }
-  await renderSavedVideos();
-  area.classList.add('show');
-  area.scrollIntoView({behavior:'smooth', block:'start'});
-}
-async function renderSavedVideos(){
-  const a = await idbGetAllVideos();
-  const l = document.getElementById('savedVideosList');
-  if(!a.length){
-    l.innerHTML = '<div class="hint">ما في فيديوهات محفوظة بعد.</div>';
-    return;
-  }
-  l.innerHTML = a.map(x => `
-    <div class="saved-image-tile">
-      <img class="saved-image-thumb" src="${esc(x.poster || '')}" style="${x.poster ? '' : 'background:#111a26;'}" draggable="false" decoding="async" loading="lazy" onclick="openSavedVideo(${x.id})">
-      <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openSavedVideo(${x.id})">▶</div>
-      <button class="saved-corner-btn saved-image-delete" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();removeSavedVideo(${x.id})" title="حذف">×</button>
-    </div>`).join('');
-}
-async function openSavedVideo(id){
-  const all = await idbGetAllVideos();
-  const rec = all.find(x => x.id === id);
-  if(!rec) return;
-  openVideoPlayer({fromSaved:true, blob:rec.blob});
-}
-async function removeSavedVideo(id){
-  await idbDeleteVideo(id);
-  renderSavedVideos();
-}
 
 function attachLongPressSave(url){
   const el = document.getElementById('extractedThumb');
@@ -1777,16 +1708,12 @@ function normSaved(x){return typeof x==='string'?{imageUrl:x,sourceUrl:x}:{image
 function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let currentExtractedImage=null;
 function setCurrentExtractedImage(imageUrl,sourceUrl){currentExtractedImage={imageUrl,sourceUrl};const b=document.getElementById('saveExtractedImageBtn');if(b){b.disabled=false;b.style.opacity='1';b.style.transform='scale(1.04)'}}
-function handleMediaUpload(event){
+function handleDeviceImageUpload(event){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if(!file) return;
-  if(file.type.startsWith('video/')){
-    openVideoPlayer(file);
-    return;
-  }
   if(!file.type.startsWith('image/')){
-    alert('لازم تختار صورة أو فيديو');
+    alert('لازم تختار ملف صورة');
     return;
   }
   const status = document.getElementById('imageSearchStatus');
@@ -1944,143 +1871,6 @@ async function saveZoomedImage(){
 }
 function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow=''}
 
-/* ===================== رفع/تشغيل فيديو محلي + سرعات + التقاط سكرين شوت + حفظ الفيديو نفسه ===================== */
-const VIDEO_SPEEDS = [0.1, 0.3, 0.5, 1.0, 1.5, 2.0];
-let currentVideoObjectUrl = null;
-let currentVideoBlob = null; // البلوب الحالي (لحفظه لاحقًا بمعرض الفيديوهات)
-let currentVideoIsSaved = false; // إذا كان مفتوح من معرض محفوظ أصلًا، ما داعي نعيد حفظه
-
-function renderVideoSpeedRow(){
-  const row = document.getElementById('videoSpeedRow');
-  row.innerHTML = VIDEO_SPEEDS.map(s => `<div class="toggle video-speed-btn" data-speed="${s}" onclick="setVideoSpeed(${s})" style="cursor:pointer; padding:7px 13px; font-size:12px;">${s}×</div>`).join('');
-  highlightVideoSpeed(1.0);
-}
-function highlightVideoSpeed(speed){
-  document.querySelectorAll('.video-speed-btn').forEach(btn=>{
-    const active = Number(btn.dataset.speed) === speed;
-    btn.style.borderColor = active ? '#d8a62a88' : '';
-    btn.style.background = active ? '#d8a62a22' : '';
-    btn.style.color = active ? '#ffd769' : '';
-  });
-}
-function setVideoSpeed(speed){
-  const videoEl = document.getElementById('videoPlayerEl');
-  videoEl.playbackRate = speed;
-  highlightVideoSpeed(speed);
-}
-function updateVideoResolutionBadge(){
-  const videoEl = document.getElementById('videoPlayerEl');
-  const badge = document.getElementById('videoResolutionBadge');
-  const w = videoEl.videoWidth, h = videoEl.videoHeight;
-  if(!w) { badge.textContent = ''; return; }
-  let label = 'SD';
-  if(w >= 3840 || h >= 2160) label = '4K';
-  else if(w >= 1920 || h >= 1080) label = 'Full HD';
-  else if(w >= 1280 || h >= 720) label = 'HD';
-  badge.textContent = `${w}×${h} · ${label}`;
-}
-
-// source: File (من input) أو {blob, fromSaved:true} (من معرض الفيديوهات المحفوظة)
-function openVideoPlayer(source){
-  const overlay = document.getElementById('videoPlayerOverlay');
-  const videoEl = document.getElementById('videoPlayerEl');
-  if(currentVideoObjectUrl) URL.revokeObjectURL(currentVideoObjectUrl);
-
-  const blob = source.fromSaved ? source.blob : source;
-  currentVideoBlob = blob;
-  currentVideoIsSaved = !!source.fromSaved;
-  currentVideoObjectUrl = URL.createObjectURL(blob);
-  videoEl.src = currentVideoObjectUrl;
-  videoEl.playbackRate = 1.0;
-  document.getElementById('videoCaptureStatus').textContent = '';
-  document.getElementById('videoResolutionBadge').textContent = '';
-  renderVideoSpeedRow();
-  updateSaveVideoBtnState();
-  videoEl.onloadedmetadata = updateVideoResolutionBadge;
-  videoEl.onerror = () => {
-    document.getElementById('videoCaptureStatus').textContent = '⚠️ تعذّر فتح هالفيديو (صيغة غير مدعومة أو الملف تالف). جرّبي فيديو ثاني.';
-  };
-
-  document.documentElement.style.overflow = 'hidden';
-  document.body.style.overflow = 'hidden';
-  requestAnimationFrame(()=> overlay.classList.add('show'));
-  videoEl.play().catch(()=>{});
-}
-function updateSaveVideoBtnState(){
-  const btn = document.getElementById('saveVideoBtn');
-  if(currentVideoIsSaved){
-    btn.style.display = 'none';
-  }else{
-    btn.style.display = '';
-    btn.textContent = '💾 حفظ الفيديو';
-  }
-}
-function closeVideoPlayer(){
-  const overlay = document.getElementById('videoPlayerOverlay');
-  const videoEl = document.getElementById('videoPlayerEl');
-  overlay.classList.remove('show');
-  videoEl.pause();
-  document.documentElement.style.overflow = '';
-  document.body.style.overflow = '';
-  setTimeout(()=>{
-    videoEl.removeAttribute('src');
-    videoEl.load();
-    if(currentVideoObjectUrl){ URL.revokeObjectURL(currentVideoObjectUrl); currentVideoObjectUrl = null; }
-    currentVideoBlob = null;
-  }, 320);
-}
-// التقاط سكرين شوت — يشتغل بأي لحظة وبأي عدد مرات بدون ما يوقف الفيديو، وينزل تلقائيًا بمعرض "📌 صور"
-async function captureVideoFrame(){
-  const videoEl = document.getElementById('videoPlayerEl');
-  const status = document.getElementById('videoCaptureStatus');
-  if(!videoEl || !videoEl.videoWidth){
-    status.textContent = '⚠️ استني لحد ما يبدأ الفيديو بالتشغيل';
-    return;
-  }
-  try{
-    const canvas = document.createElement('canvas');
-    canvas.width = videoEl.videoWidth;   // التقاط بالدقة الأصلية الكاملة (حتى 4K حسب مصدر الفيديو)
-    canvas.height = videoEl.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    await saveLinkToStorage(dataUrl, dataUrl);
-    if(navigator.vibrate) navigator.vibrate(30);
-    status.textContent = '✅ تم حفظ السكرين شوت — بتلاقيه بمعرض "📌 صور"';
-    if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
-    setTimeout(()=>{ if(status.textContent.includes('تم حفظ')) status.textContent = ''; }, 2000);
-  }catch(err){
-    status.textContent = '⚠️ تعذّر التقاط الصورة من الفيديو';
-  }
-}
-// حفظ الفيديو نفسه (كملف كامل) بمعرض "🎬 فيديو" المنفصل
-async function saveCurrentVideo(){
-  const videoEl = document.getElementById('videoPlayerEl');
-  const status = document.getElementById('videoCaptureStatus');
-  const btn = document.getElementById('saveVideoBtn');
-  if(!currentVideoBlob){ status.textContent = '⚠️ ما في فيديو مفتوح حاليًا'; return; }
-  try{
-    // نلتقط صورة الإطار الحالي لاستخدامها كصورة غلاف (poster) بالمعرض
-    let posterDataUrl = '';
-    if(videoEl.videoWidth){
-      const canvas = document.createElement('canvas');
-      const maxDim = 480;
-      let w = videoEl.videoWidth, h = videoEl.videoHeight;
-      const ratio = Math.min(1, maxDim / Math.max(w, h));
-      canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio);
-      canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      posterDataUrl = canvas.toDataURL('image/jpeg', 0.75);
-    }
-    await idbAddVideo(currentVideoBlob, posterDataUrl);
-    currentVideoIsSaved = true;
-    if(navigator.vibrate) navigator.vibrate(30);
-    btn.textContent = '✅ تم الحفظ';
-    setTimeout(()=> updateSaveVideoBtnState(), 1500);
-    if(document.getElementById('savedVideosArea').classList.contains('show')) renderSavedVideos();
-  }catch(err){
-    status.textContent = '⚠️ تعذّر حفظ الفيديو (ممكن يكون كبير على المساحة المتاحة)';
-  }
-}
 function openImageZoomPage(imageUrl){
  const safe=String(imageUrl||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
  const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=no"><title>عارض الصورة</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03060b;color:#fff;font-family:Arial}#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;background:radial-gradient(circle at center,#152033,#03060b 68%)}img{max-width:94vw;max-height:92vh;object-fit:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;will-change:transform;transform-origin:center;border-radius:12px;box-shadow:0 22px 70px #000c}.bar{position:fixed;z-index:3;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:7px;border-radius:999px;background:#08101ddd;border:1px solid #ffffff2b;backdrop-filter:blur(8px)}button{width:42px;height:42px;border-radius:50%;border:1px solid #ffffff33;background:#101a2b;color:#fff;font-size:20px;cursor:pointer}.hint{position:fixed;z-index:3;bottom:15px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:7px 12px;border-radius:999px;background:#08101ddd;color:#cbd8ea;font-size:12px}</style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script></body></html>`;
@@ -2256,18 +2046,6 @@ handleSharedLink();
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
-
-<div class="saved-inline-focus" id="videoPlayerOverlay" style="flex-direction:column;">
-  <video id="videoPlayerEl" controls playsinline style="max-width:100%; max-height:70vh; border-radius:12px;"></video>
-  <div id="videoResolutionBadge" style="margin-top:8px; font-size:11px; color:#9fb3c8; direction:ltr;"></div>
-  <div class="toggles" id="videoSpeedRow" style="margin-top:12px; justify-content:center;"></div>
-  <div class="saved-inline-focus-actions" style="position:static; opacity:1; visibility:visible; pointer-events:auto; transform:none; margin-top:14px; flex-wrap:wrap; justify-content:center;">
-    <button type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer; font-size:14px; padding:11px 20px;" onclick="captureVideoFrame()">📸 التقط سكرين شوت</button>
-    <button type="button" id="saveVideoBtn" class="saved-inline-focus-btn" style="color:#8affb0;border-color:#4bd47a88;background:#26ae6022;cursor:pointer; font-size:14px; padding:11px 20px;" onclick="saveCurrentVideo()">💾 حفظ الفيديو</button>
-    <button type="button" class="saved-inline-focus-btn" style="color:#e6edf5;border-color:#ffffff33;background:#ffffff14;cursor:pointer;" onclick="closeVideoPlayer()">✕ إغلاق</button>
-  </div>
-  <div class="hint" id="videoCaptureStatus" style="margin-top:10px; color:#d6e2f2;"></div>
-</div>
 </body>
 
 </html>
