@@ -1312,7 +1312,7 @@ async function idbGetAllImages(){
       req.onsuccess = () => resolve(req.result.sort((a,b)=>(b.ts||0)-(a.ts||0)));
       req.onerror = () => reject(req.error);
     });
-  }catch(e){ return []; }
+  }catch(e){ throw e; }
 }
 async function idbAddImage(imageUrl, sourceUrl){
   const db = await idbOpen();
@@ -1351,6 +1351,37 @@ async function idbMigrateFromLocalStorage(){
 // طلب تخزين دائم بأقصى سعة يسمح بها المتصفح (يمنع حذف البيانات تلقائيًا عند ضغط المساحة)
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 idbMigrateFromLocalStorage();
+let radarRecoveryDone=false;
+async function radarRecoverSameOriginMedia(){
+  if(radarRecoveryDone)return;radarRecoveryDone=true;
+  if(!indexedDB.databases)return;
+  try{
+    const dbs=await indexedDB.databases();
+    for(const info of dbs){
+      const name=info&&info.name;if(!name||name===IDB_NAME||name===RADAR_VIDEO_DB)continue;
+      await new Promise(resolve=>{
+        const req=indexedDB.open(name);req.onerror=()=>resolve();req.onsuccess=()=>{
+          const db=req.result;
+          try{
+            if(db.objectStoreNames.contains('saved_images')){
+              const q=db.transaction('saved_images').objectStore('saved_images').getAll();
+              q.onsuccess=async()=>{for(const x of q.result||[]){if(x.imageUrl)await idbAddImage(x.imageUrl,x.sourceUrl||x.imageUrl)};resolve()};q.onerror=()=>resolve();return;
+            }
+            if(db.objectStoreNames.contains('images')){
+              const q=db.transaction('images').objectStore('images').getAll();
+              q.onsuccess=async()=>{for(const x of q.result||[]){const u=x.imageUrl||x.url||x.dataUrl;if(u)await idbAddImage(u,x.sourceUrl||u)};resolve()};q.onerror=()=>resolve();return;
+            }
+          }catch(e){}resolve();
+        };
+      });
+    }
+  }catch(e){}
+}
+function radarStorageContextHint(){
+  const protocol=location.protocol;
+  if(protocol==='file:'||protocol==='content:'||location.origin==='null')return '⚠️ هذه النسخة تعمل من ملف محلي أو سياق مختلف. بيانات النسخ السابقة لا تنتقل تلقائياً بين عناوين الملفات. افتح دائماً النسخة من نفس عنوان الاستضافة.';
+  return '';
+}
 
 async function saveLinkToStorage(imageUrl, sourceUrl){
   await idbAddImage(imageUrl, sourceUrl);
@@ -1377,14 +1408,24 @@ async function toggleSavedLinksView(){
   area.scrollIntoView({behavior:'smooth', block:'start'});
 }
 async function renderSavedLinks(){
-  const a = await idbGetAllImages();
   const l = document.getElementById('savedLinksList');
-  if(!a.length){
-    l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
-    return;
+  try{
+    await radarRecoverSameOriginMedia();
+    const a = await idbGetAllImages();
+    if(!a.length){
+      const hint=radarStorageContextHint();
+      l.innerHTML = `<div class="hint">ما في صور محفوظة في مساحة التخزين الحالية.${hint?'<br>'+hint:''}</div>`;
+      return;
+    }
+    l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+    attachSavedZoom();
+  }catch(e){
+    l.innerHTML='<div class="hint">⚠️ المتصفح منع الوصول إلى تخزين الصور في هذا السياق. افتح التطبيق من عنوان HTTPS ثابت، وليس من معاينة ملف أو رابط تنزيل جديد.</div>';
   }
-  l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
-  attachSavedZoom();
+  return;
+  const a = [];
+  if(!a.length){ return; }
+  
 }
 async function removeSavedLink(id){
   await idbDeleteImage(id);
@@ -2095,7 +2136,7 @@ function radarYouTubeId(url){try{const u=new URL(url),h=u.hostname.replace(/^www
 
 async function radarCaptureFrame(){const v=document.getElementById('radarVideoPlayer');if(!v.videoWidth||!v.videoHeight){radarVideoMsg('⚠️ شغّل الفيديو وانتقل إلى اللقطة المطلوبة أولاً.');return}const wasPlaying=!v.paused;try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await radarSaveAndRevealPhoto(shot,shot);if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('✅ تم حفظ السكرين وظهر في خانة صور بالبحث العكسي، والفيديو مستمر.')}catch(e){if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('⚠️ منع المتصفح التقاط السكرين من هذا المصدر بسبب حماية المصدر أو CORS.')}}
 
-async function radarRenderSavedVideos(){const box=document.getElementById('radarSavedVideos'),items=await radarVideoAll();box.innerHTML=items.length?items.slice().reverse().map(x=>`<div class="result-card" style="display:block"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name)}</strong><button class="saved-url-delete" onclick="radarRemoveSavedVideo(${x.id})">×</button></div><video id="radarSavedVideo_${x.id}" controls playsinline preload="metadata" style="width:100%;max-height:55vh;background:#000;border-radius:10px"></video><div class="toggles" style="margin-top:8px"><button class="toggle" onclick="radarLoadSavedVideo(${x.id})">▶ فتح</button><button class="toggle" onclick="radarRestartSavedVideo(${x.id})">↺ إعادة</button><button class="toggle" onclick="radarCaptureSavedVideo(${x.id})">📸 سكرين</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.1)">0.1×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.2)">0.2×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},1)">1×</button></div></div>`).join(''):'<div class="hint">لا توجد فيديوهات محفوظة.</div>'}
+async function radarRenderSavedVideos(){const box=document.getElementById('radarSavedVideos');try{const items=await radarVideoAll();box.innerHTML=items.length?items.slice().reverse().map(x=>`<div class="result-card" style="display:block"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name)}</strong><button class="saved-url-delete" onclick="radarRemoveSavedVideo(${x.id})">×</button></div><video id="radarSavedVideo_${x.id}" controls playsinline preload="metadata" style="width:100%;max-height:55vh;background:#000;border-radius:10px"></video><div class="toggles" style="margin-top:8px"><button class="toggle" onclick="radarLoadSavedVideo(${x.id})">▶ فتح</button><button class="toggle" onclick="radarRestartSavedVideo(${x.id})">↺ إعادة</button><button class="toggle" onclick="radarCaptureSavedVideo(${x.id})">📸 سكرين</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.1)">0.1×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.2)">0.2×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},1)">1×</button></div></div>`).join(''):`<div class="hint">لا توجد فيديوهات محفوظة في مساحة التخزين الحالية.${radarStorageContextHint()?'<br>'+radarStorageContextHint():''}</div>`}catch(e){box.innerHTML='<div class="hint">⚠️ المتصفح منع الوصول إلى تخزين الفيديو. افتح التطبيق من عنوان HTTPS ثابت.</div>'}}
 async function radarLoadSavedVideo(id){const x=(await radarVideoAll()).find(v=>v.id===id);if(!x)return;const player=document.getElementById('radarSavedVideo_'+id);if(player.dataset.loaded)return;player.src=URL.createObjectURL(x.blob);player.dataset.loaded='1';player.load()}
 async function radarRestartSavedVideo(id){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);v.currentTime=0;v.play().catch(()=>{})}
 async function radarSavedSpeed(id,rate){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);try{v.playbackRate=rate;v.defaultPlaybackRate=rate;v.play()}catch(e){radarVideoMsg('⚠️ السرعة غير مدعومة')}}
