@@ -1387,7 +1387,7 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
 }
 async function removeSavedLink(id){
@@ -1413,7 +1413,7 @@ async function renderSavedVideos(){
   }
   l.innerHTML = a.map(x => `
     <div class="saved-image-tile">
-      <img class="saved-image-thumb" src="${esc(x.poster || '')}" style="${x.poster ? '' : 'background:#111a26;'}" draggable="false" onclick="openSavedVideo(${x.id})">
+      <img class="saved-image-thumb" src="${esc(x.poster || '')}" style="${x.poster ? '' : 'background:#111a26;'}" draggable="false" decoding="async" loading="lazy" onclick="openSavedVideo(${x.id})">
       <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openSavedVideo(${x.id})">▶</div>
       <button class="saved-corner-btn saved-image-delete" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();removeSavedVideo(${x.id})" title="حذف">×</button>
     </div>`).join('');
@@ -1901,6 +1901,7 @@ function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.set
 function openInlineSavedFocus(src){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
   if(!l||!p)return;
+  l.style.pointerEvents='';
   p.src=src;
   const isRemote = /^https?:\/\//i.test(src);
   const yandexBtn = document.getElementById('savedInlineFocusYandex');
@@ -1941,7 +1942,7 @@ async function saveZoomedImage(){
     }
   }
 }
-function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus');if(!l)return;l.classList.remove('show');document.documentElement.style.overflow='';document.body.style.overflow=''}
+function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow=''}
 
 /* ===================== رفع/تشغيل فيديو محلي + سرعات + التقاط سكرين شوت + حفظ الفيديو نفسه ===================== */
 const VIDEO_SPEEDS = [0.1, 0.3, 0.5, 1.0, 1.5, 2.0];
