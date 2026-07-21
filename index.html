@@ -217,7 +217,6 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       </button>
     </div>
     <div class="toggles" style="margin-top:10px;">
-      <div class="toggle" onclick="openPastedLinkDirectly()" style="cursor:pointer;"><span style="font-size:16px;">⚡</span><span>انتقل</span></div>
       <div class="toggle" onclick="toggleSavedLinksView()" style="cursor:pointer;"><span style="font-size:16px;">📌</span><span>صور</span></div>
       <div class="toggle saved-url-toggle" onclick="toggleSavedUrlsView()" style="cursor:pointer;"><span class="red-pin" style="font-size:16px;">📌</span><span>روابط</span></div>
       <div class="toggle" onclick="document.getElementById('deviceImageInput').click()" style="cursor:pointer; width:38px; height:38px; padding:0; border-radius:50%; justify-content:center; flex-shrink:0;"><span style="font-size:15px;">📤</span></div>
@@ -1261,7 +1260,7 @@ async function runImageSearch(){
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
 const SAVED_LINKS_KEY = 'radar_saved_images'; // legacy localStorage key (للترحيل فقط)
-const IDB_NAME = 'radar_db', IDB_VERSION = 1, IDB_STORE = 'saved_images';
+const IDB_NAME = 'radar_db', IDB_VERSION = 2, IDB_STORE = 'saved_images';
 let _idbPromise = null;
 function idbOpen(){
   if(_idbPromise) return _idbPromise;
