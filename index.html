@@ -1340,12 +1340,12 @@ async function idbDeleteImage(id){
 }
 async function idbMigrateFromLocalStorage(){
   try{
-    if(localStorage.getItem('radar_images_migrated_v1')) return;
     const raw = JSON.parse(localStorage.getItem(SAVED_LINKS_KEY)) || [];
+    if(localStorage.getItem('radar_images_migrated_v1') && !raw.length) return;
     const items = raw.map(normSaved).filter(x => x.imageUrl);
     for(const it of items){ await idbAddImage(it.imageUrl, it.sourceUrl); }
     localStorage.setItem('radar_images_migrated_v1', '1');
-    localStorage.removeItem(SAVED_LINKS_KEY);
+    // إبقاء النسخة القديمة احتياطياً حتى لا تختفي الصور السابقة
   }catch(e){}
 }
 // طلب تخزين دائم بأقصى سعة يسمح بها المتصفح (يمنع حذف البيانات تلقائيًا عند ضغط المساحة)
@@ -1358,10 +1358,20 @@ async function saveLinkToStorage(imageUrl, sourceUrl){
 async function getSavedLinks(){
   return await idbGetAllImages();
 }
+async function radarSaveAndRevealPhoto(imageUrl, sourceUrl){
+  await saveLinkToStorage(imageUrl, sourceUrl || imageUrl);
+  const saved = await idbGetAllImages();
+  if(!saved.some(x => x.imageUrl === imageUrl)) throw new Error('لم يتم تثبيت الصورة في التخزين');
+  await renderSavedLinks();
+  const area = document.getElementById('savedLinksArea');
+  area.classList.add('show');
+  return saved;
+}
 async function toggleSavedLinksView(){
   const area = document.getElementById('savedLinksArea');
   const isShown = area.classList.contains('show');
   if(isShown){ area.classList.remove('show'); return; }
+  await idbMigrateFromLocalStorage();
   await renderSavedLinks();
   area.classList.add('show');
   area.scrollIntoView({behavior:'smooth', block:'start'});
@@ -2057,7 +2067,7 @@ function radarLooksLikeVideo(file){return (file.type||'').startsWith('video/')||
 function radarHandleUnifiedMedia(event){const file=event.target.files&&event.target.files[0];event.target.value='';if(!file)return;if(radarLooksLikeImage(file)){radarPreviewSelectedImage(file);return}if(radarLooksLikeVideo(file)){radarImportVideoFile(file);return}alert('تم اختيار الملف، لكن المتصفح لم يتعرف عليه كصورة أو فيديو قابل للعرض.')}
 function radarPreviewSelectedImage(file){radarPreviewImageFile=file;if(radarPreviewImageUrl)URL.revokeObjectURL(radarPreviewImageUrl);radarPreviewImageUrl=URL.createObjectURL(file);const panel=document.getElementById('radarImagePreviewPanel'),img=document.getElementById('radarImagePreview'),status=document.getElementById('radarImagePreviewStatus');document.getElementById('radarVideoPanel').style.display='none';img.src=radarPreviewImageUrl;panel.style.display='block';status.textContent='معاينة الصورة. اضغط ⛶ للتكبير أو 💾 للحفظ في صور.';img.onerror=()=>status.textContent='⚠️ المتصفح لا يستطيع فك ترميز هذه الصورة.'}
 function radarOpenPreviewImage(){const img=document.getElementById('radarImagePreview');if(img&&img.src)openInlineSavedFocus(img.src)}
-async function radarSavePreviewImage(){const status=document.getElementById('radarImagePreviewStatus');if(!radarPreviewImageFile){status.textContent='⚠️ اختر صورة أولاً.';return}try{const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(radarPreviewImageFile)});await saveLinkToStorage(dataUrl,dataUrl);await renderSavedLinks();document.getElementById('savedLinksArea').classList.add('show');status.textContent='✅ تم حفظ الصورة في خانة صور.'}catch(e){status.textContent='⚠️ تعذر حفظ الصورة.'}}
+async function radarSavePreviewImage(){const status=document.getElementById('radarImagePreviewStatus');if(!radarPreviewImageFile){status.textContent='⚠️ اختر صورة أولاً.';return}try{const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(radarPreviewImageFile)});await radarSaveAndRevealPhoto(dataUrl,dataUrl);status.textContent='✅ تم حفظ الصورة وظهرت في خانة صور بالبحث العكسي.'}catch(e){status.textContent='⚠️ تعذر حفظ الصورة.'}}
 function radarRestartVideo(){const v=document.getElementById('radarVideoPlayer');if(!v.src){radarVideoMsg('⚠️ اختر فيديو أولاً.');return}v.currentTime=0;v.play().catch(()=>{});radarVideoMsg('تمت إعادة تشغيل الفيديو من البداية.')}
 async function radarSearchLocalImage(target,src){try{const r=await fetch(src),blob=await r.blob(),ext=(blob.type.split('/')[1]||'png').replace('jpeg','jpg'),file=new File([blob],`radar-image.${ext}`,{type:blob.type||'image/png'}),data={files:[file],title:'RADAR بحث عكسي'};if(navigator.share&&(!navigator.canShare||navigator.canShare(data))){await navigator.share(data);return}const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);window.open(target==='yandex'?'https://yandex.com/images/search?rpt=imageview':'https://lens.google.com/','_blank','noopener')}catch(e){alert('تعذر إرسال الصورة مباشرة. نزّل الصورة ثم اخترها داخل جوجل لينس أو ياندكس.')}}
 async function radarSaveCurrentVideo(){if(!radarVideoBlob){radarVideoMsg('⚠️ اختر فيديو من الجهاز أولاً.');return}try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist();await radarVideoPut({name:radarVideoName||'video',type:radarVideoBlob.type||'video/*',blob:radarVideoBlob,savedAt:Date.now()});await radarRenderSavedVideos();const area=document.getElementById('radarSavedVideosArea');area.classList.add('show');radarVideoMsg('✅ حُفظ الفيديو في خانة فيديو.');setTimeout(()=>area.scrollIntoView({behavior:'smooth',block:'start'}),80)}catch(e){radarVideoMsg('⚠️ تعذر حفظ الفيديو داخل التطبيق.')}}
@@ -2083,17 +2093,18 @@ async function radarOpenVideoUrl(){
 }
 function radarYouTubeId(url){try{const u=new URL(url),h=u.hostname.replace(/^www\./,'');if(h==='youtu.be')return u.pathname.split('/').filter(Boolean)[0]||'';if(h==='youtube.com'||h==='m.youtube.com'||h==='music.youtube.com'){if(u.pathname==='/watch')return u.searchParams.get('v')||'';const m=u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/);return m?m[1]:''}}catch(e){}return''}
 
-async function radarCaptureFrame(){const v=document.getElementById('radarVideoPlayer');if(!v.videoWidth||!v.videoHeight){radarVideoMsg('⚠️ شغّل الفيديو وانتقل إلى اللقطة المطلوبة أولاً.');return}const wasPlaying=!v.paused;try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await saveLinkToStorage(shot,shot);await renderSavedLinks();document.getElementById('savedLinksArea').classList.add('show');if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('✅ تم حفظ السكرين في صور والفيديو مستمر في التشغيل.')}catch(e){if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('⚠️ منع المتصفح التقاط السكرين من هذا المصدر بسبب حماية المصدر أو CORS.')}}
+async function radarCaptureFrame(){const v=document.getElementById('radarVideoPlayer');if(!v.videoWidth||!v.videoHeight){radarVideoMsg('⚠️ شغّل الفيديو وانتقل إلى اللقطة المطلوبة أولاً.');return}const wasPlaying=!v.paused;try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await radarSaveAndRevealPhoto(shot,shot);if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('✅ تم حفظ السكرين وظهر في خانة صور بالبحث العكسي، والفيديو مستمر.')}catch(e){if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('⚠️ منع المتصفح التقاط السكرين من هذا المصدر بسبب حماية المصدر أو CORS.')}}
 
 async function radarRenderSavedVideos(){const box=document.getElementById('radarSavedVideos'),items=await radarVideoAll();box.innerHTML=items.length?items.slice().reverse().map(x=>`<div class="result-card" style="display:block"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name)}</strong><button class="saved-url-delete" onclick="radarRemoveSavedVideo(${x.id})">×</button></div><video id="radarSavedVideo_${x.id}" controls playsinline preload="metadata" style="width:100%;max-height:55vh;background:#000;border-radius:10px"></video><div class="toggles" style="margin-top:8px"><button class="toggle" onclick="radarLoadSavedVideo(${x.id})">▶ فتح</button><button class="toggle" onclick="radarRestartSavedVideo(${x.id})">↺ إعادة</button><button class="toggle" onclick="radarCaptureSavedVideo(${x.id})">📸 سكرين</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.1)">0.1×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},0.2)">0.2×</button><button class="toggle" onclick="radarSavedSpeed(${x.id},1)">1×</button></div></div>`).join(''):'<div class="hint">لا توجد فيديوهات محفوظة.</div>'}
 async function radarLoadSavedVideo(id){const x=(await radarVideoAll()).find(v=>v.id===id);if(!x)return;const player=document.getElementById('radarSavedVideo_'+id);if(player.dataset.loaded)return;player.src=URL.createObjectURL(x.blob);player.dataset.loaded='1';player.load()}
 async function radarRestartSavedVideo(id){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);v.currentTime=0;v.play().catch(()=>{})}
 async function radarSavedSpeed(id,rate){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);try{v.playbackRate=rate;v.defaultPlaybackRate=rate;v.play()}catch(e){radarVideoMsg('⚠️ السرعة غير مدعومة')}}
-async function radarCaptureSavedVideo(id){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);if(!v.videoWidth){radarVideoMsg('⚠️ شغّل الفيديو المحفوظ أولاً.');return}const wasPlaying=!v.paused;try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await saveLinkToStorage(shot,shot);await renderSavedLinks();document.getElementById('savedLinksArea').classList.add('show');if(wasPlaying&&v.paused)v.play().catch(()=>{})}catch(e){if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('⚠️ تعذر التقاط السكرين')}}
+async function radarCaptureSavedVideo(id){await radarLoadSavedVideo(id);const v=document.getElementById('radarSavedVideo_'+id);if(!v.videoWidth){radarVideoMsg('⚠️ شغّل الفيديو المحفوظ أولاً.');return}const wasPlaying=!v.paused;try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const shot=c.toDataURL('image/png');await radarSaveAndRevealPhoto(shot,shot);if(wasPlaying&&v.paused)v.play().catch(()=>{})}catch(e){if(wasPlaying&&v.paused)v.play().catch(()=>{});radarVideoMsg('⚠️ تعذر التقاط السكرين')}}
 
 async function radarToggleSavedVideos(){const area=document.getElementById('radarSavedVideosArea');if(area.classList.contains('show')){area.classList.remove('show');return}await radarRenderSavedVideos();area.classList.add('show');area.scrollIntoView({behavior:'smooth',block:'start'})}
 async function radarPlaySavedVideo(id){const x=(await radarVideoAll()).find(v=>v.id===id);if(!x)return;radarVideoBlob=x.blob;radarVideoName=x.name;if(radarVideoObjectUrl)URL.revokeObjectURL(radarVideoObjectUrl);radarVideoObjectUrl=URL.createObjectURL(x.blob);radarSetPlayerSource(radarVideoObjectUrl);radarVideoMsg('✅ تشغيل مقطع محفوظ داخل التطبيق.')}
 async function radarRemoveSavedVideo(id){await radarVideoDelete(id);await radarRenderSavedVideos()}
+window.addEventListener('DOMContentLoaded',async()=>{try{await idbMigrateFromLocalStorage();await renderSavedLinks()}catch(e){}});
 window.addEventListener('DOMContentLoaded',()=>{const p=new URLSearchParams(location.search),u=p.get('shared_video')||p.get('url')||p.get('text');if(u&&/^https?:\/\//i.test(u)){document.getElementById('imageUrlInput').value=u;radarShowVideoPanel();radarVideoMsg('تم استلام رابط مشاركة. اضغط «فتح رابط فيديو».')}});
 </script>
 </body>
