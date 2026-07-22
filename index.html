@@ -1301,11 +1301,11 @@ async function idbGetAllVideos(){
     });
   }catch(e){ return []; }
 }
-async function idbAddVideo(blob){
+async function idbAddVideo(blob, poster){
   const db = await idbOpen();
   return new Promise((resolve, reject)=>{
     const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
-    tx.objectStore(IDB_VIDEO_STORE).add({blob, ts: Date.now()});
+    tx.objectStore(IDB_VIDEO_STORE).add({blob, poster: poster || '', ts: Date.now()});
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -1374,9 +1374,15 @@ async function saveLinkToStorage(imageUrl, sourceUrl){
 async function getSavedLinks(){
   return await idbGetAllImages();
 }
+function closeOtherGalleries(exceptId){
+  ['savedLinksArea','savedVideosArea','savedUrlsArea'].forEach(id=>{
+    if(id !== exceptId) document.getElementById(id)?.classList.remove('show');
+  });
+}
 async function toggleSavedLinksView(){
   const area = document.getElementById('savedLinksArea');
   const isShown = area.classList.contains('show');
+  closeOtherGalleries('savedLinksArea');
   if(isShown){ area.classList.remove('show'); return; }
   await renderSavedLinks();
   area.classList.add('show');
@@ -1405,7 +1411,48 @@ function handleVideoUpload(event){
   event.target.value = '';
   if(!file) return;
   if(!file.type.startsWith('video/')){ alert('لازم تختار ملف فيديو'); return; }
-  openVideoModal(file, false);
+  saveVideoDirectly(file);
+}
+function generateVideoPoster(blob){
+  return new Promise((resolve)=>{
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'metadata'; v.src = url;
+    let done = false;
+    const finish = (result)=>{ if(done) return; done = true; URL.revokeObjectURL(url); resolve(result); };
+    const timeout = setTimeout(()=> finish(''), 4000);
+    v.addEventListener('loadeddata', ()=>{
+      try{ v.currentTime = Math.min(0.3, (v.duration||1)/4); }
+      catch(e){ clearTimeout(timeout); finish(''); }
+    });
+    v.addEventListener('seeked', ()=>{
+      try{
+        const canvas = document.createElement('canvas');
+        const maxDim = 240;
+        const ratio = Math.min(1, maxDim / Math.max(v.videoWidth||1, v.videoHeight||1));
+        canvas.width = Math.max(1, Math.round(v.videoWidth*ratio));
+        canvas.height = Math.max(1, Math.round(v.videoHeight*ratio));
+        canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+        clearTimeout(timeout);
+        finish(canvas.toDataURL('image/jpeg', 0.6));
+      }catch(e){ clearTimeout(timeout); finish(''); }
+    });
+    v.addEventListener('error', ()=>{ clearTimeout(timeout); finish(''); });
+  });
+}
+async function saveVideoDirectly(blob){
+  const status = document.getElementById('imageSearchStatus');
+  if(status) status.textContent = '⏳ جارٍ تجهيز الفيديو...';
+  const poster = await generateVideoPoster(blob);
+  try{
+    await idbAddVideo(blob, poster);
+    if(navigator.vibrate) navigator.vibrate(30);
+    if(status) status.textContent = '✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
+    if(document.getElementById('savedVideosArea').classList.contains('show')) renderSavedVideos();
+    setTimeout(()=>{ if(status && status.textContent.includes('انحفظ')) status.textContent=''; }, 2200);
+  }catch(err){
+    if(status) status.textContent = `⚠️ تعذّر حفظ الفيديو: ${err?.message || err}`;
+  }
 }
 function openVideoModal(blobSource, isSaved){
   closeVideoModal();
@@ -1415,8 +1462,12 @@ function openVideoModal(blobSource, isSaved){
   modal.id = 'lightVideoModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:10060;background:#000000ee;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:12px;';
   modal.innerHTML = `
-    <video id="lightVideoEl" controls playsinline style="max-width:100%;max-height:60vh;border-radius:10px;background:#000;"></video>
-    <div class="toggles" id="lightVideoSpeedRow" style="justify-content:center;"></div>
+    <video id="lightVideoEl" controls playsinline style="max-width:100%;max-height:56vh;border-radius:10px;background:#000;"></video>
+    <div class="toggles" style="justify-content:center;">
+      <div class="toggle" style="cursor:pointer;padding:8px 14px;" onclick="stepVideoLight(-0.2)">⏪ 0.2ث</div>
+      <div class="toggle" style="cursor:pointer;padding:8px 14px;" onclick="stepVideoLight(0.2)">0.2ث ⏩</div>
+    </div>
+    <div class="toggles" id="lightVideoSpeedRow" style="justify-content:center; flex-wrap:wrap;"></div>
     <div class="toggles" style="justify-content:center;">
       <div class="toggle" style="cursor:pointer;color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;" onclick="captureVideoFrameLight()">📸 سكرين شوت</div>
       ${isSaved ? '' : '<div class="toggle" id="saveVideoLightBtn" style="cursor:pointer;color:#8affb0;border-color:#4bd47a88;background:#26ae6022;" onclick="saveCurrentVideoLight()">💾 حفظ الفيديو</div>'}
@@ -1431,9 +1482,15 @@ function openVideoModal(blobSource, isSaved){
   videoEl.play().catch(()=>{});
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
-  const speeds = [0.5, 1, 1.5, 2];
+  const speeds = [0.1, 0.3, 0.5, 1, 1.5, 2];
   const row = modal.querySelector('#lightVideoSpeedRow');
   row.innerHTML = speeds.map(s=>`<div class="toggle speed-btn" data-s="${s}" style="cursor:pointer;padding:6px 12px;font-size:12px;${s===1?'border-color:#d8a62a88;color:#ffd769;':''}" onclick="setVideoSpeedLight(${s},this)">${s}×</div>`).join('');
+}
+function stepVideoLight(delta){
+  const videoEl = document.getElementById('lightVideoEl');
+  if(!videoEl) return;
+  videoEl.pause();
+  videoEl.currentTime = Math.max(0, Math.min((videoEl.duration||0), videoEl.currentTime + delta));
 }
 function setVideoSpeedLight(speed, el){
   const videoEl = document.getElementById('lightVideoEl');
@@ -1475,10 +1532,21 @@ async function captureVideoFrameLight(){
 async function saveCurrentVideoLight(){
   const status = document.getElementById('lightVideoStatus');
   const btn = document.getElementById('saveVideoLightBtn');
+  const videoEl = document.getElementById('lightVideoEl');
   if(!_currentVideoBlob){ status.textContent = '⚠️ ما في فيديو مفتوح حاليًا لحفظه'; return; }
   if(btn){ btn.textContent = '⏳ جارٍ الحفظ...'; }
   try{
-    await idbAddVideo(_currentVideoBlob);
+    let poster = '';
+    if(videoEl && videoEl.videoWidth){
+      const canvas = document.createElement('canvas');
+      const maxDim = 240; // غلاف صغير جدًا، ما يأثر على الأداء
+      const ratio = Math.min(1, maxDim / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+      canvas.width = Math.round(videoEl.videoWidth * ratio);
+      canvas.height = Math.round(videoEl.videoHeight * ratio);
+      canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      poster = canvas.toDataURL('image/jpeg', 0.7);
+    }
+    await idbAddVideo(_currentVideoBlob, poster);
     if(navigator.vibrate) navigator.vibrate(30);
     if(btn) btn.textContent = '✅ تم الحفظ';
     status.textContent = '✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
@@ -1490,7 +1558,9 @@ async function saveCurrentVideoLight(){
 }
 async function toggleSavedVideosView(){
   const area = document.getElementById('savedVideosArea');
-  if(area.classList.contains('show')){ area.classList.remove('show'); return; }
+  const isShown = area.classList.contains('show');
+  closeOtherGalleries('savedVideosArea');
+  if(isShown){ area.classList.remove('show'); return; }
   await renderSavedVideos();
   area.classList.add('show');
   area.scrollIntoView({behavior:'smooth', block:'start'});
@@ -1501,7 +1571,8 @@ async function renderSavedVideos(){
   if(!a.length){ l.innerHTML = '<div class="hint">ما في فيديوهات محفوظة بعد.</div>'; return; }
   l.innerHTML = a.map(x=>`
     <div class="saved-image-tile">
-      <div class="saved-image-thumb" style="display:flex;align-items:center;justify-content:center;background:#111a26;font-size:24px;" onclick="openSavedVideoLight(${x.id})">🎬</div>
+      <img class="saved-image-thumb" src="${x.poster ? esc(x.poster) : ''}" style="${x.poster ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:24px;'}" decoding="async" loading="lazy" onclick="openSavedVideoLight(${x.id})">
+      <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openSavedVideoLight(${x.id})">▶</div>
       <button class="saved-corner-btn saved-image-delete" style="opacity:1;visibility:visible;pointer-events:auto;" onclick="event.stopPropagation();removeSavedVideoLight(${x.id})" title="حذف">×</button>
     </div>`).join('');
 }
@@ -1540,7 +1611,21 @@ function attachLongPressSave(url){
 }
 
 /* ===================== RUN SEARCH ===================== */
-function detectProfileScope(text){
+// يفكّك روابط فيسبوك الملفوفة (m.facebook.com/?next=..، plugins/video.php?href=..) للرابط الحقيقي بداخلها
+function unwrapFacebookLink(url){
+  try{
+    const u = new URL(url);
+    if(/m\.facebook\.com$/i.test(u.hostname) && u.searchParams.has('next')){
+      return decodeURIComponent(u.searchParams.get('next'));
+    }
+    if(/facebook\.com$/i.test(u.hostname) && u.pathname.includes('/plugins/video.php') && u.searchParams.has('href')){
+      return decodeURIComponent(u.searchParams.get('href'));
+    }
+  }catch(e){}
+  return url;
+}
+function detectProfileScope(rawText){
+  const text = unwrapFacebookLink(rawText.trim());
   const patterns = [
     { platform:'facebook',  domain:'facebook.com',  re:/https?:\/\/(?:www\.|m\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.\-_]+)/i },
     { platform:'instagram', domain:'instagram.com',  re:/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/i },
@@ -1823,7 +1908,7 @@ function handleSharedLink(){
   const shared = params.get('shared_url') || params.get('shared_text') || '';
   const urlMatch = shared.match(/https?:\/\/\S+/);
   if(!urlMatch) return;
-  const link = urlMatch[0];
+  const link = unwrapFacebookLink(urlMatch[0]);
   window.history.replaceState({}, '', window.location.pathname);
 
   // روابط محتوى محدد (فيديو/صورة/منشور/ريلز/ستوري/مشاركة سريعة) → البحث العكسي دايمًا
@@ -1986,7 +2071,7 @@ window.saveFallbackLinkDirect=function(button){
  if(navigator.vibrate)navigator.vibrate(25);
  return false;
 };
-function toggleSavedUrlsView(){const a=document.getElementById('savedUrlsArea');if(a.classList.contains('show')){a.classList.remove('show');return}renderSavedUrls();a.classList.add('show')}
+function toggleSavedUrlsView(){const a=document.getElementById('savedUrlsArea');const isShown=a.classList.contains('show');closeOtherGalleries('savedUrlsArea');if(isShown){a.classList.remove('show');return}renderSavedUrls();a.classList.add('show')}
 function renderSavedUrls(items){const l=document.getElementById('savedUrlsList'),a=Array.isArray(items)?items:getSavedUrls();l.innerHTML=a.length?a.map((u,i)=>`<div class="result-card saved-url-card"><span class="red-pin">📌</span><a class="saved-url-open" href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a><button class="saved-url-delete" onclick="removeSavedUrl(${i})">×</button></div>`).join(''):'<div class="hint">لا توجد روابط محفوظة بعد.</div>'}
 function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.setItem(SAVED_URLS_KEY,JSON.stringify(a));renderSavedUrls()}
 function openInlineSavedFocus(src){
