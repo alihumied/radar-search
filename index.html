@@ -1266,7 +1266,7 @@ async function runImageSearch(){
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
 const SAVED_LINKS_KEY = 'radar_saved_images'; // legacy localStorage key (للترحيل فقط)
-const IDB_NAME = 'radar_db', IDB_VERSION = 3, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light';
+const IDB_NAME = 'radar_db', IDB_VERSION = 6, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light';
 let _idbPromise = null;
 function idbOpen(){
   if(_idbPromise) return _idbPromise;
@@ -1475,14 +1475,17 @@ async function captureVideoFrameLight(){
 async function saveCurrentVideoLight(){
   const status = document.getElementById('lightVideoStatus');
   const btn = document.getElementById('saveVideoLightBtn');
-  if(!_currentVideoBlob) return;
+  if(!_currentVideoBlob){ status.textContent = '⚠️ ما في فيديو مفتوح حاليًا لحفظه'; return; }
+  if(btn){ btn.textContent = '⏳ جارٍ الحفظ...'; }
   try{
     await idbAddVideo(_currentVideoBlob);
     if(navigator.vibrate) navigator.vibrate(30);
     if(btn) btn.textContent = '✅ تم الحفظ';
+    status.textContent = '✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
     if(document.getElementById('savedVideosArea').classList.contains('show')) renderSavedVideos();
   }catch(err){
-    status.textContent = '⚠️ تعذّر حفظ الفيديو (ممكن المساحة ممتلئة)';
+    if(btn) btn.textContent = '💾 حفظ الفيديو';
+    status.textContent = `⚠️ تعذّر حفظ الفيديو: ${err?.message || err}`;
   }
 }
 async function toggleSavedVideosView(){
@@ -1548,8 +1551,11 @@ function detectProfileScope(text){
     const m = text.match(p.re);
     if(m){
       const scopePath = `${p.domain}/${m[1]}`;
+      // نستخرج المعرّف الحقيقي بس (اسم المستخدم أو الرقم التسلسلي) لاستخدامه بصيغة "site:domain "id"" الأوسع نطاقًا
+      const idMatch = m[1].match(/profile\.php\?id=(\d+)/i);
+      const identifier = idMatch ? idMatch[1] : m[1];
       const remainder = text.replace(m[0], '').trim();
-      return { platform:p.platform, scopePath, remainder };
+      return { platform:p.platform, domain:p.domain, identifier, scopePath, remainder };
     }
   }
   return null;
@@ -1565,10 +1571,11 @@ function renderProfileScopedSearch(scope, type){
   cards.innerHTML = '';
 
   const kwPart = keyword ? ` "${keyword}"` : '';
-  const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
+  const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود" OR "Like" OR "أعجبني")';
+  const idTerm = `"${scope.identifier}"`;
 
-  const postsQ = `site:${scope.scopePath}${kwPart}`;
-  const commentsQ = `site:${scope.scopePath}${kwPart} ${commentSignal}`;
+  const postsQ = `site:${scope.domain} ${idTerm}${kwPart}`;
+  const commentsQ = `site:${scope.domain} ${idTerm}${kwPart} ${commentSignal}`;
 
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
 
@@ -1819,8 +1826,15 @@ function handleSharedLink(){
   const link = urlMatch[0];
   window.history.replaceState({}, '', window.location.pathname);
 
-  // إذا الرابط من منصة عندها مزوّد بيانات مفعّل (worker جاهز)، وجّه لقسم "بيانات المنصات"
-  const matchedProvider = Object.entries(PLATFORM_DATA_PROVIDERS).find(([key, p]) =>
+  // روابط محتوى محدد (فيديو/صورة/منشور/ريلز/ستوري/مشاركة سريعة) → البحث العكسي دايمًا
+  const fbPath = (link.split('facebook.com/')[1] || '').split(/[?#]/)[0];
+  const fbSegments = fbPath.split('/').filter(Boolean);
+  const isSpecificContent = /\/(videos?|photos?|posts?|reels?|reel|stories|story\.php|watch|permalink\.php|photo\.php|share|groups\/[^/]+\/(posts|permalink))\b/i.test(link)
+    // أو أي رابط فيه أكتر من جزء بعد اسم المستخدم (يعني مو بروفايل عام لحاله)
+    || fbSegments.length > 1;
+
+  // إذا الرابط من منصة عندها مزوّد بيانات مفعّل (worker جاهز) وهو رابط بروفايل (مو محتوى محدد)، وجّه لقسم "بيانات المنصات"
+  const matchedProvider = !isSpecificContent && Object.entries(PLATFORM_DATA_PROVIDERS).find(([key, p]) =>
     p.matches && p.matches(link) && p.workerUrl && !p.workerUrl.includes('YOUR-WORKER')
   );
   if(matchedProvider){
@@ -1832,7 +1846,7 @@ function handleSharedLink(){
     return;
   }
 
-  // غير هيك، السلوك القديم: البحث العكسي
+  // غير هيك (بروفايل بلا worker، أو أي محتوى محدد فيديو/صورة/منشور): البحث العكسي
   document.getElementById('imageUrlInput').value = link;
   setTimeout(()=> runImageSearch(), 300);
 }
