@@ -1469,140 +1469,6 @@ async function removeSavedLink(id){
 }
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
 
-/* ===================== استيراد صفحة HTML محفوظة — تفكيك عام (منشورات/ريلز/فيديو/صور/ستوري) ===================== */
-function handleHtmlImport(event){
-  const file = event.target.files && event.target.files[0];
-  event.target.value = '';
-  if(!file) return;
-  const status = document.getElementById('htmlImportStatus');
-  const list = document.getElementById('htmlImportResultsList');
-  status.textContent = '⏳ جارٍ تحليل الملف...';
-  list.innerHTML = '';
-  const reader = new FileReader();
-  reader.onload = e => {
-    try{
-      const items = parseFacebookHtmlDump(e.target.result);
-      if(!items.length){
-        status.textContent = '⚠️ ما لقينا أي روابط فيسبوك معروفة بهالملف.';
-        document.getElementById('htmlImportResultsArea').classList.add('show');
-        return;
-      }
-      status.textContent = `✅ لقينا ${items.length} عنصر`;
-      list.innerHTML = items.map((it, i) => `
-        <div class="saved-image-tile">
-          <img class="saved-image-thumb" src="${esc(it.thumb)}" style="${it.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:22px;'}" decoding="async" loading="lazy" onerror="this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.textContent='🔗'">
-          <a class="saved-corner-btn saved-image-source" href="${esc(it.link)}" target="_blank" rel="noopener" title="فتح على فيسبوك">↗</a>
-          <button class="saved-corner-btn saved-image-open" onclick="sendHtmlItemToReverseSearch(${i})" title="بحث عكسي / معاينة حية">🔍</button>
-        </div>`).join('');
-      window._htmlImportItems = items;
-      document.getElementById('htmlImportResultsArea').classList.add('show');
-    }catch(err){
-      status.textContent = `⚠️ تعذّر تحليل الملف: ${err.message}`;
-    }
-  };
-  reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
-  reader.readAsText(file);
-}
-function parseFacebookHtmlDump(htmlText){
-  const linkRe = /https:\/\/(?:www\.|m\.)?facebook\.com\/(?:[^\s"'<>]*?\/(?:videos?|photos?|posts?|reels?|stories)\/[^\s"'<>]*|reel\/\d+[^\s"'<>]*)/gi;
-  const matches = [...htmlText.matchAll(linkRe)];
-  const seen = new Set();
-  const items = [];
-  for(const m of matches){
-    const link = m[0].replace(/&amp;/g, '&');
-    const key = link.split(/[?&]/)[0];
-    if(seen.has(key)) continue;
-    seen.add(key);
-    const windowText = htmlText.slice(m.index + m[0].length, m.index + m[0].length + 800);
-    const imgMatch = windowText.match(/<img[^>]+src="([^"]+)"/i);
-    const thumb = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '';
-    items.push({ link, thumb });
-  }
-  return items;
-}
-function sendHtmlItemToReverseSearch(i){
-  const it = (window._htmlImportItems || [])[i];
-  if(!it) return;
-  document.getElementById('imageUrlInput').value = it.link;
-  document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
-  setTimeout(()=> runImageSearch(), 250);
-}
-
-/* ===================== استيراد صفحة HTML محفوظة — يستخرج ريلز/فيديو/منشورات/صور/ستوري مع صورها ===================== */
-function handleHtmlImport(event){
-  const file = event.target.files && event.target.files[0];
-  event.target.value = '';
-  if(!file) return;
-  const area = document.getElementById('htmlImportResults');
-  area.innerHTML = '<div class="hint">⏳ جارٍ تحليل الملف...</div>';
-  const reader = new FileReader();
-  reader.onload = e => {
-    try{
-      parseImportedHtml(e.target.result);
-    }catch(err){
-      area.innerHTML = `<div class="hint">⚠️ تعذّر تحليل الملف: ${err.message}</div>`;
-    }
-  };
-  reader.onerror = () => { area.innerHTML = '<div class="hint">⚠️ تعذّر قراءة الملف</div>'; };
-  reader.readAsText(file);
-}
-function parseImportedHtml(htmlText){
-  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-  const patterns = [
-    { type:'🎬 ريلز',    re:/\/reels?\/\d/i },
-    { type:'📹 فيديو',   re:/\/videos?\/\d/i },
-    { type:'📝 منشور',   re:/\/posts?\/\d|permalink\.php\?story_fbid|story_fbid=\d/i },
-    { type:'🖼️ صورة',    re:/\/photos?\/|photo\.php\?fbid=\d|fbid=\d/i },
-    { type:'⏳ ستوري',   re:/\/stories\/\d|story\.php\?story_fbid=\d/i },
-  ];
-  const anchors = [...doc.querySelectorAll('a[href]')].filter(a => /facebook\.com|fb\.watch/i.test(a.href));
-  const seen = new Set();
-  const items = [];
-  for(const a of anchors){
-    let type = null;
-    for(const p of patterns){ if(p.re.test(a.href)){ type = p.type; break; } }
-    if(!type) continue;
-    const cleanHref = a.href.split('?')[0].replace(/\/$/, '');
-    if(seen.has(cleanHref)) continue;
-    seen.add(cleanHref);
-    let img = a.querySelector('img');
-    if(!img){
-      let sib = a.nextElementSibling;
-      for(let i=0; i<3 && sib; i++){ if(sib.tagName === 'IMG'){ img = sib; break; } sib = sib.nextElementSibling; }
-    }
-    const thumb = img ? (img.getAttribute('src') || '') : '';
-    items.push({ type, href: a.href, thumb });
-  }
-  renderImportedHtmlResults(items);
-}
-function renderImportedHtmlResults(items){
-  const area = document.getElementById('htmlImportResults');
-  if(!items.length){
-    area.innerHTML = '<div class="hint">⚠️ ما لقيت أي روابط ريلز/فيديو/منشورات/صور مدعومة بهالملف.</div>';
-    return;
-  }
-  const counts = {};
-  items.forEach(it => counts[it.type] = (counts[it.type]||0) + 1);
-  const summary = Object.entries(counts).map(([t,c]) => `${t}: ${c}`).join(' · ');
-  area.innerHTML = `
-    <div class="hint">✅ لقيت ${items.length} عنصر — ${summary}</div>
-    <div class="saved-images-grid" style="margin-top:12px;">
-      ${items.map(it => `
-        <div class="saved-image-tile">
-          ${it.thumb
-            ? `<img class="saved-image-thumb" src="${esc(it.thumb)}" decoding="async" loading="lazy" onclick="window.open('${esc(it.href)}','_blank')" onerror="this.style.background='#111a26'">`
-            : `<div class="saved-image-thumb" style="display:flex;align-items:center;justify-content:center;background:#111a26;font-size:22px;cursor:pointer;" onclick="window.open('${esc(it.href)}','_blank')">🔗</div>`}
-          <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:auto; padding:0 6px; border-radius:9px; font-size:9px; opacity:1; visibility:visible; pointer-events:none; background:#000000cc; white-space:nowrap;">${it.type}</div>
-          <button class="saved-corner-btn saved-image-open" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();sendImportedToReverseSearch('${esc(it.href)}')" title="ابحث بهالرابط بالبحث العكسي">🔍</button>
-        </div>`).join('')}
-    </div>`;
-}
-function sendImportedToReverseSearch(href){
-  document.getElementById('imageUrlInput').value = href;
-  document.getElementById('imageUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
-  runImageSearch();
-}
-
 /* ===================== استيراد صفحة HTML محفوظة — تحليل كامل محليًا بالمتصفح ===================== */
 function handleHtmlImport(event){
   const file = event.target.files && event.target.files[0];
@@ -1667,14 +1533,47 @@ function extractFacebookContentFromDoc(doc, rawText){
   return [...byId.values()].filter(x => !/\/reel\/?\?s=tab/i.test(x.url) && !/\/watch\/?$/i.test(x.url));
 }
 function renderHtmlImportResults(items){
+  window._htmlImportItems = items;
   const l = document.getElementById('htmlImportResultsList');
   if(!items.length){ l.innerHTML = ''; return; }
-  l.innerHTML = items.map(x => `
-    <div class="saved-image-tile" title="${esc(x.type)}">
-      <img class="saved-image-thumb" src="${x.thumb ? esc(x.thumb) : ''}" style="${x.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:11px;color:#9fb3c8;'}" decoding="async" loading="lazy" onclick="handleHtmlImportItemClick('${esc(x.url)}')">
+  l.innerHTML = items.map((x, i) => `
+    <div class="saved-image-tile" title="${esc(x.type)}" data-idx="${i}">
+      <img class="saved-image-thumb" src="${x.thumb ? esc(x.thumb) : ''}" style="${x.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:11px;color:#9fb3c8;'}" decoding="async" loading="lazy" onclick="zoomHtmlImportItem(${i})" onerror="this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.textContent='🔗'">
       <div class="saved-corner-btn" style="top:-7px; right:auto; left:-7px; width:auto; height:auto; padding:2px 6px; border-radius:6px; font-size:9px; background:#000000cc; opacity:1; visibility:visible; pointer-events:none;">${x.type}</div>
+      <button class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#1877F2cc; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openHtmlImportLink(${i})" title="فتح بالمتصفح">↗</button>
+      <button class="saved-corner-btn saved-image-open" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();saveHtmlImportItemToGallery(${i})" title="حفظ بمعرض صور">💾</button>
+      <button class="saved-corner-btn saved-image-delete" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();deleteHtmlImportItem(${i})" title="حذف من هالقائمة">×</button>
     </div>`).join('');
   document.getElementById('htmlImportResultsArea').classList.add('show');
+}
+function zoomHtmlImportItem(i){
+  const it = (window._htmlImportItems||[])[i];
+  if(!it) return;
+  if(it.thumb){ openInlineSavedFocus(it.thumb); }
+  else { openHtmlImportLink(i); }
+}
+// نستخدم window.open المُشغَّل من JS بدل رابط <a> عادي — أكتر ضمانًا لفتحه بالمتصفح
+// بدل ما يحاول أندرويد يفتحه بتطبيق فيسبوك المثبّت (سلوك App Links يتحكم فيه النظام أساسًا)
+function openHtmlImportLink(i){
+  const it = (window._htmlImportItems||[])[i];
+  if(!it) return;
+  window.open(it.url, '_blank', 'noopener');
+}
+async function saveHtmlImportItemToGallery(i){
+  const it = (window._htmlImportItems||[])[i];
+  if(!it || !it.thumb){ alert('هالعنصر ما فيه صورة مصغّرة لحفظها'); return; }
+  await saveLinkToStorage(it.thumb, it.url);
+  if(navigator.vibrate) navigator.vibrate(30);
+  renderSavedLinksIfVisible();
+  const status = document.getElementById('htmlImportStatus');
+  const old = status.textContent;
+  status.textContent = '✅ انحفظت الصورة بمعرض "📌 صور"';
+  setTimeout(()=>{ if(status.textContent.includes('انحفظت')) status.textContent = old; }, 1800);
+}
+function deleteHtmlImportItem(i){
+  const items = window._htmlImportItems || [];
+  items.splice(i, 1);
+  renderHtmlImportResults(items);
 }
 function handleHtmlImportItemClick(url){
   document.getElementById('imageUrlInput').value = url;
