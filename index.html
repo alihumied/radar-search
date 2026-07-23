@@ -223,6 +223,19 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   </div>
 
   <div class="core">
+    <div class="section-title" style="margin:0 0 12px;"><h2>📄 استيراد صفحة محفوظة (HTML)</h2></div>
+    <div class="hint" style="margin-top:0; margin-bottom:8px;">افتحي صفحة الشخص/الريلز بفيسبوك بالمتصفح ← (⋮) ← "حفظ صفحة" أو "Save page" باسم "صفحة ويب، كاملة" ← ارفعي ملف الـ HTML هون. رح نطلعلك كل الريلز/الفيديوهات/المنشورات اللي فيها مع صورها المصغّرة، بدون أي اتصال إنترنت — كله بيصير بجهازك.</div>
+    <input type="file" id="htmlImportInput" accept=".html,.htm" style="display:none;" onchange="handleHtmlImport(event)">
+    <div class="toggles">
+      <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📄</span><span>رفع ملف HTML</span></div>
+    </div>
+    <div class="hint" id="htmlImportStatus" style="margin-top:8px;"></div>
+    <div class="results" id="htmlImportResultsArea">
+      <div class="saved-images-grid" id="htmlImportResultsList" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <div class="core">
     <div class="section-title" style="margin:0 0 12px;"><h2>📘 بيانات المنصات (تجريبي)</h2></div>
     <div class="hint" style="margin-top:0; margin-bottom:8px;">جلب منشورات وتعليقات وصور مباشرة من رابط — منفصل تمامًا عن البحث العكسي والبحث الرئيسي</div>
 
@@ -358,6 +371,32 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   <div class="results" id="resultsArea">
     <div class="result-meta" id="resultMeta"></div>
     <div id="resultCards"></div>
+  </div>
+
+  <div class="section-title" style="margin:26px 0 12px;"><h2>📄 استيراد صفحة محفوظة (HTML)</h2></div>
+  <div class="hint" style="margin-top:0; margin-bottom:8px;">
+    احفظي أي صفحة فيسبوك (بروفايل/ريلز/فيديوهات) من المتصفح كـ"صفحة ويب كاملة" (Save as → Webpage, Complete)، وارفعي الملف هون — رح يطلعلك كل الروابط المكتشفة (منشورات، فيديوهات، ريلز، صور، ستوري) مع صورها المصغّرة الحقيقية، وتقدري تفتحي أي وحدة مباشرة أو تبعتيها للبحث العكسي.
+  </div>
+  <div class="toggles" style="margin-bottom:10px;">
+    <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📤</span><span>رفع ملف HTML</span></div>
+  </div>
+  <input type="file" id="htmlImportInput" accept=".html,.htm,text/html" style="display:none;" onchange="handleHtmlImport(event)">
+  <div id="htmlImportResults"></div>
+
+  <div class="core">
+    <div class="section-title" style="margin:0 0 12px;"><h2>📄 استيراد صفحة محفوظة (HTML)</h2></div>
+    <div class="hint" style="margin-top:0; margin-bottom:8px;">
+      احفظي أي صفحة فيسبوك (بروفايل، ريلز، منشورات) من كروم كـ"صفحة ويب كاملة"، وارفعي الملف هون. رح يطلعلك كل الروابط (منشورات/ريلز/فيديوهات/صور/ستوري) مع صورها المصغّرة الحقيقية، منفصل تمامًا عن باقي الأقسام.
+      <br><br>⚠️ <b>مهم:</b> هاي بس تستخرج <b>الروابط والصور المصغّرة</b> اللي كانت ظاهرة وقت الحفظ — ما تقدر تحمّل الفيديو أو الريلز نفسه كملف، لأنه فيسبوك يحمّله ببرمجة حية (JavaScript) بعد فتح الصفحة، وهالجزء ما ينحفظ بملف HTML ثابت. لتحميل/معاينة الفيديو نفسه، اضغطي "🔍 بحث عكسي" على أي عنصر لفتحه بمعاينة حية بقسم البحث العكسي.
+    </div>
+    <div class="toggles" style="margin-bottom:10px;">
+      <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📤</span><span>ارفع ملف HTML</span></div>
+    </div>
+    <input type="file" id="htmlImportInput" accept=".html,.htm,text/html" style="display:none;" onchange="handleHtmlImport(event)">
+    <div class="hint" id="htmlImportStatus" style="margin-top:8px;"></div>
+    <div class="results" id="htmlImportResultsArea">
+      <div class="saved-images-grid" id="htmlImportResultsList" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <footer>RADAR — بحث موجّه نحو الروابط العامة للمنصات · لا يقوم بأي تجاوز لخصوصية أو اختراق حسابات</footer>
@@ -1084,14 +1123,23 @@ function openPastedLinkDirectly(){
 }
 
 /* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
+async function fetchWithTimeout(url, ms=5000){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), ms);
+  try{
+    return await fetch(url, {signal: controller.signal});
+  }finally{
+    clearTimeout(timer);
+  }
+}
 async function fetchOgTags(pageUrl){
   const scrapeUrl=pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com');
   const candidates=[];let title=null,desc=null;
   const add=(url,w=0,h=0)=>{if(url&&/^https?:\/\//i.test(url)&&!candidates.some(x=>x.url===url))candidates.push({url,w:Number(w)||0,h:Number(h)||0})};
-  try{const r=await fetch(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=m.title||title;desc=m.description||desc}}catch(e){}
-  try{const r=await fetch(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=d.title||title}}catch(e){}
+  try{const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=m.title||title;desc=m.description||desc}}catch(e){}
+  try{const r=await fetchWithTimeout(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=d.title||title}}catch(e){}
   const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`];
-  for(const make of proxies){try{const r=await fetch(make(scrapeUrl));if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=doc.querySelector('meta[property="og:title"]')?.content||title;desc=doc.querySelector('meta[property="og:description"]')?.content||desc;if(candidates.length)break}catch(e){}}
+  for(const make of proxies){try{const r=await fetchWithTimeout(make(scrapeUrl),4500);if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=doc.querySelector('meta[property="og:title"]')?.content||title;desc=doc.querySelector('meta[property="og:description"]')?.content||desc;if(candidates.length)break}catch(e){}}
   const image=await pickBestPublicImage(candidates.map(x=>x.url));
   return {image,title,desc,candidates};
 }
@@ -1121,7 +1169,8 @@ function openOriginalLinkHtml(url){
 
 async function runImageSearch(){
   const input = document.getElementById('imageUrlInput');
-  const url = input.value.trim();
+  const url = unwrapFacebookLink(input.value.trim());
+  input.value = url;
   const cards = document.getElementById('imageResultCards');
   const status = document.getElementById('imageSearchStatus');
   status.textContent = '';
@@ -1136,6 +1185,23 @@ async function runImageSearch(){
   let imageUrl = null;
   let captionText = '';
   let sourceLabel = '';
+
+  // معاينة embed حية للفيديو/الريلز — نحسبها بدري لأنها لازم تظهر حتى لو فشل استخراج صورة
+  const isFbVideoLink = /facebook\.com\/(?:[^/]+\/videos?\/|reel\/|watch\/?\?)/i.test(url) || /fb\.watch/i.test(url);
+  const embedHtml = isFbVideoLink ? `
+      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة (Embed رسمي من فيسبوك)</div>
+        <iframe src="https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=400" width="100%" height="380" style="border:none; border-radius:10px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
+        <div class="hint" style="margin:0; padding:0 4px;">⚠️ ما نقدر نلتقط سكرين شوت من جوا هالمعاينة تلقائيًا (فيسبوك محمي من هالنوع من الالتقاط بكل المتصفحات لأي موقع). لأخذ سكرين شوت: استخدمي زر السكرين شوت العادي بجهازك وهاي المعاينة مفتوحة قدامك.</div>
+      </div>` : '';
+
+  // فيديو/ريلز فيسبوك: نعرض المعاينة الحية فورًا بدون أي انتظار — الاستخراج البطيء مش لازم أصلًا هون
+  if(isFbVideoLink){
+    status.textContent = '';
+    cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+    document.getElementById('imageResultsArea').classList.add('show');
+    return;
+  }
 
   // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
   const ytId = extractYouTubeId(url);
@@ -1187,7 +1253,7 @@ async function runImageSearch(){
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
       status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو (لو كان رابط ستوري) الستوريهات لا تعرض معاينة عامة لأنها مؤقتة بطبيعتها. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
-      cards.innerHTML = openOriginalLinkHtml(url);
+      cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
@@ -1241,8 +1307,7 @@ async function runImageSearch(){
       </div>`).join('');
   }
 
-
-  cards.innerHTML = `
+  cards.innerHTML = embedHtml + `
     <div class="result-card extracted-preview-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
         <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
@@ -1403,6 +1468,219 @@ async function removeSavedLink(id){
   renderSavedLinks();
 }
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
+
+/* ===================== استيراد صفحة HTML محفوظة — تفكيك عام (منشورات/ريلز/فيديو/صور/ستوري) ===================== */
+function handleHtmlImport(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+  const status = document.getElementById('htmlImportStatus');
+  const list = document.getElementById('htmlImportResultsList');
+  status.textContent = '⏳ جارٍ تحليل الملف...';
+  list.innerHTML = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const items = parseFacebookHtmlDump(e.target.result);
+      if(!items.length){
+        status.textContent = '⚠️ ما لقينا أي روابط فيسبوك معروفة بهالملف.';
+        document.getElementById('htmlImportResultsArea').classList.add('show');
+        return;
+      }
+      status.textContent = `✅ لقينا ${items.length} عنصر`;
+      list.innerHTML = items.map((it, i) => `
+        <div class="saved-image-tile">
+          <img class="saved-image-thumb" src="${esc(it.thumb)}" style="${it.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:22px;'}" decoding="async" loading="lazy" onerror="this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.textContent='🔗'">
+          <a class="saved-corner-btn saved-image-source" href="${esc(it.link)}" target="_blank" rel="noopener" title="فتح على فيسبوك">↗</a>
+          <button class="saved-corner-btn saved-image-open" onclick="sendHtmlItemToReverseSearch(${i})" title="بحث عكسي / معاينة حية">🔍</button>
+        </div>`).join('');
+      window._htmlImportItems = items;
+      document.getElementById('htmlImportResultsArea').classList.add('show');
+    }catch(err){
+      status.textContent = `⚠️ تعذّر تحليل الملف: ${err.message}`;
+    }
+  };
+  reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
+  reader.readAsText(file);
+}
+function parseFacebookHtmlDump(htmlText){
+  const linkRe = /https:\/\/(?:www\.|m\.)?facebook\.com\/(?:[^\s"'<>]*?\/(?:videos?|photos?|posts?|reels?|stories)\/[^\s"'<>]*|reel\/\d+[^\s"'<>]*)/gi;
+  const matches = [...htmlText.matchAll(linkRe)];
+  const seen = new Set();
+  const items = [];
+  for(const m of matches){
+    const link = m[0].replace(/&amp;/g, '&');
+    const key = link.split(/[?&]/)[0];
+    if(seen.has(key)) continue;
+    seen.add(key);
+    const windowText = htmlText.slice(m.index + m[0].length, m.index + m[0].length + 800);
+    const imgMatch = windowText.match(/<img[^>]+src="([^"]+)"/i);
+    const thumb = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '';
+    items.push({ link, thumb });
+  }
+  return items;
+}
+function sendHtmlItemToReverseSearch(i){
+  const it = (window._htmlImportItems || [])[i];
+  if(!it) return;
+  document.getElementById('imageUrlInput').value = it.link;
+  document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  setTimeout(()=> runImageSearch(), 250);
+}
+
+/* ===================== استيراد صفحة HTML محفوظة — يستخرج ريلز/فيديو/منشورات/صور/ستوري مع صورها ===================== */
+function handleHtmlImport(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+  const area = document.getElementById('htmlImportResults');
+  area.innerHTML = '<div class="hint">⏳ جارٍ تحليل الملف...</div>';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      parseImportedHtml(e.target.result);
+    }catch(err){
+      area.innerHTML = `<div class="hint">⚠️ تعذّر تحليل الملف: ${err.message}</div>`;
+    }
+  };
+  reader.onerror = () => { area.innerHTML = '<div class="hint">⚠️ تعذّر قراءة الملف</div>'; };
+  reader.readAsText(file);
+}
+function parseImportedHtml(htmlText){
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  const patterns = [
+    { type:'🎬 ريلز',    re:/\/reels?\/\d/i },
+    { type:'📹 فيديو',   re:/\/videos?\/\d/i },
+    { type:'📝 منشور',   re:/\/posts?\/\d|permalink\.php\?story_fbid|story_fbid=\d/i },
+    { type:'🖼️ صورة',    re:/\/photos?\/|photo\.php\?fbid=\d|fbid=\d/i },
+    { type:'⏳ ستوري',   re:/\/stories\/\d|story\.php\?story_fbid=\d/i },
+  ];
+  const anchors = [...doc.querySelectorAll('a[href]')].filter(a => /facebook\.com|fb\.watch/i.test(a.href));
+  const seen = new Set();
+  const items = [];
+  for(const a of anchors){
+    let type = null;
+    for(const p of patterns){ if(p.re.test(a.href)){ type = p.type; break; } }
+    if(!type) continue;
+    const cleanHref = a.href.split('?')[0].replace(/\/$/, '');
+    if(seen.has(cleanHref)) continue;
+    seen.add(cleanHref);
+    let img = a.querySelector('img');
+    if(!img){
+      let sib = a.nextElementSibling;
+      for(let i=0; i<3 && sib; i++){ if(sib.tagName === 'IMG'){ img = sib; break; } sib = sib.nextElementSibling; }
+    }
+    const thumb = img ? (img.getAttribute('src') || '') : '';
+    items.push({ type, href: a.href, thumb });
+  }
+  renderImportedHtmlResults(items);
+}
+function renderImportedHtmlResults(items){
+  const area = document.getElementById('htmlImportResults');
+  if(!items.length){
+    area.innerHTML = '<div class="hint">⚠️ ما لقيت أي روابط ريلز/فيديو/منشورات/صور مدعومة بهالملف.</div>';
+    return;
+  }
+  const counts = {};
+  items.forEach(it => counts[it.type] = (counts[it.type]||0) + 1);
+  const summary = Object.entries(counts).map(([t,c]) => `${t}: ${c}`).join(' · ');
+  area.innerHTML = `
+    <div class="hint">✅ لقيت ${items.length} عنصر — ${summary}</div>
+    <div class="saved-images-grid" style="margin-top:12px;">
+      ${items.map(it => `
+        <div class="saved-image-tile">
+          ${it.thumb
+            ? `<img class="saved-image-thumb" src="${esc(it.thumb)}" decoding="async" loading="lazy" onclick="window.open('${esc(it.href)}','_blank')" onerror="this.style.background='#111a26'">`
+            : `<div class="saved-image-thumb" style="display:flex;align-items:center;justify-content:center;background:#111a26;font-size:22px;cursor:pointer;" onclick="window.open('${esc(it.href)}','_blank')">🔗</div>`}
+          <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:auto; padding:0 6px; border-radius:9px; font-size:9px; opacity:1; visibility:visible; pointer-events:none; background:#000000cc; white-space:nowrap;">${it.type}</div>
+          <button class="saved-corner-btn saved-image-open" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();sendImportedToReverseSearch('${esc(it.href)}')" title="ابحث بهالرابط بالبحث العكسي">🔍</button>
+        </div>`).join('')}
+    </div>`;
+}
+function sendImportedToReverseSearch(href){
+  document.getElementById('imageUrlInput').value = href;
+  document.getElementById('imageUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
+  runImageSearch();
+}
+
+/* ===================== استيراد صفحة HTML محفوظة — تحليل كامل محليًا بالمتصفح ===================== */
+function handleHtmlImport(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+  const status = document.getElementById('htmlImportStatus');
+  status.textContent = '⏳ جارٍ تحليل الملف...';
+  document.getElementById('htmlImportResultsList').innerHTML = '';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const rawText = e.target.result;
+      const doc = new DOMParser().parseFromString(rawText, 'text/html');
+      const items = extractFacebookContentFromDoc(doc, rawText);
+      renderHtmlImportResults(items);
+      status.textContent = items.length ? `✅ لقينا ${items.length} عنصر` : '⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';
+    }catch(err){
+      status.textContent = `⚠️ تعذّر تحليل الملف: ${err?.message || err}`;
+    }
+  };
+  reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
+  reader.readAsText(file);
+}
+// يستخرج معرّف مستقر (رقمي غالبًا) من الرابط لتفادي عدّ نفس المحتوى مرتين بروابط مختلفة الشكل
+function extractStableId(url){
+  const m = url.match(/\/(reel|reels|videos?|photos?|posts?|stories)\/(?:.*?)?(\d{6,})/i) || url.match(/(\d{10,})/);
+  return m ? m[m.length-1] : url.split(/[?#]/)[0];
+}
+// يشتغل بشكل عام مع أي نوع محتوى فيسبوك (منشورات/ريلز/فيديوهات/صور/ستوري) — بدون تخصيص لنوع معيّن
+// يفحص وسوم <a> أولاً، وبعدها يفحص نص الملف الخام كامل لالتقاط أي روابط داخل سكربتات/بيانات JSON ما كانت لتظهر بوسوم عادية
+function extractFacebookContentFromDoc(doc, rawText){
+  const CONTENT_RE = /\/(reels?|videos?|posts?|photos?|stories|story\.php|watch)\b/i;
+  const typeOf = (href) => /reels?/i.test(href) ? '🎬 ريلز' : /videos?|watch/i.test(href) ? '📹 فيديو' : /photos?/i.test(href) ? '🖼️ صورة' : /stories|story\.php/i.test(href) ? '⏱️ ستوري' : '📝 منشور';
+  const byId = new Map();
+
+  // 1) وسوم <a> — نقدر نلاقي صورة مصغّرة مرتبطة فعليًا
+  doc.querySelectorAll('a[href*="facebook.com"], a[href^="/"]').forEach(a=>{
+    let href = a.getAttribute('href') || '';
+    if(!href || !CONTENT_RE.test(href)) return;
+    href = href.split('&__cft__')[0].split('?__cft__')[0];
+    const fullUrl = href.startsWith('http') ? href : `https://www.facebook.com${href}`;
+    const id = extractStableId(fullUrl);
+    if(byId.has(id) && byId.get(id).thumb) return; // عندنا نسخة أفضل (فيها صورة) خلص
+    let img = a.querySelector('img');
+    if(!img && a.nextElementSibling && a.nextElementSibling.tagName === 'IMG') img = a.nextElementSibling;
+    if(!img){ const parent = a.closest('div'); if(parent) img = parent.querySelector('img'); }
+    byId.set(id, { url: fullUrl, thumb: img ? (img.getAttribute('src')||'') : '', type: typeOf(fullUrl) });
+  });
+
+  // 2) فحص النص الخام كامل (يلتقط روابط داخل سكربتات/JSON ما كانت لتظهر بوسوم <a> عادية)
+  if(rawText){
+    const re = /https:\/\/(?:www\.|m\.)?facebook\.com\/[^\s"'<>\\]*?\/(?:reels?|videos?|photos?|posts?|stories|story\.php|watch)[^\s"'<>\\]*/gi;
+    let m;
+    while((m = re.exec(rawText))){
+      const fullUrl = m[0].replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
+      const id = extractStableId(fullUrl);
+      if(byId.has(id)) continue; // خلّي أولوية للنسخة اللي من وسم <a> (فيها صورة غالبًا)
+      byId.set(id, { url: fullUrl, thumb: '', type: typeOf(fullUrl) });
+    }
+  }
+
+  return [...byId.values()].filter(x => !/\/reel\/?\?s=tab/i.test(x.url) && !/\/watch\/?$/i.test(x.url));
+}
+function renderHtmlImportResults(items){
+  const l = document.getElementById('htmlImportResultsList');
+  if(!items.length){ l.innerHTML = ''; return; }
+  l.innerHTML = items.map(x => `
+    <div class="saved-image-tile" title="${esc(x.type)}">
+      <img class="saved-image-thumb" src="${x.thumb ? esc(x.thumb) : ''}" style="${x.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:11px;color:#9fb3c8;'}" decoding="async" loading="lazy" onclick="handleHtmlImportItemClick('${esc(x.url)}')">
+      <div class="saved-corner-btn" style="top:-7px; right:auto; left:-7px; width:auto; height:auto; padding:2px 6px; border-radius:6px; font-size:9px; background:#000000cc; opacity:1; visibility:visible; pointer-events:none;">${x.type}</div>
+    </div>`).join('');
+  document.getElementById('htmlImportResultsArea').classList.add('show');
+}
+function handleHtmlImportItemClick(url){
+  document.getElementById('imageUrlInput').value = url;
+  document.getElementById('imageUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
+  setTimeout(()=> runImageSearch(), 250);
+}
 
 /* ===================== فيديو — أسلوب خفيف ومعزول: يُبنى فقط وقت الاستخدام ويُحذف بالكامل بعده ===================== */
 let _currentVideoBlob = null;
