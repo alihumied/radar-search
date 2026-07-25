@@ -156,10 +156,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 
 .hx-toolbar{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg-0)}.hx-platform{color:var(--cyan);font-size:12px;font-weight:700;margin-bottom:10px;word-break:break-word}.hx-types{display:flex;gap:7px;flex-wrap:wrap}.hx-type{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:8px 12px;font-family:Tajawal}.hx-type.active{border-color:var(--cyan);background:rgba(63,212,255,.12)}.hx-type b{color:var(--cyan);font:10px 'JetBrains Mono'}.hx-search{display:grid;grid-template-columns:2fr 1.2fr 1fr auto;gap:8px;margin-top:10px}.hx-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;padding:10px;direction:rtl}.hx-comment{display:grid;grid-template-columns:38px 1fr auto;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:11px;margin-bottom:8px}.hx-comment img{width:36px;height:36px;border-radius:50%;object-fit:cover}.hx-name{color:var(--cyan);font-size:12px;font-weight:700}.hx-date{color:var(--muted);font-size:10px}.hx-text{font-size:13px;line-height:1.7}.hx-embed{position:fixed;inset:0;z-index:10080;background:#020408ed;display:flex;align-items:center;justify-content:center;padding:14px}.hx-box{width:min(96vw,580px);max-height:94vh;padding:11px;border:1px solid var(--line);border-radius:18px;background:var(--bg-1);display:flex;flex-direction:column;gap:9px}.hx-head{display:flex;justify-content:space-between;align-items:center}.hx-head button{width:36px;height:36px;border-radius:50%}.hx-embed iframe{width:100%;height:68vh;border:0;border-radius:12px;background:#000}.hx-actions{display:flex;gap:8px}.hx-actions>*{flex:1;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-0);color:var(--text);text-align:center;text-decoration:none}@media(max-width:700px){.hx-search{grid-template-columns:1fr 1fr}.hx-search #hxText{grid-column:1/-1}.hx-embed iframe{height:65vh}}
 
-/* FORCE PORTRAIT THUMBNAILS: 1.5cm wide x 2cm high */
+/* RADAR unified media tiles: 1.5cm x 2cm */
 .saved-images-grid,.hx-grid{grid-template-columns:repeat(auto-fill,1.5cm)!important;grid-auto-rows:2cm!important;align-items:start!important}
 .saved-image-tile,.saved-image-thumb,#savedLinksList .saved-image-tile,#savedLinksList .saved-image-thumb,#htmlImportResultsList .saved-image-tile,#htmlImportResultsList .saved-image-thumb,#savedVideosList .saved-image-tile,#savedVideosList .saved-image-thumb{width:1.5cm!important;min-width:1.5cm!important;max-width:1.5cm!important;height:2cm!important;min-height:2cm!important;max-height:2cm!important;aspect-ratio:3/4!important}
-.saved-image-thumb,#savedLinksList .saved-image-thumb,#htmlImportResultsList .saved-image-thumb,#savedVideosList .saved-image-thumb{display:block!important;object-fit:cover!important;object-position:center!important}
+.saved-image-thumb{display:block!important;object-fit:cover!important;object-position:center!important}
 </style>
 </head>
 <body>
@@ -232,8 +232,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div class="section-title" style="margin:0 0 12px;"><h2>📄 استيراد صفحة محفوظة (HTML)</h2></div>
     <div class="hint" style="margin-top:0; margin-bottom:8px;">افتحي صفحة الشخص/الريلز بفيسبوك بالمتصفح ← (⋮) ← "حفظ صفحة" أو "Save page" باسم "صفحة ويب، كاملة" ← ارفعي ملف الـ HTML هون. رح نطلعلك كل الريلز/الفيديوهات/المنشورات اللي فيها مع صورها المصغّرة، بدون أي اتصال إنترنت — كله بيصير بجهازك.</div>
     <input type="file" id="htmlImportInput" accept=".html,.htm" style="display:none;" onchange="handleHtmlImport(event)">
+    <input type="file" id="jsonImportInput" accept=".json,application/json" style="display:none;" onchange="handleRadarJsonImport(event)">
     <div class="toggles">
       <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📄</span><span>رفع ملف HTML</span></div>
+      <div class="toggle" onclick="document.getElementById('jsonImportInput').click()" style="cursor:pointer;border-color:#45d9ff88;background:#45d9ff12;"><span style="font-size:16px;">{ }</span><span>رفع ملف JSON</span></div>
     </div>
     <div class="hint" id="htmlImportStatus" style="margin-top:8px;"></div>
     <div class="results" id="htmlImportResultsArea">
@@ -2499,6 +2501,56 @@ function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram
 function hxOpen(id){const x=HX.find(y=>y.id===id);if(!x?.url)return;if(!['reel','video','post'].includes(x.type)){window.open(x.url,'_blank','noopener');return}hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.dataset.source=x.url;d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>${HXL[HXplatform]} Embed</b><button onclick="hxClose()">×</button></div><iframe src="${hxEmbed(x)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe><div class="hx-actions"><label for="hxShot">📸 اختر لقطة شاشة واحفظها</label><a href="${esc(x.url)}" target="_blank">فتح الأصلي ↗</a></div><input id="hxShot" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0" onchange="hxShot(event)"><div id="hxStatus" class="hint">خذ لقطة بأزرار الهاتف ثم اخترها</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d)}
 async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById('hxStatus');e.target.value='';if(!f)return;const r=new FileReader();r.onload=async x=>{try{await saveLinkToStorage(x.target.result,document.getElementById('hxEmbed')?.dataset.source||x.target.result);st.textContent='✅ حُفظت في 📌 صور';await renderSavedLinks()}catch{st.textContent='⚠️ تعذّر الحفظ'}};r.readAsDataURL(f)}function hxClose(){document.getElementById('hxEmbed')?.remove()}async function hxSave(id){const x=HX.find(y=>y.id===id);if(!x?.thumb)return;await saveLinkToStorage(x.thumb,x.url||x.thumb);renderSavedLinksIfVisible();document.getElementById('htmlImportStatus').textContent='✅ حُفظت في 📌 صور'}
 
+
+
+/* ===================== RADAR JSON import: same viewer as HTML ===================== */
+function radarVideoIdFromUrl(url){
+  const m=String(url||'').match(/(?:amplify_video|ext_tw_video)\/(\d+)/i) || String(url||'').match(/(?:amplify_video_thumb|ext_tw_video_thumb)\/(\d+)/i);
+  return m ? m[1] : '';
+}
+function radarIsMasterM3u8(url){return /\/pl\/[^/]+\.m3u8(?:\?|$)/i.test(String(url||''));}
+function radarIsVideoMp4(url){return /\/vid\/.*\.mp4(?:\?|$)/i.test(String(url||''));}
+function radarIsPostImage(url){return /pbs\.twimg\.com\/media\//i.test(String(url||'')) || /sc-cdn\.net/i.test(String(url||''));}
+function radarJsonToHx(data){
+  const out=[], seen=new Set();
+  const add=x=>{if(!x||!x.id||seen.has(x.id))return;seen.add(x.id);out.push(x)};
+  if(data && data.format==='radar-media-clean-v3'){
+    (data.videos||[]).forEach(v=>add({id:'json-video:'+v.id,type:'video',url:v.master||v.videoMp4||(v.playlists||[])[0]?.url||'',mediaUrl:v.master||v.videoMp4||(v.playlists||[])[0]?.url||'',thumb:v.poster||'',text:`فيديو ${v.bestWidth&&v.bestHeight?v.bestWidth+'×'+v.bestHeight:'HLS'}`,author:'X',date:v.firstSeen||''}));
+    (data.images||[]).forEach((im,i)=>add({id:'json-image:'+(im.id||i),type:'image',url:im.url||'',thumb:im.url||'',text:'صورة منشور',author:'X',date:im.firstSeen||''}));
+    return out;
+  }
+  const items=Array.isArray(data?.items)?data.items:[];
+  const vids=new Map();
+  items.forEach((it,i)=>{
+    const u=String(it.url||'');
+    const id=radarVideoIdFromUrl(u);
+    if(id){
+      const v=vids.get(id)||{id,type:'video',url:'',mediaUrl:'',thumb:'',text:'فيديو X',author:'X',date:it.seenAt||''};
+      if(/pbs\.twimg\.com\/(?:amplify_video_thumb|ext_tw_video_thumb)/i.test(u))v.thumb=u;
+      if(radarIsMasterM3u8(u)){v.url=u;v.mediaUrl=u;}
+      else if(radarIsVideoMp4(u)&&!v.mediaUrl){v.url=u;v.mediaUrl=u;}
+      vids.set(id,v);return;
+    }
+    if(radarIsPostImage(u))add({id:'json-image:'+i+':'+u.split('?')[0],type:'image',url:u,thumb:u,text:'صورة منشور',author:'X',date:it.seenAt||''});
+  });
+  vids.forEach(v=>add({...v,id:'json-video:'+v.id}));
+  return out;
+}
+function handleRadarJsonImport(event){
+  const file=event.target.files&&event.target.files[0];event.target.value='';if(!file)return;
+  const status=document.getElementById('htmlImportStatus');status.textContent='⏳ جارٍ قراءة ملف JSON وتنظيم الوسائط...';
+  const reader=new FileReader();
+  reader.onload=e=>{try{
+    const data=JSON.parse(e.target.result);HX=radarJsonToHx(data);HXplatform=/snapchat/i.test(data.pageUrl||'')?'snapchat':'x';HXtype='image';HXpage=1;
+    document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));
+    document.getElementById('hxPlatform').textContent='المنصة: '+HXL[HXplatform]+' · JSON · '+file.name;
+    hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');
+    const vi=HX.filter(x=>x.type==='video'||x.type==='reel').length,im=HX.filter(x=>x.type==='image').length;
+    status.textContent=`✅ تم استيراد JSON بنفس عارض HTML: فيديو ${vi} · صور ${im}`;
+    document.getElementById('htmlImportResultsArea').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){status.textContent='⚠️ ملف JSON غير صالح أو غير مدعوم: '+(err?.message||err)}};
+  reader.onerror=()=>status.textContent='⚠️ تعذرت قراءة ملف JSON';reader.readAsText(file);
+}
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
