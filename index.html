@@ -2499,36 +2499,40 @@ function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram
 function hxOpen(id){const x=HX.find(y=>y.id===id);if(!x?.url)return;if(HXplatform==='snapchat'||!['reel','video','post'].includes(x.type)){window.open(x.url,'_blank','noopener');return}hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.dataset.source=x.url;d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>${HXL[HXplatform]} Embed</b><button onclick="hxClose()">×</button></div><iframe src="${hxEmbed(x)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe><div class="hx-actions"><label for="hxShot">📸 اختر لقطة شاشة واحفظها</label><a href="${esc(x.url)}" target="_blank">فتح الأصلي ↗</a></div><input id="hxShot" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0" onchange="hxShot(event)"><div id="hxStatus" class="hint">خذ لقطة بأزرار الهاتف ثم اخترها</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d)}
 async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById('hxStatus');e.target.value='';if(!f)return;const r=new FileReader();r.onload=async x=>{try{await saveLinkToStorage(x.target.result,document.getElementById('hxEmbed')?.dataset.source||x.target.result);st.textContent='✅ حُفظت في 📌 صور';await renderSavedLinks()}catch{st.textContent='⚠️ تعذّر الحفظ'}};r.readAsDataURL(f)}function hxClose(){document.getElementById('hxEmbed')?.remove()}async function hxSave(id){const x=HX.find(y=>y.id===id);if(!x?.thumb)return;await saveLinkToStorage(x.thumb,x.url||x.thumb);renderSavedLinksIfVisible();document.getElementById('htmlImportStatus').textContent='✅ حُفظت في 📌 صور'}
 
-/* تنزيل مباشر لجهاز المستخدم (وليس حفظ داخل تطبيق RADAR فقط). يجرّب fetch->blob؛ إذا منعت المنصة CORS يفتح الرابط بتبويب جديد ليحفظه المستخدم يدويًا. */
-async function hxDownloadToDevice(src,ext,label){
+/* تنزيل مباشر لجهاز المستخدم (وليس حفظ داخل تطبيق RADAR فقط). يجرّب fetch->blob؛ إذا فشل (رابط منتهي/CORS) بدل ما نفتح الرابط الخام (رح يعطي 403 غالبًا مع فيديو تويتر) نفتح رابط المنشور الأصلي إذا متوفر. */
+async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
   try{
     const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
     const blob=await res.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=u;a.download=`radar-${label||'media'}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
-    return true;
-  }catch(e){window.open(src,'_blank','noopener');return false}
+    return {ok:true};
+  }catch(e){
+    if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
+    return {ok:false,openedPost:false};
+  }
 }
 async function hxDownloadById(id){
   const x=HX.find(y=>y.id===id);if(!x)return;
   const isImg=x.type==='image';
   const src=isImg?(x.directUrl||x.thumb||x.url):(x.directUrl||'');
   if(!src){alert('ما في رابط تنزيل مباشر لهاد العنصر (اضغطي ▶ لفتحه بدل هيك).');return}
-  await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform);
+  const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl);
+  if(!r.ok&&!r.openedPost)alert('⚠️ تعذّر التنزيل ولا يوجد رابط منشور بديل لفتحه.');
 }
 async function hxDownloadAll(){
   const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
   if(!confirm(`تنزيل ${items.length} عنصر مباشرة للجهاز؟ رح يفتح المتصفح عدة تنزيلات متتالية.`))return;
-  let ok=0,opened=0;const st=document.getElementById('htmlImportStatus');
+  let ok=0,openedPost=0,failed=0;const st=document.getElementById('htmlImportStatus');
   for(let i=0;i<items.length;i++){
     const x=items[i],isImg=x.type==='image';
     st.textContent=`⏳ تنزيل ${i+1} من ${items.length}...`;
-    const saved=await hxDownloadToDevice(isImg?(x.directUrl||x.thumb||x.url):x.directUrl,isImg?'jpg':'mp4',HXplatform);
-    if(saved)ok++;else opened++;
+    const r=await hxDownloadToDevice(isImg?(x.directUrl||x.thumb||x.url):x.directUrl,isImg?'jpg':'mp4',HXplatform,x.postUrl);
+    if(r.ok)ok++;else if(r.openedPost)openedPost++;else failed++;
     await new Promise(r=>setTimeout(r,400));
   }
-  st.textContent=`✅ تم تنزيل ${ok} مباشرة للجهاز${opened?` · فُتح ${opened} برابط خارجي (المنصة منعت القراءة المباشرة — احفظيه يدويًا بضغطة مطوّلة)`:''}`;
+  st.textContent=`✅ تم تنزيل ${ok} مباشرة للجهاز${openedPost?` · فُتح ${openedPost} منشور أصلي (رابط X المؤقت انتهى/رُفض — احفظي الفيديو يدويًا من هناك)`:''}${failed?` · تعذّر ${failed} بدون بديل`:''}`;
 }
 
 
