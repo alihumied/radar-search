@@ -2551,6 +2551,44 @@ function handleRadarJsonImport(event){
   }catch(err){status.textContent='⚠️ ملف JSON غير صالح أو غير مدعوم: '+(err?.message||err)}};
   reader.onerror=()=>status.textContent='⚠️ تعذرت قراءة ملف JSON';reader.readAsText(file);
 }
+
+
+/* ===================== Direct JSON media player fix ===================== */
+const hxOpenBeforeJsonDirectPlayer = hxOpen;
+hxOpen = function(id){
+  const x=(window.HX||HX||[]).find(y=>y.id===id);
+  if(!x) return;
+  const media=String(x.mediaUrl||'');
+  if(!media) return hxOpenBeforeJsonDirectPlayer(id);
+  hxClose();
+  const d=document.createElement('div');
+  d.id='hxEmbed';d.className='hx-embed';d.dataset.source=x.url||media;
+  const isHls=/\.m3u8(?:\?|$)/i.test(media);
+  const isDirect=/\.(?:mp4|webm|mov)(?:\?|$)/i.test(media);
+  const safeMedia=esc(media),safePoster=esc(x.thumb||'');
+  d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()">
+    <div class="hx-head"><b>مشغل الفيديو المباشر</b><button onclick="hxClose()">×</button></div>
+    <video id="hxDirectVideo" controls playsinline preload="metadata" ${safePoster?`poster="${safePoster}"`:''} style="width:100%;height:68vh;max-height:68vh;object-fit:contain;background:#000;border-radius:12px"></video>
+    <div id="hxDirectStatus" class="hint">جارٍ تجهيز رابط الفيديو...</div>
+    <div class="hx-actions">
+      <a href="${safeMedia}" target="_blank" rel="noopener">فتح رابط التشغيل ↗</a>
+      ${x.thumb?`<a href="${safePoster}" target="_blank" rel="noopener">فتح الغلاف ↗</a>`:''}
+    </div>
+  </div>`;
+  d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);
+  const v=d.querySelector('#hxDirectVideo'),st=d.querySelector('#hxDirectStatus');
+  const fail=()=>{st.innerHTML='⚠️ تعذّر التشغيل داخل المتصفح. اضغط «فتح رابط التشغيل»؛ بعض روابط HLS تحتاج مشغلًا يدعم M3U8.'};
+  v.addEventListener('loadedmetadata',()=>{st.textContent=`✅ جاهز للتشغيل${v.videoWidth?' · '+v.videoWidth+'×'+v.videoHeight:''}`},{once:true});
+  v.addEventListener('error',fail,{once:true});
+  if(isDirect){v.src=media;st.textContent='✅ تم تحميل ملف الفيديو المباشر';v.load();return;}
+  if(isHls){
+    const nativeHls=v.canPlayType('application/vnd.apple.mpegurl')||v.canPlayType('application/x-mpegURL');
+    v.src=media;v.type='application/vnd.apple.mpegurl';v.load();
+    st.textContent=nativeHls?'✅ تم تحميل بث HLS':'⏳ محاولة تشغيل HLS بواسطة مشغل النظام...';
+    return;
+  }
+  v.src=media;v.load();
+};
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
