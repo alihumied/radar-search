@@ -2497,7 +2497,42 @@ function hxMore(){HXpage++;hxRender()}
 function hxSelect(e,img,id){e.stopPropagation();const t=img.closest('.saved-image-tile'),on=t.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>{if(x!==t)x.classList.remove('selected')});if(on){const x=HX.find(y=>y.id===id);if(x?.thumb)openInlineSavedFocus(x.thumb);else hxOpen(id)}else t.classList.add('selected')}
 function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram\.com\/(p|reel|tv)\/([\w.-]+)/)))return`https://www.instagram.com/${m[1]}/${m[2]}/embed/captioned/`;if(HXplatform==='facebook')return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(x.url)+'&show_text=false&width=500';if(HXplatform==='youtube'&&(m=x.url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]+)/)))return'https://www.youtube.com/embed/'+m[1];if(HXplatform==='tiktok'&&(m=x.url.match(/video\/(\d+)/)))return'https://www.tiktok.com/player/v1/'+m[1];if(HXplatform==='telegram')return x.url+'?embed=1';if(HXplatform==='x')return'https://twitframe.com/show?url='+encodeURIComponent(x.url);return x.url}
 function hxOpen(id){const x=HX.find(y=>y.id===id);if(!x?.url)return;if(HXplatform==='snapchat'||!['reel','video','post'].includes(x.type)){window.open(x.url,'_blank','noopener');return}hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.dataset.source=x.url;d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>${HXL[HXplatform]} Embed</b><button onclick="hxClose()">×</button></div><iframe src="${hxEmbed(x)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe><div class="hx-actions"><label for="hxShot">📸 اختر لقطة شاشة واحفظها</label><a href="${esc(x.url)}" target="_blank">فتح الأصلي ↗</a></div><input id="hxShot" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0" onchange="hxShot(event)"><div id="hxStatus" class="hint">خذ لقطة بأزرار الهاتف ثم اخترها</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d)}
-async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById('hxStatus');e.target.value='';if(!f)return;const r=new FileReader();r.onload=async x=>{try{await saveLinkToStorage(x.target.result,document.getElementById('hxEmbed')?.dataset.source||x.target.result);st.textContent='✅ حُفظت في 📌 صور';await renderSavedLinks()}catch{st.textContent='⚠️ تعذّر الحفظ'}};r.readAsDataURL(f)}function hxClose(){document.getElementById('hxEmbed')?.remove()}async function hxSave(id){const x=HX.find(y=>y.id===id);if(!x?.thumb)return;await saveLinkToStorage(x.thumb,x.url||x.thumb);renderSavedLinksIfVisible();document.getElementById('htmlImportStatus').textContent='✅ حُفظت في 📌 صور'}
+async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById('hxStatus');e.target.value='';if(!f)return;const r=new FileReader();r.onload=async x=>{try{await saveLinkToStorage(x.target.result,document.getElementById('hxEmbed')?.dataset.source||x.target.result);st.textContent='✅ حُفظت في 📌 صور';await renderSavedLinks()}catch{st.textContent='⚠️ تعذّر الحفظ'}};r.readAsDataURL(f)}function hxClose(){document.getElementById('hxEmbed')?.remove()}async function hxSave(id){
+  const x=HX.find(y=>y.id===id);if(!x)return;
+  const st=document.getElementById('htmlImportStatus');
+  if(x.type==='image'){
+    const src=x.directUrl||x.thumb||x.url;if(!src)return;
+    await saveLinkToStorage(src,x.url||src);
+    renderSavedLinksIfVisible();
+    if(st)st.textContent='✅ حُفظت في 📌 صور';
+    return;
+  }
+  // فيديو: لازم نجيب البايتات الحقيقية ونحطها بمعرض 📌 فيديو (متل باقي الفيديوهات بالتطبيق)، مش مجرد رابط
+  if(!x.directUrl){
+    if(!x.thumb){if(st)st.textContent='⚠️ ما في رابط فيديو مباشر ولا صورة مصغّرة لهاد العنصر';return}
+    await saveLinkToStorage(x.thumb,x.url||x.thumb);
+    renderSavedLinksIfVisible();
+    if(st)st.textContent='⚠️ ما في رابط فيديو مباشر — انحفظت الصورة المصغّرة بس بمعرض 📌 صور';
+    return;
+  }
+  if(st)st.textContent='⏳ جارٍ تنزيل الفيديو وحفظه بمعرض 📌 فيديو...';
+  try{
+    const res=await fetch(x.directUrl,{mode:'cors'});if(!res.ok)throw 0;
+    const blob=await res.blob();
+    const poster=x.thumb?await(async()=>{
+      try{
+        const r=await fetch(x.thumb,{mode:'cors'});if(!r.ok)return'';
+        const b=await r.blob();
+        return await new Promise(resolve=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>resolve('');fr.readAsDataURL(b)});
+      }catch{return''}
+    })():'';
+    await idbAddVideo(blob,poster);
+    if(document.getElementById('savedVideosArea')?.classList.contains('show'))renderSavedVideos();
+    if(st)st.textContent='✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
+  }catch(err){
+    if(st)st.textContent='⚠️ تعذّر تنزيل الفيديو للحفظ (الرابط ممكن يكون منتهي الصلاحية) — جربي ▶ لفتح المنشور بدل هيك';
+  }
+}
 
 /* تنزيل مباشر لجهاز المستخدم (وليس حفظ داخل تطبيق RADAR فقط). يجرّب fetch->blob؛ إذا فشل (رابط منتهي/CORS) بدل ما نفتح الرابط الخام (رح يعطي 403 غالبًا مع فيديو تويتر) نفتح رابط المنشور الأصلي إذا متوفر. */
 async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
