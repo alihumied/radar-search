@@ -231,6 +231,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div class="toggles">
       <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📄</span><span>رفع ملف HTML</span></div>
       <div class="toggle" onclick="document.getElementById('jsonImportInput').click()" style="cursor:pointer;border-color:#45d9ff88"><span>{ }</span><span>رفع ملف JSON</span></div>
+      <div class="toggle" onclick="toggleSavedFilesView()" style="cursor:pointer;border-color:#d4af5a88"><span style="font-size:16px;">📁</span><span>الملفات المحفوظة</span></div>
+    </div>
+    <div class="results" id="savedFilesArea">
+      <div id="savedFilesList" style="margin-top:12px;"></div>
     </div>
     <div class="hint" id="htmlImportStatus" style="margin-top:8px;"></div>
     <div class="results" id="htmlImportResultsArea">
@@ -1324,7 +1328,7 @@ async function runImageSearch(){
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
 const SAVED_LINKS_KEY = 'radar_saved_images'; // legacy localStorage key (للترحيل فقط)
-const IDB_NAME = 'radar_db', IDB_VERSION = 6, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light';
+const IDB_NAME = 'radar_db', IDB_VERSION = 7, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light', IDB_FILE_STORE = 'saved_source_files';
 let _idbPromise = null;
 function idbOpen(){
   if(_idbPromise) return _idbPromise;
@@ -1341,12 +1345,45 @@ function idbOpen(){
         const vstore = db.createObjectStore(IDB_VIDEO_STORE, {keyPath:'id', autoIncrement:true});
         vstore.createIndex('ts', 'ts', {unique:false});
       }
+      if(!db.objectStoreNames.contains(IDB_FILE_STORE)){
+        const fstore = db.createObjectStore(IDB_FILE_STORE, {keyPath:'id', autoIncrement:true});
+        fstore.createIndex('ts', 'ts', {unique:false});
+      }
     };
     req.onsuccess = e => resolve(e.target.result);
     req.onblocked = () => reject(new Error('قاعدة البيانات مقفولة بتبويب ثاني مفتوح للتطبيق — سكّري باقي التبويبات وجربي من جديد'));
     req.onerror = e => reject(e.target.error);
   });
   return _idbPromise;
+}
+async function idbAddSourceFile(name, kind, content, platform){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(IDB_FILE_STORE, 'readwrite');
+    tx.objectStore(IDB_FILE_STORE).add({name, kind, content, platform: platform||'', ts: Date.now()});
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGetAllSourceFiles(){
+  try{
+    const db = await idbOpen();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_FILE_STORE, 'readonly');
+      const req = tx.objectStore(IDB_FILE_STORE).getAll();
+      req.onsuccess = () => resolve(req.result.sort((a,b)=>(b.ts||0)-(a.ts||0)));
+      req.onerror = () => reject(req.error);
+    });
+  }catch(e){ return []; }
+}
+async function idbDeleteSourceFile(id){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(IDB_FILE_STORE, 'readwrite');
+    tx.objectStore(IDB_FILE_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 async function idbGetAllVideos(){
   try{
@@ -1463,6 +1500,7 @@ async function removeSavedLink(id){
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
 
 /* ===================== استيراد صفحة HTML محفوظة — تحليل كامل محليًا بالمتصفح ===================== */
+function applyHtmlImportText(rawText,filename){const status=document.getElementById('htmlImportStatus');document.getElementById('htmlImportResultsList').innerHTML='';try{const doc=new DOMParser().parseFromString(rawText,'text/html');const items=extractFacebookContentFromDoc(doc,rawText);renderHtmlImportResults(items);if(status)status.textContent=items.length?`✅ لقينا ${items.length} عنصر`:'⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';}catch(err){if(status)status.textContent=`⚠️ تعذّر تحليل الملف: ${err?.message||err}`}}
 function handleHtmlImport(event){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
@@ -1472,15 +1510,9 @@ function handleHtmlImport(event){
   document.getElementById('htmlImportResultsList').innerHTML = '';
   const reader = new FileReader();
   reader.onload = (e) => {
-    try{
-      const rawText = e.target.result;
-      const doc = new DOMParser().parseFromString(rawText, 'text/html');
-      const items = extractFacebookContentFromDoc(doc, rawText);
-      renderHtmlImportResults(items);
-      status.textContent = items.length ? `✅ لقينا ${items.length} عنصر` : '⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';
-    }catch(err){
-      status.textContent = `⚠️ تعذّر تحليل الملف: ${err?.message || err}`;
-    }
+    const rawText = e.target.result;
+    applyHtmlImportText(rawText, file.name);
+    idbAddSourceFile(file.name,'html',rawText,'facebook').catch(()=>{});
   };
   reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
   reader.readAsText(file);
@@ -2571,7 +2603,54 @@ async function hxDownloadAll(){
 }
 
 
-function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const d=JSON.parse(x.target.result);const platform=d.platform||'x';const label=HXL[platform]||platform;HX=[];(d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));(d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));HXplatform=platform;HXtype='image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));document.getElementById('hxPlatform').textContent=`المنصة: ${label} · JSON رسمي · ${f.name}`;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}`;}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
+function applyOfficialJsonData(d,filename){const st=document.getElementById('htmlImportStatus');const platform=d.platform||'x';const label=HXL[platform]||platform;HX=[];(d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));(d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));HXplatform=platform;HXtype='image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));document.getElementById('hxPlatform').textContent=`المنصة: ${label} · JSON رسمي · ${filename}`;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}`}
+async function toggleSavedFilesView(){
+  const area=document.getElementById('savedFilesArea');
+  const showing=area.classList.contains('show');
+  ['savedLinksArea','savedVideosArea','savedUrlsArea','savedFilesArea'].forEach(id=>{
+    const a=document.getElementById(id); if(a) a.classList.remove('show');
+  });
+  if(showing)return;
+  area.classList.add('show');
+  await renderSavedFiles();
+}
+async function renderSavedFiles(){
+  const l=document.getElementById('savedFilesList');
+  const items=await idbGetAllSourceFiles();
+  if(!items.length){l.innerHTML='<div class="hint">ما في ملفات محفوظة بعد — أي HTML أو JSON بترفعيه بينحفظ هون تلقائيًا.</div>';return}
+  l.innerHTML=items.map(x=>{
+    const kb=Math.round((x.content?.length||0)/1024);
+    const d=new Date(x.ts).toLocaleString('ar');
+    return `<div class="result-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="overflow:hidden">
+        <div style="font-size:13px">${x.kind==='json'?'{ } JSON':'📄 HTML'} · ${esc(x.name)}</div>
+        <div style="font-size:11px;color:#8fa0bb">${esc(x.platform||'')} · ${kb} كيلوبايت · ${d}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex:none">
+        <button class="toggle" style="padding:6px 10px" onclick="reopenSavedFile(${x.id})">فتح</button>
+        <button class="toggle" style="padding:6px 10px;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function reopenSavedFile(id){
+  const items=await idbGetAllSourceFiles();
+  const x=items.find(y=>y.id===id);
+  if(!x)return;
+  if(x.kind==='json'){
+    try{ applyOfficialJsonData(JSON.parse(x.content), x.name); }
+    catch(err){ alert('⚠️ الملف تالف: '+err.message); return; }
+  }else{
+    applyHtmlImportText(x.content, x.name);
+  }
+  document.getElementById('htmlImportResultsArea')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function deleteSavedFile(id){
+  if(!confirm('حذف هالملف من المحفوظات؟'))return;
+  await idbDeleteSourceFile(id);
+  renderSavedFiles();
+}
+function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const text=x.target.result;const d=JSON.parse(text);applyOfficialJsonData(d,f.name);idbAddSourceFile(f.name,'json',text,d.platform||'x').catch(()=>{});}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function loadXWidget(cb){if(window.twttr?.widgets)return cb();let sc=document.getElementById('xWidgets');if(!sc){sc=document.createElement('script');sc.id='xWidgets';sc.src='https://platform.x.com/widgets.js';sc.async=true;document.head.appendChild(sc)}let n=0;const t=setInterval(()=>{if(window.twttr?.widgets){clearInterval(t);cb()}else if(++n>40)clearInterval(t)},250)}
 const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);const isXPost=x?.postUrl&&/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i.test(x.postUrl);if(!isXPost)return officialOldOpen(id);hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>X Embed الرسمي</b><button onclick="hxClose()">×</button></div><div id="xMount" style="min-height:340px;overflow:auto"><div class="hint">⏳ تحميل المنشور الرسمي...</div></div><div class="hx-actions"><a href="${esc(x.postUrl)}" target="_blank">فتح المنشور ↗</a></div><div id="xMsg" class="hint">يعتمد على رابط المنشور الرسمي</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);loadXWidget(()=>{const m=x.postUrl.match(/\/status\/(\d+)/),mount=d.querySelector('#xMount'),msg=d.querySelector('#xMsg');if(!m)return msg.textContent='⚠️ رابط المنشور ناقص';mount.innerHTML='';twttr.widgets.createTweet(m[1],mount,{theme:document.body.classList.contains('light-theme')?'light':'dark',align:'center',conversation:'none',dnt:true}).then(el=>msg.textContent=el?'✅ تم تحميل X Embed الرسمي':'⚠️ لم يسمح X بعرض المنشور').catch(er=>msg.textContent='⚠️ '+er.message)})};
 </script>
