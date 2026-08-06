@@ -2627,8 +2627,8 @@ async function renderSavedFiles(){
         <div style="font-size:11px;color:#8fa0bb">${esc(x.platform||'')} · ${kb} كيلوبايت · ${d}</div>
       </div>
       <div style="display:flex;gap:6px;flex:none">
-        <button class="toggle" style="padding:6px 10px" onclick="reopenSavedFile(${x.id})">فتح</button>
-        <button class="toggle" style="padding:6px 10px;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</button>
+        <div class="toggle" style="padding:6px 10px;cursor:pointer" onclick="reopenSavedFile(${x.id})">فتح</div>
+        <div class="toggle" style="padding:6px 10px;cursor:pointer;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
       </div>
     </div>`;
   }).join('');
