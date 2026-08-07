@@ -1500,7 +1500,7 @@ async function removeSavedLink(id){
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
 
 /* ===================== استيراد صفحة HTML محفوظة — تحليل كامل محليًا بالمتصفح ===================== */
-function applyHtmlImportText(rawText,filename){const status=document.getElementById('htmlImportStatus');document.getElementById('htmlImportResultsList').innerHTML='';try{const doc=new DOMParser().parseFromString(rawText,'text/html');const items=extractFacebookContentFromDoc(doc,rawText);renderHtmlImportResults(items);if(status)status.textContent=items.length?`✅ لقينا ${items.length} عنصر`:'⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';}catch(err){if(status)status.textContent=`⚠️ تعذّر تحليل الملف: ${err?.message||err}`}}
+function applyHtmlImportText(rawText,filename){const status=document.getElementById('htmlImportStatus');document.getElementById('htmlImportResultsList').innerHTML='';try{const doc=new DOMParser().parseFromString(rawText,'text/html');const items=extractFacebookContentFromDoc(doc,rawText);renderHtmlImportResults(items);if(status)status.textContent=items.length?`✅ لقينا ${items.length} عنصر`:'⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';return items;}catch(err){if(status)status.textContent=`⚠️ تعذّر تحليل الملف: ${err?.message||err}`;return null;}}
 function handleHtmlImport(event){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
@@ -1511,11 +1511,21 @@ function handleHtmlImport(event){
   const reader = new FileReader();
   reader.onload = (e) => {
     const rawText = e.target.result;
-    applyHtmlImportText(rawText, file.name);
-    idbAddSourceFile(file.name,'html',rawText,'facebook').catch(err=>{
-      console.error('radar: failed to save html source file', err);
-      if(status) status.textContent += ` ⚠️ (تعذّر حفظ نسخة الملف بـ"الملفات المحفوظة": ${err?.message||err})`;
-    });
+    const items = applyHtmlImportText(rawText, file.name);
+    if(!items) return; // فشل التحليل أصلاً، ما في داعي نحاول نحفظ شي
+    // نخزّن النتائج المستخرَجة الخفيفة بس (روابط + صور مصغّرة)، مو نص HTML الخام الكامل —
+    // ملفات "حفظ صفحة كاملة" لفيد فيه مئات الريلز ممكن توصل لميغابايتات كتير، وتخزينها بالكامل كنص واحد
+    // كان يفشل بصمت (على الأغلب Quota) بدون أي رسالة واضحة.
+    try{
+      const light = JSON.stringify(items);
+      idbAddSourceFile(file.name,'html',light,'facebook').catch(err=>{
+        console.error('radar: failed to save html source file', err);
+        alert('⚠️ تعذّر حفظ نسخة الملف بـ"الملفات المحفوظة":\n'+(err?.message||err));
+      });
+    }catch(err){
+      console.error('radar: failed to stringify html items', err);
+      alert('⚠️ تعذّر تجهيز الملف للحفظ: '+(err?.message||err));
+    }
   };
   reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
   reader.readAsText(file);
@@ -2644,7 +2654,13 @@ async function reopenSavedFile(id){
     try{ applyOfficialJsonData(JSON.parse(x.content), x.name); }
     catch(err){ alert('⚠️ الملف تالف: '+err.message); return; }
   }else{
-    applyHtmlImportText(x.content, x.name);
+    try{
+      const parsed=JSON.parse(x.content);
+      document.getElementById('htmlImportResultsList').innerHTML='';
+      renderHtmlImportResults(parsed);
+      const st=document.getElementById('htmlImportStatus');
+      if(st)st.textContent=`✅ فُتح من المحفوظات · ${parsed.length} عنصر`;
+    }catch(err){ alert('⚠️ الملف تالف: '+err.message); return; }
   }
   document.getElementById('htmlImportResultsArea')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
