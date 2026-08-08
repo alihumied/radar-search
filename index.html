@@ -1518,11 +1518,13 @@ function handleHtmlImport(event){
     // كان يفشل بصمت (على الأغلب Quota) بدون أي رسالة واضحة.
     try{
       const light = JSON.stringify(items);
-      idbAddSourceFile(file.name,'html',light,'facebook').then(()=>{
+      idbAddSourceFile(file.name,'html',light,'facebook').then(async()=>{
         refreshSavedFilesIfVisible();
+        const all=await idbGetAllSourceFiles();
+        alert('✅ تم الحفظ. عدد الملفات المحفوظة الكلي هلأ: '+all.length);
       }).catch(err=>{
         console.error('radar: failed to save html source file', err);
-        alert('⚠️ تعذّر حفظ نسخة الملف بـ"الملفات المحفوظة":\n'+(err?.message||err));
+        alert('⚠️ تعذّر حفظ نسخة الملف بـ"الملفات المحفوظة":\n'+(err?.message||err)+'\n\nnoStack:'+(err?.name||''));
       });
     }catch(err){
       console.error('radar: failed to stringify html items', err);
