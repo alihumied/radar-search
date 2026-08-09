@@ -1334,6 +1334,14 @@ function idbOpen(){
   if(_idbPromise) return _idbPromise;
   _idbPromise = new Promise((resolve, reject)=>{
     if(!window.indexedDB){ reject(new Error('IndexedDB غير مدعوم بهذا المتصفح')); return; }
+    let settled = false;
+    const timeoutId = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      _idbPromise = null; // نسمح بمحاولة جديدة لاحقًا بدل ما نضل عالقين على هاد الـ promise المعلّق للأبد
+      reject(new Error('قاعدة البيانات ما استجابت خلال 5 ثواني — على الأغلب في تبويب ثاني مفتوح لصفحة RADAR بمكان تاني. سكّري كل التبويبات التانية للتطبيق (خليكي بتبويب واحد بس) وجربي من جديد.'));
+    }, 5000);
+    const finish = (fn, val) => { if(settled) return; settled = true; clearTimeout(timeoutId); fn(val); };
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
@@ -1350,9 +1358,9 @@ function idbOpen(){
         fstore.createIndex('ts', 'ts', {unique:false});
       }
     };
-    req.onsuccess = e => resolve(e.target.result);
-    req.onblocked = () => reject(new Error('قاعدة البيانات مقفولة بتبويب ثاني مفتوح للتطبيق — سكّري باقي التبويبات وجربي من جديد'));
-    req.onerror = e => reject(e.target.error);
+    req.onsuccess = e => finish(resolve, e.target.result);
+    req.onblocked = () => finish(reject, new Error('قاعدة البيانات مقفولة بتبويب ثاني مفتوح للتطبيق — سكّري باقي التبويبات وجربي من جديد'));
+    req.onerror = e => finish(reject, e.target.error);
   });
   return _idbPromise;
 }
