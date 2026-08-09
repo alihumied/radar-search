@@ -1507,132 +1507,6 @@ async function removeSavedLink(id){
 }
 function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
 
-/* ===================== استيراد صفحة HTML محفوظة — تحليل كامل محليًا بالمتصفح ===================== */
-function applyHtmlImportText(rawText,filename){const status=document.getElementById('htmlImportStatus');document.getElementById('htmlImportResultsList').innerHTML='';try{const doc=new DOMParser().parseFromString(rawText,'text/html');const items=extractFacebookContentFromDoc(doc,rawText);renderHtmlImportResults(items);if(status)status.textContent=items.length?`✅ لقينا ${items.length} عنصر`:'⚠️ ما لقينا أي محتوى فيسبوك معروف بهالملف';return items;}catch(err){if(status)status.textContent=`⚠️ تعذّر تحليل الملف: ${err?.message||err}`;return null;}}
-function handleHtmlImport(event){
-  const file = event.target.files && event.target.files[0];
-  event.target.value = '';
-  if(!file) return;
-  const status = document.getElementById('htmlImportStatus');
-  status.textContent = '⏳ جارٍ تحليل الملف...';
-  document.getElementById('htmlImportResultsList').innerHTML = '';
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const rawText = e.target.result;
-    const items = applyHtmlImportText(rawText, file.name);
-    if(!items) return; // فشل التحليل أصلاً، ما في داعي نحاول نحفظ شي
-    // نخزّن النتائج المستخرَجة الخفيفة بس (روابط + صور مصغّرة)، مو نص HTML الخام الكامل —
-    // ملفات "حفظ صفحة كاملة" لفيد فيه مئات الريلز ممكن توصل لميغابايتات كتير، وتخزينها بالكامل كنص واحد
-    // كان يفشل بصمت (على الأغلب Quota) بدون أي رسالة واضحة.
-    // ملاحظة: alert() مش موثوق هون (يبدو إنه بينحجب من نداءات غير متزامنة بمتصفح الجوال) —
-    // لهيك التحديثات كلها هلأ بتنكتب مباشرة بنص الحالة اللي أثبت إنه بيظهر دايمًا.
-    if(status) status.textContent += ' · ⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...';
-    try{
-      const light = JSON.stringify(items);
-      idbAddSourceFile(file.name,'html',light,'facebook').then(async()=>{
-        refreshSavedFilesIfVisible();
-        const all=await idbGetAllSourceFiles();
-        if(status) status.textContent = status.textContent.replace('⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...', `✅ انحفظت نسخة الملف (المجموع الكلي هلأ: ${all.length})`);
-      }).catch(err=>{
-        console.error('radar: failed to save html source file', err);
-        if(status) status.textContent = status.textContent.replace('⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...', `⚠️ تعذّر حفظ نسخة الملف: ${err?.message||err}`);
-      });
-    }catch(err){
-      console.error('radar: failed to stringify html items', err);
-      if(status) status.textContent += ` ⚠️ تعذّر تجهيز الملف للحفظ: ${err?.message||err}`;
-    }
-  };
-  reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
-  reader.readAsText(file);
-}
-// يستخرج معرّف مستقر (رقمي غالبًا) من الرابط لتفادي عدّ نفس المحتوى مرتين بروابط مختلفة الشكل
-function extractStableId(url){
-  const m = url.match(/\/(reel|reels|videos?|photos?|posts?|stories)\/(?:.*?)?(\d{6,})/i) || url.match(/(\d{10,})/);
-  return m ? m[m.length-1] : url.split(/[?#]/)[0];
-}
-// يشتغل بشكل عام مع أي نوع محتوى فيسبوك (منشورات/ريلز/فيديوهات/صور/ستوري) — بدون تخصيص لنوع معيّن
-// يفحص وسوم <a> أولاً، وبعدها يفحص نص الملف الخام كامل لالتقاط أي روابط داخل سكربتات/بيانات JSON ما كانت لتظهر بوسوم عادية
-function extractFacebookContentFromDoc(doc, rawText){
-  const CONTENT_RE = /\/(reels?|videos?|posts?|photos?|stories|story\.php|watch)\b/i;
-  const typeOf = (href) => /reels?/i.test(href) ? '🎬 ريلز' : /videos?|watch/i.test(href) ? '📹 فيديو' : /photos?/i.test(href) ? '🖼️ صورة' : /stories|story\.php/i.test(href) ? '⏱️ ستوري' : '📝 منشور';
-  const byId = new Map();
-
-  // 1) وسوم <a> — نقدر نلاقي صورة مصغّرة مرتبطة فعليًا
-  doc.querySelectorAll('a[href*="facebook.com"], a[href^="/"]').forEach(a=>{
-    let href = a.getAttribute('href') || '';
-    if(!href || !CONTENT_RE.test(href)) return;
-    href = href.split('&__cft__')[0].split('?__cft__')[0];
-    const fullUrl = href.startsWith('http') ? href : `https://www.facebook.com${href}`;
-    const id = extractStableId(fullUrl);
-    if(byId.has(id) && byId.get(id).thumb) return; // عندنا نسخة أفضل (فيها صورة) خلص
-    let img = a.querySelector('img');
-    if(!img && a.nextElementSibling && a.nextElementSibling.tagName === 'IMG') img = a.nextElementSibling;
-    if(!img){ const parent = a.closest('div'); if(parent) img = parent.querySelector('img'); }
-    byId.set(id, { url: fullUrl, thumb: img ? (img.getAttribute('src')||'') : '', type: typeOf(fullUrl) });
-  });
-
-  // 2) فحص النص الخام كامل (يلتقط روابط داخل سكربتات/JSON ما كانت لتظهر بوسوم <a> عادية)
-  if(rawText){
-    const re = /https:\/\/(?:www\.|m\.)?facebook\.com\/[^\s"'<>\\]*?\/(?:reels?|videos?|photos?|posts?|stories|story\.php|watch)[^\s"'<>\\]*/gi;
-    let m;
-    while((m = re.exec(rawText))){
-      const fullUrl = m[0].replace(/\\u0026/g, '&').replace(/&amp;/g, '&');
-      const id = extractStableId(fullUrl);
-      if(byId.has(id)) continue; // خلّي أولوية للنسخة اللي من وسم <a> (فيها صورة غالبًا)
-      byId.set(id, { url: fullUrl, thumb: '', type: typeOf(fullUrl) });
-    }
-  }
-
-  return [...byId.values()].filter(x => !/\/reel\/?\?s=tab/i.test(x.url) && !/\/watch\/?$/i.test(x.url));
-}
-function renderHtmlImportResults(items){
-  window._htmlImportItems = items;
-  const l = document.getElementById('htmlImportResultsList');
-  if(!items.length){ l.innerHTML = ''; return; }
-  l.innerHTML = items.map((x, i) => `
-    <div class="saved-image-tile" title="${esc(x.type)}" data-idx="${i}">
-      <img class="saved-image-thumb" src="${x.thumb ? esc(x.thumb) : ''}" style="${x.thumb ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:11px;color:#9fb3c8;'}" decoding="async" loading="lazy" onclick="zoomHtmlImportItem(${i})" onerror="this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.textContent='🔗'">
-      <div class="saved-corner-btn" style="top:-7px; right:auto; left:-7px; width:auto; height:auto; padding:2px 6px; border-radius:6px; font-size:9px; background:#000000cc; opacity:1; visibility:visible; pointer-events:none;">${x.type}</div>
-      <button class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#1877F2cc; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openHtmlImportLink(${i})" title="فتح بالمتصفح">↗</button>
-      <button class="saved-corner-btn saved-image-open" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();saveHtmlImportItemToGallery(${i})" title="حفظ بمعرض صور">💾</button>
-      <button class="saved-corner-btn saved-image-delete" style="opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();deleteHtmlImportItem(${i})" title="حذف من هالقائمة">×</button>
-    </div>`).join('');
-  document.getElementById('htmlImportResultsArea').classList.add('show');
-}
-function zoomHtmlImportItem(i){
-  const it = (window._htmlImportItems||[])[i];
-  if(!it) return;
-  if(it.thumb){ openInlineSavedFocus(it.thumb); }
-  else { openHtmlImportLink(i); }
-}
-// نستخدم window.open المُشغَّل من JS بدل رابط <a> عادي — أكتر ضمانًا لفتحه بالمتصفح
-// بدل ما يحاول أندرويد يفتحه بتطبيق فيسبوك المثبّت (سلوك App Links يتحكم فيه النظام أساسًا)
-function openHtmlImportLink(i){
-  const it = (window._htmlImportItems||[])[i];
-  if(!it) return;
-  window.open(it.url, '_blank', 'noopener');
-}
-async function saveHtmlImportItemToGallery(i){
-  const it = (window._htmlImportItems||[])[i];
-  if(!it || !it.thumb){ alert('هالعنصر ما فيه صورة مصغّرة لحفظها'); return; }
-  await saveLinkToStorage(it.thumb, it.url);
-  if(navigator.vibrate) navigator.vibrate(30);
-  renderSavedLinksIfVisible();
-  const status = document.getElementById('htmlImportStatus');
-  const old = status.textContent;
-  status.textContent = '✅ انحفظت الصورة بمعرض "📌 صور"';
-  setTimeout(()=>{ if(status.textContent.includes('انحفظت')) status.textContent = old; }, 1800);
-}
-function deleteHtmlImportItem(i){
-  const items = window._htmlImportItems || [];
-  items.splice(i, 1);
-  renderHtmlImportResults(items);
-}
-function handleHtmlImportItemClick(url){
-  document.getElementById('imageUrlInput').value = url;
-  document.getElementById('imageUrlInput').scrollIntoView({behavior:'smooth', block:'start'});
-  setTimeout(()=> runImageSearch(), 250);
-}
 
 /* ===================== فيديو — أسلوب خفيف ومعزول: يُبنى فقط وقت الاستخدام ويُحذف بالكامل بعده ===================== */
 let _currentVideoBlob = null;
@@ -2548,6 +2422,20 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
  msg+=` (الملف فيه ${rawSet.size} رابط صورة محفوظ فعليًا)`;
  if(rawSet.size>0 && rawSet.size<40){msg+=' ⚠️ عدد قليل — الأرجح إنك ما نزّلت/مررت على كل الصفحة قبل الحفظ. مرّر (scroll) ببطء لآخر الصفحة/البروفايل لين تتحمّل كل الصور، وبعدين احفظ الصفحة من جديد.'}
  st.textContent=msg;
+ st.textContent+=' · ⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...';
+ try{
+   idbAddSourceFile(f.name,'html',JSON.stringify(HX),HXplatform).then(async()=>{
+     refreshSavedFilesIfVisible();
+     const all=await idbGetAllSourceFiles();
+     st.textContent=msg+` · ✅ انحفظت نسخة الملف (المجموع الكلي: ${all.length})`;
+   }).catch(err=>{
+     console.error('radar: failed to save html source file',err);
+     st.textContent=msg+` · ⚠️ تعذّر حفظ نسخة الملف: ${err?.message||err}`;
+   });
+ }catch(err){
+   console.error('radar: failed to stringify HX for saving',err);
+   st.textContent=msg+` · ⚠️ تعذّر تجهيز الملف للحفظ: ${err?.message||err}`;
+ }
  }catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function hxCounts(){for(const k of['Image','Reel','Comment','Story','Video'])document.getElementById('hx'+k).textContent=HX.filter(x=>x.type===k.toLowerCase()).length}function hxPick(t,b){HXtype=t;HXpage=1;document.querySelectorAll('.hx-type').forEach(x=>x.classList.remove('active'));b.classList.add('active');hxRender()}function hxReset(){HXpage=1;hxRender()}function hxClear(){['hxText','hxName','hxDate'].forEach(id=>document.getElementById(id).value='');hxReset()}
 function hxFiltered(){const q=hxn(document.getElementById('hxText')?.value).toLowerCase(),n=hxn(document.getElementById('hxName')?.value).toLowerCase(),d=document.getElementById('hxDate')?.value||'';return HX.filter(x=>x.type===HXtype&&(!q||(x.text+' '+x.author).toLowerCase().includes(q))&&(!n||x.author.toLowerCase().includes(n))&&(!d||String(x.date).includes(d)))}
@@ -2674,11 +2562,15 @@ async function reopenSavedFile(id){
     catch(err){ alert('⚠️ الملف تالف: '+err.message); return; }
   }else{
     try{
-      const parsed=JSON.parse(x.content);
-      document.getElementById('htmlImportResultsList').innerHTML='';
-      renderHtmlImportResults(parsed);
+      HX=JSON.parse(x.content);
+      HXplatform=x.platform||'facebook';
+      HXtype='image';HXpage=1;
+      document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));
+      document.getElementById('hxPlatform').textContent='المنصة: '+(HXL[HXplatform]||HXplatform)+' · '+x.name;
+      hxCounts();hxRender();
+      document.getElementById('htmlImportResultsArea').classList.add('show');
       const st=document.getElementById('htmlImportStatus');
-      if(st)st.textContent=`✅ فُتح من المحفوظات · ${parsed.length} عنصر`;
+      if(st)st.textContent=`✅ فُتح من المحفوظات · ${HX.length} عنصر`;
     }catch(err){ alert('⚠️ الملف تالف: '+err.message); return; }
   }
   document.getElementById('htmlImportResultsArea')?.scrollIntoView({behavior:'smooth',block:'start'});
