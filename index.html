@@ -1524,19 +1524,22 @@ function handleHtmlImport(event){
     // نخزّن النتائج المستخرَجة الخفيفة بس (روابط + صور مصغّرة)، مو نص HTML الخام الكامل —
     // ملفات "حفظ صفحة كاملة" لفيد فيه مئات الريلز ممكن توصل لميغابايتات كتير، وتخزينها بالكامل كنص واحد
     // كان يفشل بصمت (على الأغلب Quota) بدون أي رسالة واضحة.
+    // ملاحظة: alert() مش موثوق هون (يبدو إنه بينحجب من نداءات غير متزامنة بمتصفح الجوال) —
+    // لهيك التحديثات كلها هلأ بتنكتب مباشرة بنص الحالة اللي أثبت إنه بيظهر دايمًا.
+    if(status) status.textContent += ' · ⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...';
     try{
       const light = JSON.stringify(items);
       idbAddSourceFile(file.name,'html',light,'facebook').then(async()=>{
         refreshSavedFilesIfVisible();
         const all=await idbGetAllSourceFiles();
-        alert('✅ تم الحفظ. عدد الملفات المحفوظة الكلي هلأ: '+all.length);
+        if(status) status.textContent = status.textContent.replace('⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...', `✅ انحفظت نسخة الملف (المجموع الكلي هلأ: ${all.length})`);
       }).catch(err=>{
         console.error('radar: failed to save html source file', err);
-        alert('⚠️ تعذّر حفظ نسخة الملف بـ"الملفات المحفوظة":\n'+(err?.message||err)+'\n\nnoStack:'+(err?.name||''));
+        if(status) status.textContent = status.textContent.replace('⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...', `⚠️ تعذّر حفظ نسخة الملف: ${err?.message||err}`);
       });
     }catch(err){
       console.error('radar: failed to stringify html items', err);
-      alert('⚠️ تعذّر تجهيز الملف للحفظ: '+(err?.message||err));
+      if(status) status.textContent += ` ⚠️ تعذّر تجهيز الملف للحفظ: ${err?.message||err}`;
     }
   };
   reader.onerror = () => { status.textContent = '⚠️ تعذّر قراءة الملف'; };
