@@ -240,6 +240,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div class="results" id="htmlImportResultsArea">
       <div class="hx-toolbar">
         <div id="hxPlatform" class="hx-platform">لم يُرفع ملف بعد</div>
+        <div class="toggle" style="cursor:pointer;padding:6px 12px;color:#ff8a8a;border-color:#ff8a8a55" onclick="hxCloseImport()">✕ إغلاق المعاينة</div>
         <div class="hx-types">
           <button class="hx-type active" data-type="image" onclick="hxPick('image',this)">🖼️ صور <b id="hxImage">0</b></button>
           <button class="hx-type" data-type="reel" onclick="hxPick('reel',this)">🎬 ريلز <b id="hxReel">0</b></button>
@@ -2441,6 +2442,14 @@ function hxCounts(){for(const k of['Image','Reel','Comment','Story','Video'])doc
 function hxFiltered(){const q=hxn(document.getElementById('hxText')?.value).toLowerCase(),n=hxn(document.getElementById('hxName')?.value).toLowerCase(),d=document.getElementById('hxDate')?.value||'';return HX.filter(x=>x.type===HXtype&&(!q||(x.text+' '+x.author).toLowerCase().includes(q))&&(!n||x.author.toLowerCase().includes(n))&&(!d||String(x.date).includes(d)))}
 function hxRender(){const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');document.getElementById('hxShown').textContent=`المعروض: ${shown.length} من ${all.length}`;more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${esc(x.text)}</div></div>${x.url?`<a href="${esc(x.url)}" target="_blank">↗</a>`:''}</div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
 function hxMore(){HXpage++;hxRender()}
+function hxCloseImport(){
+  HX=[];HXtype='image';HXpage=1;
+  document.getElementById('htmlImportResultsArea').classList.remove('show');
+  document.getElementById('htmlImportResultsList').innerHTML='';
+  document.getElementById('hxPlatform').textContent='لم يُرفع ملف بعد';
+  const st=document.getElementById('htmlImportStatus');
+  if(st)st.textContent='';
+}
 // First tap shows actions. Second tap enlarges poster for images, reels and videos. Embed opens only from ▶.
 function hxSelect(e,img,id){e.stopPropagation();const t=img.closest('.saved-image-tile'),on=t.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>{if(x!==t)x.classList.remove('selected')});if(on){const x=HX.find(y=>y.id===id);if(x?.thumb)openInlineSavedFocus(x.thumb);else hxOpen(id)}else t.classList.add('selected')}
 function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram\.com\/(p|reel|tv)\/([\w.-]+)/)))return`https://www.instagram.com/${m[1]}/${m[2]}/embed/captioned/`;if(HXplatform==='facebook')return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(x.url)+'&show_text=false&width=500';if(HXplatform==='youtube'&&(m=x.url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]+)/)))return'https://www.youtube.com/embed/'+m[1];if(HXplatform==='tiktok'&&(m=x.url.match(/video\/(\d+)/)))return'https://www.tiktok.com/player/v1/'+m[1];if(HXplatform==='telegram')return x.url+'?embed=1';if(HXplatform==='x')return'https://twitframe.com/show?url='+encodeURIComponent(x.url);return x.url}
@@ -2538,18 +2547,35 @@ async function renderSavedFiles(){
   const l=document.getElementById('savedFilesList');
   const items=await idbGetAllSourceFiles();
   if(!items.length){l.innerHTML='<div class="hint">ما في ملفات محفوظة بعد — أي HTML أو JSON بترفعيه بينحفظ هون تلقائيًا.</div>';return}
-  l.innerHTML=items.map(x=>{
-    const kb=Math.round((x.content?.length||0)/1024);
-    const d=new Date(x.ts).toLocaleString('ar');
-    return `<div class="result-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <div style="overflow:hidden">
-        <div style="font-size:13px">${x.kind==='json'?'{ } JSON':'📄 HTML'} · ${esc(x.name)}</div>
-        <div style="font-size:11px;color:#8fa0bb">${esc(x.platform||'')} · ${kb} كيلوبايت · ${d}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex:none">
-        <div class="toggle" style="padding:6px 10px;cursor:pointer" onclick="reopenSavedFile(${x.id})">فتح</div>
-        <div class="toggle" style="padding:6px 10px;cursor:pointer;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
-      </div>
+  const ICON={facebook:'📘',instagram:'📸',tiktok:'🎵',snapchat:'👻',x:'🐦',telegram:'✈️',youtube:'▶️',messenger:'💬'};
+  const groups=new Map();
+  items.forEach(x=>{
+    const p=x.platform||'—';
+    if(!groups.has(p))groups.set(p,[]);
+    groups.get(p).push(x);
+  });
+  // رتّبي المجموعات حسب أحدث ملف بكل مجموعة (المنصة الأنشط أخيرًا تطلع فوق)
+  const sortedPlatforms=[...groups.keys()].sort((a,b)=>Math.max(...groups.get(b).map(x=>x.ts))-Math.max(...groups.get(a).map(x=>x.ts)));
+  l.innerHTML=sortedPlatforms.map(p=>{
+    const rows=groups.get(p);
+    const label=HXL[p]||p;
+    const cards=rows.map(x=>{
+      const kb=Math.round((x.content?.length||0)/1024);
+      const d=new Date(x.ts).toLocaleString('ar');
+      return `<div class="result-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="overflow:hidden">
+          <div style="font-size:13px">${x.kind==='json'?'{ } JSON':'📄 HTML'} · ${esc(x.name)}</div>
+          <div style="font-size:11px;color:#8fa0bb">${kb} كيلوبايت · ${d}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex:none">
+          <div class="toggle" style="padding:6px 10px;cursor:pointer" onclick="reopenSavedFile(${x.id})">فتح</div>
+          <div class="toggle" style="padding:6px 10px;cursor:pointer;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:14px">
+      <div style="font-size:12px;color:#d4af5a;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #29415f">${ICON[p]||'🔗'} ${esc(label)} <span style="color:#8fa0bb">(${rows.length})</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">${cards}</div>
     </div>`;
   }).join('');
 }
