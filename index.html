@@ -2405,7 +2405,7 @@ function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&
 // ترقية جودة صور X/تويتر لأعلى دقة متاحة (name=orig) — الرابط الأساسي نفسه بيضل شغّال بس بيرجّع أعلى دقة.
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
 function hxImgQuality(url){return String(url||'').replace(/([?&])name=[^&]+/,'$1name=orig')}
-function hxPlatform(doc,raw){const h=String(raw||'').slice(0,500000),loc=(h.match(/Snapshot-Content-Location:\s*(https?:\/\/[^\s]+)/i)||[])[1]||'',can=doc.querySelector('link[rel="canonical"]')?.href||doc.querySelector('meta[property="og:url"]')?.content||'',v=(loc+' '+can+' '+doc.title).toLowerCase();if(/instagram/.test(v))return'instagram';if(/tiktok/.test(v))return'tiktok';if(/telegram|t\.me/.test(v))return'telegram';if(/youtube|youtu\.be/.test(v))return'youtube';if(/twitter| x\.com/.test(v))return'x';if(/snapchat/.test(v))return'snapchat';return'facebook'}
+function hxPlatform(doc,raw){const h=String(raw||'').slice(0,500000),loc=(h.match(/Snapshot-Content-Location:\s*(https?:\/\/[^\s]+)/i)||[])[1]||'',can=doc.querySelector('link[rel="canonical"]')?.href||doc.querySelector('meta[property="og:url"]')?.content||'',v=(loc+' '+can+' '+doc.title).toLowerCase();if(/instagram/.test(v))return'instagram';if(/tiktok/.test(v))return'tiktok';if(/telegram|t\.me/.test(v))return'telegram';if(/youtube|youtu\.be/.test(v))return'youtube';if(/twitter\.com|x\.com\b|\/\s*x\s*$/.test(v))return'x';if(/snapchat/.test(v))return'snapchat';return'facebook'}
 function hxLink(url,p){url=hxn(url);let m;if(p==='facebook'){if(url.startsWith('/'))url='https://www.facebook.com'+url;if(!/(facebook\.com|fb\.watch)/i.test(url))return null;let type=/stories|story\.php/i.test(url)?'story':/\/reels?\//i.test(url)?'reel':/\/videos?\/|watch|fb\.watch/i.test(url)?'video':/photos?|photo\.php/i.test(url)?'image':'post';return{url,type,id:'fb:'+url.split(/[?#]/)[0]}}if(p==='instagram'){if(url.startsWith('/'))url='https://www.instagram.com'+url;if(!(m=url.match(/instagram\.com\/(p|reel|tv|stories)\/([\w.-]+)/i)))return null;let k=m[1].toLowerCase();return{url:`https://www.instagram.com/${k}/${m[2]}/`,type:k==='reel'?'reel':k==='stories'?'story':k==='tv'?'video':'image',id:'ig:'+k+':'+m[2]}}if(p==='tiktok'&&(m=url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i)))return{url:url.split(/[?#]/)[0],type:'video',id:'tt:'+m[1]};if(p==='telegram'&&(m=url.match(/(?:t\.me|telegram\.me)\/([\w_]+)\/(\d+)/i)))return{url:`https://t.me/${m[1]}/${m[2]}`,type:'post',id:'tg:'+m[1]+m[2]};if(p==='youtube'&&(m=url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]{6,})/i)))return{url,type:/shorts\//i.test(url)?'reel':'video',id:'yt:'+m[1]};if(p==='x'&&(m=url.match(/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i)))return{url:`https://x.com/${m[1]}/status/${m[2]}`,type:'post',id:'x:'+m[2]};if(p==='snapchat'){if(m=url.match(/snapchat\.com\/spotlight\/([\w-]+)/i))return{url,type:'reel',id:'sc:sp:'+m[1]};if(m=url.match(/story\.snapchat\.com\/s\/([\w-]+)|snapchat\.com\/s\/([\w-]+)/i))return{url,type:'story',id:'sc:st:'+(m[1]||m[2])};if(m=url.match(/snapchat\.com\/add\/([\w.-]+)/i))return{url,type:'post',id:'sc:add:'+m[1]}}return null}
 function hxKey(src){try{const u=new URL(src);return u.hostname+u.pathname}catch{return src.split('?')[0]}}
 function hxBad(img,src){const z=(src+' '+(img?.getAttribute?.('alt')||'')).toLowerCase(),w=+(img?.getAttribute?.('width')||0),h=+(img?.getAttribute?.('height')||0);return!src||/sprite|emoji|icon|logo|profile picture|avatar/.test(z)||(w&&w<80)||(h&&h<80)}
@@ -2432,7 +2432,26 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
  [...flat.matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)/gi)].forEach((m,i)=>{const src=hxn(m[1]);if(!/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat|pscp\.tv/i.test(src))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const x={id:'mh:'+i+key,type:'image',url:'',thumb:src,text:'',author:'',date:''};pool.push(x);add(x)});
  // Give every reel/video/story a poster. Remove assigned poster from plain image category.
  let pi=0;media.forEach(x=>{if(['reel','video','story'].includes(x.type)&&!x.thumb&&pool.length){while(pi<pool.length&&!map.has(pool[pi].id))pi++;const poster=pool[pi++];if(poster){x.thumb=poster.thumb;map.delete(poster.id)}}add(x)});
- const sel={facebook:'[data-testid*="comment"],[aria-label*="comment" i],[class*="comment" i]',instagram:'ul li',tiktok:'[data-e2e*="comment"],[class*="CommentItem"]',telegram:'.tgme_widget_message',youtube:'ytd-comment-thread-renderer,ytd-comment-view-model',x:'[data-testid="tweet"]',snapchat:'[class*="comment" i]'}[p]||'x-none',st=new Set();doc.querySelectorAll(sel).forEach((el,i)=>{const text=hxn(el.innerText||el.textContent);if(text.length<2||text.length>3000)return;const author=hxn(el.querySelector('a[href],#author-text,[class*="author" i]')?.textContent),date=hxn(el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.getAttribute('datetime')||el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.textContent),k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);add({id:'c:'+i+k.slice(0,30),type:'comment',url:el.querySelector('a[href]')?.href||'',thumb:el.querySelector('img')?.src||'',text,author,date})});return[...map.values()]}
+ const sel={facebook:'[data-testid*="comment"],[aria-label*="comment" i],[class*="comment" i]',instagram:'ul li',tiktok:'[data-e2e*="comment"],[class*="CommentItem"]',telegram:'.tgme_widget_message',youtube:'ytd-comment-thread-renderer,ytd-comment-view-model',x:'[data-testid="tweet"]',snapchat:'[class*="comment" i]'}[p]||'x-none',st=new Set();
+ // فيسبوك بالذات بيستخدم عناصر مش <a href> عادية لاسم الشخص (عناصر تنقّل بجافاسكربت)، فالنص كله بيطلع مسطّح ومدموج
+ // (الاسم + الوقت + كلمات الواجهة Like/Reply/Author + النص الفعلي) بدون فواصل واضحة. هاي الدالة بتفكّكه.
+ function hxSplitComment(raw){
+   let t=hxn(raw),author='',date='';
+   const m=t.match(/^(.*?)(?:\s*Verified account)?\s*[·•]?\s*(\d+\s*[hmdwy])\s*[·•]?\s*(?:Author)?\s*(.*)$/is);
+   if(m&&m[1]&&m[1].length<80){author=hxn(m[1]);date=hxn(m[2]);t=hxn(m[3])}
+   t=t.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
+   return{author,date,text:t};
+ }
+ doc.querySelectorAll(sel).forEach((el,i)=>{
+   const rawText=hxn(el.innerText||el.textContent);
+   if(rawText.length<2||rawText.length>3000)return;
+   let author='',date='',text=rawText;
+   if(p==='facebook'||p==='snapchat'){const sp=hxSplitComment(rawText);author=sp.author;date=sp.date;text=sp.text||rawText}
+   else{author=hxn(el.querySelector('a[href],#author-text,[class*="author" i]')?.textContent);date=hxn(el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.getAttribute('datetime')||el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.textContent)}
+   if(!text||text.length<1)return;
+   const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
+   add({id:'c:'+i+k.slice(0,30),type:'comment',url:el.querySelector('a[href]')?.href||'',thumb:el.querySelector('img')?.src||'',text,author,date})
+ });return[...map.values()]}
 window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ تحليل الملف والصور المصغرة...';const r=new FileReader();r.onload=x=>{try{const raw=x.target.result,doc=new DOMParser().parseFromString(raw,'text/html');HXplatform=hxPlatform(doc,raw);HX=hxExtract(doc,raw,HXplatform);HXtype='image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));document.getElementById('hxPlatform').textContent='المنصة: '+HXL[HXplatform]+' · '+f.name;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');
  // Count media resources actually embedded in the saved file (ground-truth ceiling for how many photos we could ever recover from this file).
  const rawMatches=[...String(raw||'').replace(/=\r?\n/g,'').matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)|<img[^>]+src=["']([^"']+)["']/gi)],rawSet=new Set();rawMatches.forEach(m=>{const u=m[1]||m[2];if(u&&/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat/i.test(u))rawSet.add(u.split('?')[0])});
@@ -2458,7 +2477,7 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
  }catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function hxCounts(){for(const k of['Image','Reel','Comment','Story','Video'])document.getElementById('hx'+k).textContent=HX.filter(x=>x.type===k.toLowerCase()).length}function hxPick(t,b){HXtype=t;HXpage=1;document.querySelectorAll('.hx-type').forEach(x=>x.classList.remove('active'));b.classList.add('active');hxRender()}function hxReset(){HXpage=1;hxRender()}function hxClear(){['hxText','hxName','hxDate'].forEach(id=>document.getElementById(id).value='');hxReset()}
 function hxFiltered(){const q=hxn(document.getElementById('hxText')?.value).toLowerCase(),n=hxn(document.getElementById('hxName')?.value).toLowerCase(),d=document.getElementById('hxDate')?.value||'';return HX.filter(x=>x.type===HXtype&&(!q||(x.text+' '+x.author).toLowerCase().includes(q))&&(!n||x.author.toLowerCase().includes(n))&&(!d||String(x.date).includes(d)))}
-function hxRender(){const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');document.getElementById('hxShown').textContent=`المعروض: ${shown.length} من ${all.length}`;more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${esc(x.text)}</div></div>${x.url?`<a href="${esc(x.url)}" target="_blank">↗</a>`:''}</div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openInlineSavedFocus('${esc(x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
+function hxRender(){const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');document.getElementById('hxShown').textContent=`المعروض: ${shown.length} من ${all.length}`;more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${esc(x.text)}</div></div>${x.url?`<a href="${esc(x.url)}" target="_blank">↗</a>`:''}</div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
   HX=[];HXtype='image';HXpage=1;
@@ -2537,22 +2556,29 @@ async function hxDownloadAll(){
   if(!confirm(`تجميع ${items.length} عنصر بملف ZIP واحد وتنزيله؟`))return;
   const st=document.getElementById('htmlImportStatus');
   const zip=new JSZip();
-  let ok=0,failed=0;
-  for(let i=0;i<items.length;i++){
-    const x=items[i],isImg=x.type==='image';
-    const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
-    st.textContent=`⏳ تجهيز ${i+1} من ${items.length} للملف المضغوط...`;
-    try{
-      const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-      const blob=await res.blob();
-      const ext=isImg?'jpg':'mp4';
-      zip.file(`radar-${HXplatform}-${String(i+1).padStart(3,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob);
-      ok++;
-    }catch(e){ failed++ }
+  let ok=0,failed=0,done=0;
+  const CONCURRENCY=8; // جلب عدة عناصر بنفس الوقت بدل واحد تلو الآخر — هاد كان السبب الأساسي للبطء
+  async function worker(queue){
+    while(queue.length){
+      const i=queue.shift();
+      const x=items[i],isImg=x.type==='image';
+      const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
+      try{
+        const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+        const blob=await res.blob();
+        const ext=isImg?'jpg':'mp4';
+        zip.file(`radar-${HXplatform}-${String(i+1).padStart(3,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob,{compression:'STORE'});
+        ok++;
+      }catch(e){ failed++ }
+      done++;
+      st.textContent=`⏳ تجهيز ${done} من ${items.length} للملف المضغوط...`;
+    }
   }
+  const queue=items.map((_,i)=>i);
+  await Promise.all(Array.from({length:Math.min(CONCURRENCY,items.length)},()=>worker(queue)));
   if(!ok){ st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي فتح كل عنصر لحاله بزر ▶.'; return }
-  st.textContent=`⏳ جارٍ ضغط ${ok} عنصر بملف واحد...`;
-  const content=await zip.generateAsync({type:'blob'});
+  st.textContent=`⏳ جارٍ تجميع ${ok} عنصر بملف واحد...`;
+  const content=await zip.generateAsync({type:'blob',compression:'STORE'});
   const url=URL.createObjectURL(content);
   const a=document.createElement('a');
   a.href=url;a.download=`radar-${HXplatform}-${Date.now()}.zip`;
