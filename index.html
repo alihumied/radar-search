@@ -2432,9 +2432,9 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
  [...flat.matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)/gi)].forEach((m,i)=>{const src=hxn(m[1]);if(!/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat|pscp\.tv/i.test(src))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const x={id:'mh:'+i+key,type:'image',url:'',thumb:src,text:'',author:'',date:''};pool.push(x);add(x)});
  // Give every reel/video/story a poster. Remove assigned poster from plain image category.
  let pi=0;media.forEach(x=>{if(['reel','video','story'].includes(x.type)&&!x.thumb&&pool.length){while(pi<pool.length&&!map.has(pool[pi].id))pi++;const poster=pool[pi++];if(poster){x.thumb=poster.thumb;map.delete(poster.id)}}add(x)});
- const sel={facebook:'[data-testid*="comment"],[aria-label*="comment" i],[class*="comment" i]',instagram:'ul li',tiktok:'[data-e2e*="comment"],[class*="CommentItem"]',telegram:'.tgme_widget_message',youtube:'ytd-comment-thread-renderer,ytd-comment-view-model',x:'[data-testid="tweet"]',snapchat:'[class*="comment" i]'}[p]||'x-none',st=new Set();
+ const sel={facebook:'[aria-label^="Comment by "]',instagram:'ul li',tiktok:'[data-e2e*="comment"],[class*="CommentItem"]',telegram:'.tgme_widget_message',youtube:'ytd-comment-thread-renderer,ytd-comment-view-model',x:'[data-testid="tweet"]',snapchat:'[class*="comment" i]'}[p]||'x-none',st=new Set();
  // فيسبوك بالذات بيستخدم عناصر مش <a href> عادية لاسم الشخص (عناصر تنقّل بجافاسكربت)، فالنص كله بيطلع مسطّح ومدموج
- // (الاسم + الوقت + كلمات الواجهة Like/Reply/Author + النص الفعلي) بدون فواصل واضحة. هاي الدالة بتفكّكه.
+ // (الاسم + الوقت + كلمات الواجهة Like/Reply/Author + النص الفعلي) بدون فواصل واضحة. هاي الدالة بتفكّكه — تُستخدم كبديل احتياطي بس.
  function hxSplitComment(raw){
    let t=hxn(raw),author='',date='';
    const m=t.match(/^(.*?)(?:\s*Verified account)?\s*[·•]?\s*(\d+\s*[hmdwy])\s*[·•]?\s*(?:Author)?\s*(.*)$/is);
@@ -2442,11 +2442,30 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    t=t.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
    return{author,date,text:t};
  }
+ if(p==='facebook'){
+   // فيسبوك بيحط aria-label="Comment by NAME about X ago" على حاوية كل تعليق — أدق وأوثق من أي تخمين نصي
+   doc.querySelectorAll(sel).forEach((el,i)=>{
+     const aria=el.getAttribute('aria-label')||'';
+     const am=aria.match(/^Comment by (.+?)\s+((?:about\s+)?.+)$/i);
+     const author=am?hxn(am[1]):'',date=am?hxn(am[2]):'';
+     let text=hxn(el.textContent);
+     if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
+     text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*\d+\s*[hmdwy]\s*[·•]?\s*(?:Author)?\s*/i,'');
+     text=text.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
+     if(!text)return;
+     const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
+     const link=el.querySelector('a[href*="facebook.com"]')?.href||'';
+     const avatarEl=el.querySelector('svg image, img');
+     const thumb=avatarEl?(avatarEl.getAttribute('xlink:href')||avatarEl.getAttribute('href')||avatarEl.src||''):'';
+     add({id:'c:'+i+k.slice(0,30),type:'comment',url:link,thumb,text,author,date});
+   });
+   return[...map.values()];
+ }
  doc.querySelectorAll(sel).forEach((el,i)=>{
    const rawText=hxn(el.textContent||el.innerText);
    if(rawText.length<2||rawText.length>3000)return;
    let author='',date='',text=rawText;
-   if(p==='facebook'||p==='snapchat'){const sp=hxSplitComment(rawText);author=sp.author;date=sp.date;text=sp.text||rawText}
+   if(p==='snapchat'){const sp=hxSplitComment(rawText);author=sp.author;date=sp.date;text=sp.text||rawText}
    else{author=hxn(el.querySelector('a[href],#author-text,[class*="author" i]')?.textContent);date=hxn(el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.getAttribute('datetime')||el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.textContent)}
    if(!text||text.length<1)return;
    const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
