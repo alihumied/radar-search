@@ -2446,7 +2446,7 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    // فيسبوك بيحط aria-label="Comment by NAME about X ago" على حاوية كل تعليق — أدق وأوثق من أي تخمين نصي
    doc.querySelectorAll(sel).forEach((el,i)=>{
      const aria=el.getAttribute('aria-label')||'';
-     const am=aria.match(/^Comment by (.+?)\s+((?:about\s+)?.+)$/i);
+     const am=aria.match(/^Comment by (.+)\s+((?:about\s+)?(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now))$/i);
      const author=am?hxn(am[1]):'',date=am?hxn(am[2]):'';
      let text=hxn(el.textContent);
      if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
