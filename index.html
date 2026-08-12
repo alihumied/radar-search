@@ -249,7 +249,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
           <button class="hx-type" data-type="story" onclick="hxPick('story',this)">⏱️ ستوري <b id="hxStory">0</b></button>
           <button class="hx-type" data-type="video" onclick="hxPick('video',this)">📹 فيديو <b id="hxVideo">0</b></button>
         </div>
-        <div class="hx-search"><input id="hxText" class="filter-input" placeholder="بحث في التعليقات والنص..." oninput="hxReset()"><input id="hxName" class="filter-input" placeholder="اسم الشخص..." oninput="hxReset()"><input id="hxDate" class="filter-input" type="date" onchange="hxReset()"><button class="toggle" onclick="hxClear()">مسح البحث</button></div>
+        <div class="hx-search"><div style="position:relative"><input id="hxText" class="filter-input" placeholder="بحث بالتعليقات أو اسم شخص (زي: الدولة)..." oninput="hxReset();hxSuggest()" onfocus="hxSuggest()" onblur="setTimeout(()=>document.getElementById('hxSuggestBox').style.display='none',150)" style="width:100%"><div id="hxSuggestBox" style="display:none;position:absolute;top:100%;right:0;left:0;z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:220px;overflow-y:auto"></div></div><input id="hxDate" class="filter-input" type="date" onchange="hxReset()"><button class="toggle" onclick="hxClear()">مسح البحث</button></div>
         <div id="hxShown" class="hint"></div>
       </div>
       <div id="htmlImportResultsList" style="margin-top:12px;"></div>
@@ -2447,11 +2447,11 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    // و aria-label="Reply by NAME to OTHER's comment X ago" على الردود — نمط مختلف تمامًا، لازم يتقرا لحاله
    doc.querySelectorAll(sel).forEach((el,i)=>{
      const aria=el.getAttribute('aria-label')||'';
-     const am=aria.match(/^(?:Comment|Reply) by (.+?)(?:\s+to\s+(.+?)'s comment)?\s+((?:about\s+)?(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now))$/i);
+     const am=aria.match(/^(?:Comment|Reply) by (.+?)(?:\s+to\s+(.+?)'s comment)?\s+((?:about\s+)?(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy]))$/i);
      const author=am?hxn(am[1]):'',replyTo=am?hxn(am[2]||''):'',date=am?hxn(am[3]):'';
      let text=hxn(el.textContent);
      if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
-     text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*\d+\s*[hmdwy]\s*[·•]?\s*(?:Author)?\s*/i,'');
+     text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy])\s*[·•]?\s*(?:by\s+)?(?:Author)?\s*/i,'');
      text=text.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
      if(replyTo)text=text.replace(new RegExp('^\\s*'+replyTo.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*','i'),'');
      if(!text)return;
@@ -2496,8 +2496,17 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
    st.textContent=msg+` · ⚠️ تعذّر تجهيز الملف للحفظ: ${err?.message||err}`;
  }
  }catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
-function hxCounts(){for(const k of['Image','Reel','Comment','Story','Video'])document.getElementById('hx'+k).textContent=HX.filter(x=>x.type===k.toLowerCase()).length}function hxPick(t,b){HXtype=t;HXpage=1;document.querySelectorAll('.hx-type').forEach(x=>x.classList.remove('active'));b.classList.add('active');hxRender()}function hxReset(){HXpage=1;hxRender()}function hxClear(){['hxText','hxName','hxDate'].forEach(id=>document.getElementById(id).value='');hxReset()}
-function hxFiltered(){const q=hxn(document.getElementById('hxText')?.value).toLowerCase(),n=hxn(document.getElementById('hxName')?.value).toLowerCase(),d=document.getElementById('hxDate')?.value||'';return HX.filter(x=>x.type===HXtype&&(!q||(x.text+' '+x.author).toLowerCase().includes(q))&&(!n||x.author.toLowerCase().includes(n))&&(!d||String(x.date).includes(d)))}
+function hxCounts(){for(const k of['Image','Reel','Comment','Story','Video'])document.getElementById('hx'+k).textContent=HX.filter(x=>x.type===k.toLowerCase()).length}function hxPick(t,b){HXtype=t;HXpage=1;document.querySelectorAll('.hx-type').forEach(x=>x.classList.remove('active'));b.classList.add('active');hxRender()}function hxReset(){HXpage=1;hxRender()}function hxClear(){['hxText','hxDate'].forEach(id=>document.getElementById(id).value='');document.getElementById('hxSuggestBox').style.display='none';hxReset()}
+function hxSuggest(){
+  const box=document.getElementById('hxSuggestBox'),q=hxn(document.getElementById('hxText')?.value).toLowerCase();
+  if(!q){box.style.display='none';return}
+  const names=[...new Set(HX.filter(x=>x.author).map(x=>x.author))].filter(n=>n.toLowerCase().includes(q)).slice(0,8);
+  if(!names.length){box.style.display='none';return}
+  box.innerHTML=names.map(n=>`<div style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px" onmousedown="hxPickName('${n.replace(/'/g,"\\'")}')">${esc(n)}</div>`).join('');
+  box.style.display='block';
+}
+function hxPickName(n){document.getElementById('hxText').value=n;document.getElementById('hxSuggestBox').style.display='none';hxReset()}
+function hxFiltered(){const q=hxn(document.getElementById('hxText')?.value).toLowerCase(),d=document.getElementById('hxDate')?.value||'';return HX.filter(x=>x.type===HXtype&&(!q||(x.text+' '+x.author).toLowerCase().includes(q))&&(!d||String(x.date).includes(d)))}
 function hxRender(){const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');document.getElementById('hxShown').textContent=`المعروض: ${shown.length} من ${all.length}`;more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}<div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${esc(x.text)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
