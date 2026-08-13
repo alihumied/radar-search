@@ -2452,12 +2452,18 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    doc.querySelectorAll(sel).forEach((el,i)=>{
      const aria=el.getAttribute('aria-label')||'';
      const am=aria.match(/^(?:Comment|Reply) by (.+?)(?:\s+to\s+(.+?)'s comment)?\s+((?:about\s+)?(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy]))$/i);
-     const author=am?hxn(am[1]):'',replyTo=am?hxn(am[2]||''):'',date=am?hxn(am[3]):'';
-     let text=hxn(el.textContent);
-     if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
-     text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy])\s*[·•]?\s*(?:by\s+)?(?:Author)?\s*/i,'');
-     text=text.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
-     if(replyTo)text=text.replace(new RegExp('^\\s*'+replyTo.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*','i'),'');
+     let author='',replyTo='',date='',text=hxn(el.textContent);
+     if(am){
+       author=hxn(am[1]);replyTo=hxn(am[2]||'');date=hxn(am[3]);
+       if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
+       text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy])\s*[·•]?\s*(?:by\s+)?(?:Author)?\s*/i,'');
+       text=text.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
+       if(replyTo)text=text.replace(new RegExp('^\\s*'+replyTo.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*','i'),'');
+     }else{
+       // ما لقينا aria-label بهالصيغة (بيصير أحيانًا لعناصر معيّنة) — نرجع للطريقة القديمة (تفكيك النص المدموج) بدل ما نستسلم
+       const sp=hxSplitComment(text);
+       if(sp.author){author=sp.author;date=sp.date;text=sp.text||text}
+     }
      if(!text)return;
      const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
      const link=el.querySelector('a[href*="facebook.com"]')?.href||'';
