@@ -1809,45 +1809,104 @@ async function resolvePublicFacebookName(scope){
   const profileUrl=scope.profileUrl||`https://${scope.scopePath}`;
   const localAlias=getLocalProfileAlias(scope);
   if(localAlias.name) return {...scope,displayName:localAlias.name,displayNameSource:localAlias.source};
-  const values=[];
-  const add=v=>{const s=String(v||'').replace(/\s+/g,' ').trim();if(s&& !values.includes(s))values.push(s)};
+  const candidates=[];
   const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
-  // قارئ عام للصفحة: غالبًا يعيد Title واسم الحساب حتى عندما تعيد معاينة Facebook صفحة تسجيل الدخول.
-  try{
-    const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
-    const r=await fetchWithTimeout(readerUrl,7000);
-    if(r.ok){
-      const text=await r.text();
-      const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1]);
-      const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1]);
-    }
-  }catch(e){}
-  try{
-    const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,6000);
-    const d=await r.json(),m=d&&d.data;
-    if(m){add(m.title);add(m.description)}
-  }catch(e){}
-  if(!values.length){
-    const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`];
-    for(const make of proxies){
-      try{
-        const r=await fetchWithTimeout(make(profileUrl),6000);if(!r.ok)continue;
-        const html=await r.text();if(html.length<200)continue;
-        const doc=new DOMParser().parseFromString(html,'text/html');
-        add(doc.querySelector('meta[property="og:title"]')?.content);
-        add(doc.querySelector('meta[name="twitter:title"]')?.content);
-        add(doc.querySelector('title')?.textContent);
-        if(values.length)break;
-      }catch(e){}
-    }
-  }
   const genericFacebookText=/^(facebook|فيسبوك|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
   const isGenericFacebookName=v=>{
     const n=String(v||'').replace(/[|·—–:]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
-    return !n||genericFacebookText.test(n)||/^(?:facebook\s+[- ]\s*)?(?:log\s*in|login)(?:\s+or\s+sign\s*up)?$/.test(n)||/^(?:facebook\s*[- ]\s*)?(?:sign\s*up|create\s+an\s+account)$/.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account)/.test(n);
+    return !n||genericFacebookText.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account|join\s+facebook|cover\s+photo|personal\s+details|digital\s+creator|follow\b|photos?\b|followers?\b)/.test(n);
   };
-  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!isGenericFacebookName(v))||'';
-  return {...scope,displayName,displayNameSource:displayName?'public':'unavailable'};
+  const add=(v,score=0,source='public')=>{
+    const s=clean(v);
+    if(!s||s.length<2||s.length>120||isGenericFacebookName(s)) return;
+    if(candidates.some(x=>x.text.toLowerCase()===s.toLowerCase())) return;
+    candidates.push({text:s,score,source});
+  };
+  const escapeRegExp=v=>String(v||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');
+  const slug=String(scope.identifier||'').replace(/^profile\\.php\\?id=/i,'');
+  // تشغيل المصادر الأساسية بالتوازي حتى لا يعلق الاسم بسبب مصدر واحد.
+  await Promise.all([
+    (async()=>{
+      try{
+        const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
+        const r=await fetchWithTimeout(readerUrl,4500);
+        if(r.ok){
+          const text=await r.text();
+          const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1],7,'jina-title');
+          const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1],6,'jina-heading');
+        }
+      }catch(e){}
+    })(),
+    (async()=>{
+      try{
+        const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,4500);
+        const d=await r.json(),m=d&&d.data;
+        if(m){add(m.title,8,'microlink-title');add(m.publisher,2,'microlink-publisher');}
+      }catch(e){}
+    })()
+  ]);
+  // مزود Facebook الداخلي: قد يعيد الاسم من snapshot/profile عندما تكون الصفحة غير مفهرسة.
+  try{
+    const provider=PLATFORM_DATA_PROVIDERS?.facebook?.workerUrl;
+    if(provider){
+      const r=await fetchWithTimeout(`${provider}/profile`,5000);
+      if(r.ok){
+        const d=await r.json().catch(()=>null);
+        const p=d?.result||d?.profile||d?.data||d;
+        if(p){
+          add(p.name,12,'facebook-provider');
+          add(p.full_name,12,'facebook-provider');
+          add(p.display_name,12,'facebook-provider');
+          add(p.user_name,10,'facebook-provider');
+          add(p.page_name,10,'facebook-provider');
+          add(p.profile_name,10,'facebook-provider');
+          add(p.title,9,'facebook-provider');
+          add(p.user?.name,12,'facebook-provider');
+          add(p.profile?.name,12,'facebook-provider');
+        }
+      }
+    }
+  }catch(e){}
+  // وكلاء HTML بديلة لالتقاط og:title/title عندما يفشل المصدر الأول.
+  const proxies=[
+    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u=>`https://r.jina.ai/http://${u.replace(/^https?:\/\//i,'')}`
+  ];
+  await Promise.all(proxies.map(async make=>{
+    try{
+      const r=await fetchWithTimeout(make(profileUrl),4500);if(!r.ok) return;
+      const html=await r.text();if(html.length<200) return;
+      const doc=new DOMParser().parseFromString(html,'text/html');
+      add(doc.querySelector('meta[property="og:title"]')?.content,8,'og-title');
+      add(doc.querySelector('meta[name="twitter:title"]')?.content,7,'twitter-title');
+      add(doc.querySelector('title')?.textContent,6,'html-title');
+    }catch(e){}
+  }));
+  // محركات بحث عامة: نلتقط عنوان النتيجة المرتبط بالرابط الفريد فقط، لا نصوص النتائج العشوائية.
+  const slugRe=escapeRegExp(slug);
+  const searchQueries=[`site:facebook.com/${slug}`,`"https://www.facebook.com/${slug}"`,`site:facebook.com "${slug}"`];
+  const searchUrls=searchQueries.flatMap(query=>{
+    const encoded=encodeURIComponent(query);
+    return [
+      `https://r.jina.ai/http://www.google.com/search?q=${encoded}`,
+      `https://r.jina.ai/http://www.bing.com/search?q=${encoded}`,
+      `https://r.jina.ai/http://search.brave.com/search?q=${encoded}`
+    ];
+  });
+  await Promise.all(searchUrls.map(async url=>{
+    try{
+      const r=await fetchWithTimeout(url,4500);if(!r.ok) return;
+      const text=await r.text();
+      const mdRe=new RegExp('\\\\[([^\\\\]\\\\n]{2,120})\\\\]\\\\(https?:\\\\/\\\\/(?:www\\\\.)?facebook\\\\.com\\\\/'+slugRe+'(?:[\\\\/?#)]|$)','ig');
+      let m;while((m=mdRe.exec(text))) add(m[1],10,'search-title');
+      const htmlRe=new RegExp('<a[^>]+href=["\\\\\\\'][^"\\\\\\\']*facebook\\\\.com\\\\/'+slugRe+'[^"\\\\\\\']*["\\\\\\\'][^>]*>([\\\\s\\\\S]{2,160}?)<\\\\/a>','ig');
+      while((m=htmlRe.exec(text))) add(m[1].replace(/<[^>]+>/g,' '),9,'search-html-title');
+    }catch(e){}
+  }));
+  candidates.sort((a,b)=>b.score-a.score);
+  const best=candidates.find(x=>!isGenericFacebookName(x.text));
+  return {...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable'};
 }
 async function renderProfileScopedSearch(scope, type){
   if(scope.platform==='facebook'&&!scope.displayName){
@@ -1855,7 +1914,12 @@ async function renderProfileScopedSearch(scope, type){
     meta.innerHTML=`<div class="meta-chip">🎯 تحليل رابط الحساب: <b>${esc(scope.scopePath)}</b></div>`;
     cards.innerHTML='<div class="hint">⏳ جارٍ استخراج الاسم العام من صفحة فيسبوك ثم تجهيز البحث العميق...</div>';
     document.getElementById('resultsArea').classList.add('show');
-    try{scope=await resolvePublicFacebookName(scope)}catch(e){}
+    try{
+      scope=await Promise.race([
+        resolvePublicFacebookName(scope),
+        new Promise(resolve=>setTimeout(()=>resolve({...scope,displayName:'',displayNameSource:'timeout'}),12000))
+      ]);
+    }catch(e){}
   }
   saveToSearchHistory(document.getElementById('query').value.trim());
   const keyword = scope.remainder || '';
