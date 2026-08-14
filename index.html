@@ -2471,18 +2471,17 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
      const thumb=avatarEl?(avatarEl.getAttribute('xlink:href')||avatarEl.getAttribute('href')||avatarEl.src||''):'';
      add({id:'c:'+i+k.slice(0,30),type:'comment',url:link,thumb,text:(replyTo?`↩️ ردًا على ${replyTo}: `:'')+text,author,date});
    });
-   // قائمة "من تفاعل مع المنشور" — فيسبوك بيحط aria-label="Profile picture of NAME" على رابط كل شخص بالقائمة،
-   // وجوا نفس الحاوية في صورة بروفايله (svg/image) + أيقونة صغيرة توضح نوع الرياكشن (Like/Haha/Love...) كـ<img> عادي
-   doc.querySelectorAll('a[aria-label^="Profile picture of "]').forEach((el,i)=>{
-     const nm=(el.getAttribute('aria-label')||'').match(/^Profile picture of (.+)$/i);
-     const author=nm?hxn(nm[1]):'';if(!author)return;
+   // قائمة "من تفاعل مع المنشور" — الفحص الفعلي بيّن إنه كل شخص بالقائمة عبارة عن رابط بسيط
+   // <a href="facebook.com/USERNAME?__tn__=-a">NAME</a> — بلاحقة "__tn__=-a" المميزة لهاي القائمة تحديدًا
+   doc.querySelectorAll('a[href*="__tn__=-a"][role="link"]').forEach((el,i)=>{
+     const author=hxn(el.textContent);if(!author)return;
      const k='reactor|'+author.toLowerCase();if(st.has(k))return;st.add(k);
-     const avatarImg=el.querySelector('image');
-     const thumb=avatarImg?(avatarImg.getAttribute('xlink:href')||avatarImg.getAttribute('href')||''):'';
-     const reaction=el.querySelector('img')?.src||'';
-     const container=el.closest('div')?.parentElement;
-     const notFriend=/Add friend/i.test(container?.textContent||'');
-     add({id:'r:'+i+k.slice(0,30),type:'reactor',url:el.href||'',thumb,reaction,text:notFriend?'مش صديق بعد':'',author,date:''});
+     const url=el.href||'';
+     const row=el.closest('div[class*="x6s0dn4"]')||el.closest('div')?.parentElement?.parentElement||el.parentElement;
+     const imgEl=row?.querySelector('svg image, img');
+     const thumb=imgEl?(imgEl.getAttribute('xlink:href')||imgEl.getAttribute('href')||imgEl.src||''):'';
+     const notFriend=!!row?.querySelector('[aria-label="Add friend"]');
+     add({id:'r:'+i+k.slice(0,30),type:'reactor',url,thumb,reaction:'',text:notFriend?'مش صديق بعد':'',author,date:''});
    });
    return[...map.values()];
  }
