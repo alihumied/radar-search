@@ -2467,8 +2467,7 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
      if(!text)return;
      const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
      const link=el.querySelector('a[href*="facebook.com"]')?.href||'';
-     const avatarEl=el.querySelector('svg image, img');
-     const thumb=avatarEl?(avatarEl.getAttribute('xlink:href')||avatarEl.getAttribute('href')||avatarEl.src||''):'';
+     const thumb=el.querySelector('img')?.src||'';
      add({id:'c:'+i+k.slice(0,30),type:'comment',url:link,thumb,text:(replyTo?`↩️ ردًا على ${replyTo}: `:'')+text,author,date});
    });
    // قائمة "من تفاعل مع المنشور" — الفحص الفعلي بيّن إنه كل شخص بالقائمة عبارة عن رابط بسيط
