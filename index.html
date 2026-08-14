@@ -1780,7 +1780,8 @@ function detectProfileScope(rawText){
 }
 const VERIFIED_PROFILE_NAMES = {
   'facebook.com/balhnan2': 'محمد بركات',
-  'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman'
+  'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
+  'facebook.com/sarah.ali.969': 'SaRah Ali SalmAn'
 };
 const VERIFIED_FACEBOOK_SHARE_MAP = {
   '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661'
@@ -1840,8 +1841,12 @@ async function resolvePublicFacebookName(scope){
       }catch(e){}
     }
   }
-  const genericFacebookText=/^(facebook|فيسبوك|log in|login|log into facebook|explore the things you love\.?|create new account|forgot password\??)$/i;
-  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!genericFacebookText.test(v))||'';
+  const genericFacebookText=/^(facebook|فيسبوك|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
+  const isGenericFacebookName=v=>{
+    const n=String(v||'').replace(/[|·—–:]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+    return !n||genericFacebookText.test(n)||/^(?:facebook\s+[- ]\s*)?(?:log\s*in|login)(?:\s+or\s+sign\s*up)?$/.test(n)||/^(?:facebook\s*[- ]\s*)?(?:sign\s*up|create\s+an\s+account)$/.test(n);
+  };
+  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!isGenericFacebookName(v))||'';
   return {...scope,displayName,displayNameSource:displayName?'public':'unavailable'};
 }
 async function renderProfileScopedSearch(scope, type){
