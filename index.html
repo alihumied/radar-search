@@ -1735,7 +1735,9 @@ function unwrapFacebookLink(url){
   return url;
 }
 function detectProfileScope(rawText){
-  const text = unwrapFacebookLink(rawText.trim());
+  const raw = unwrapFacebookLink(rawText.trim());
+  const knownBare = /^(?:www\.)?(?:facebook\.com|instagram\.com|(?:x|twitter)\.com|tiktok\.com|youtube\.com|(?:t\.me|telegram\.me))\//i;
+  const text = /^https?:\/\//i.test(raw) ? raw : (knownBare.test(raw) ? `https://${raw}` : raw);
   const patterns = [
     { platform:'facebook',  domain:'facebook.com',  re:/https?:\/\/(?:www\.|m\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.\-_]+)/i },
     { platform:'instagram', domain:'instagram.com',  re:/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/i },
@@ -1811,7 +1813,8 @@ async function resolvePublicFacebookName(scope){
       }catch(e){}
     }
   }
-  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!/^(facebook|فيسبوك|log in|login)$/i.test(v))||'';
+  const genericFacebookText=/^(facebook|فيسبوك|log in|login|log into facebook|explore the things you love\.?|create new account|forgot password\??)$/i;
+  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!genericFacebookText.test(v))||'';
   return {...scope,displayName};
 }
 async function renderProfileScopedSearch(scope, type){
@@ -1828,7 +1831,7 @@ async function renderProfileScopedSearch(scope, type){
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    ${displayName ? `<div class="meta-chip">👤 الاسم المستخرج: <b>${esc(displayName)}</b></div>` : ''}
+    ${displayName ? `<div class="meta-chip">👤 الاسم المستخرج: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح حاليًا؛ تم الاعتماد على الرابط الفريد فقط</div>`}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
