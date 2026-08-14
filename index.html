@@ -1751,7 +1751,7 @@ function detectProfileScope(rawText){
      /https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv|stories)\//i.test(text)||
      /https?:\/\/(?:www\.)?youtube\.com\/(?:watch|shorts|live)\//i.test(text)||
      /https?:\/\/(?:www\.)?tiktok\.com\/@[^/]+\/video\//i.test(text)||
-     /https?:\/\/(?:www\.)?facebook\.com\/(?:[^/]+\/(?:posts|photos|videos|reels|permalink)|watch|story\.php|photo\.php)/i.test(text)||
+     /https?:\/\/(?:www\.)?facebook\.com\/(?:share(?:\/|$)|[^/]+\/(?:posts|photos|videos|reels|permalink)|watch|story\.php|photo\.php)/i.test(text)||
      /https?:\/\/(?:t\.me|telegram\.me)\/[^/]+\/\d+/i.test(text)) return null;
   for(const p of patterns){
     const m = text.match(p.re);
@@ -1844,7 +1844,7 @@ async function resolvePublicFacebookName(scope){
   const genericFacebookText=/^(facebook|فيسبوك|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
   const isGenericFacebookName=v=>{
     const n=String(v||'').replace(/[|·—–:]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
-    return !n||genericFacebookText.test(n)||/^(?:facebook\s+[- ]\s*)?(?:log\s*in|login)(?:\s+or\s+sign\s*up)?$/.test(n)||/^(?:facebook\s*[- ]\s*)?(?:sign\s*up|create\s+an\s+account)$/.test(n);
+    return !n||genericFacebookText.test(n)||/^(?:facebook\s+[- ]\s*)?(?:log\s*in|login)(?:\s+or\s+sign\s*up)?$/.test(n)||/^(?:facebook\s*[- ]\s*)?(?:sign\s*up|create\s+an\s+account)$/.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account)/.test(n);
   };
   const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!isGenericFacebookName(v))||'';
   return {...scope,displayName,displayNameSource:displayName?'public':'unavailable'};
@@ -1923,12 +1923,12 @@ function cleanResolvedFacebookUrl(url){
 }
 function renderShareFallbackSearch(shareUrl,type){
   const token=(String(shareUrl).match(/facebook\.com\/share\/([^/?#]+)/i)||[])[1]||'';
-  const q=encodeURIComponent(`site:facebook.com "${token}"`);
-  const q2=encodeURIComponent(`site:facebook.com/share "${token}"`);
+  const q=encodeURIComponent(token?`site:facebook.com "${token}"`:'site:facebook.com/share');
+  const q2=encodeURIComponent(token?`site:facebook.com/share "${token}"`:'site:facebook.com/share');
   const cards=document.getElementById('resultCards');
   document.getElementById('resultMeta').innerHTML=`<div class="meta-chip">🔗 رابط مشاركة: <b>${esc(shareUrl)}</b></div><div class="meta-chip">🔒 البحث العام فقط</div>`;
   cards.innerHTML=`
-    <div class="hint" style="margin-top:0;">⚠️ تعذّر حلّ رابط المشاركة تلقائيًا. أضفت بحثًا قريبًا عن الرمز العام، ويمكن فتح الرابط مباشرة إذا كانت الصفحة متاحة.</div>
+    <div class="hint" style="margin-top:0;">⚠️ تعذّر حلّ رابط المشاركة تلقائيًا. لن أعتبره بروفايلًا ولن أستخدم كلمة share كاسم؛ أضفت فقط بحثًا قريبًا وفتح الرابط مباشرة.</div>
     <div class="result-card"><a class="main-link" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener"><div class="result-icon" style="background:#4285F4">G</div><div class="result-body"><div class="result-title">🔗 صفحات مرتبطة برمز المشاركة <span class="badge">بحث قريب</span></div><div class="result-desc">https://www.google.com/search?q=${q}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>
     <div class="result-card"><a class="main-link" href="https://www.google.com/search?q=${q2}" target="_blank" rel="noopener"><div class="result-icon" style="background:#4285F4">G</div><div class="result-body"><div class="result-title">👤 بحث قريب عن بروفايل Facebook <span class="badge">بدون معاملات طويلة</span></div><div class="result-desc">https://www.google.com/search?q=${q2}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>
     <div class="result-card"><a class="main-link" href="${esc(shareUrl)}" target="_blank" rel="noopener"><div class="result-icon" style="background:#1877F2">f</div><div class="result-body"><div class="result-title">🔗 فتح رابط المشاركة مباشرة <span class="badge">الرابط الأصلي</span></div><div class="result-desc">${esc(shareUrl)}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>`;
@@ -1974,7 +1974,7 @@ async function runSearch(){
   const type = effectiveType;
 
   // رابط مشاركة مختصر (facebook.com/share/xxx) — نحلّه لرابط بروفايل حقيقي أول (مجاني، بدون API مدفوع)
-  const shareMatch = baseQuery.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/share\/[A-Za-z0-9_-]+\/?(?:\?[^\s]*)?/i);
+  const shareMatch = baseQuery.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/share(?:\/[A-Za-z0-9_-]+)?\/?(?:\?[^\s]*)?/i);
   if(shareMatch){
     const shareUrl = /^https?:\/\//i.test(shareMatch[0]) ? shareMatch[0] : `https://${shareMatch[0]}`;
     await resolveShareLinkAndSearch(baseQuery, shareUrl, type);
