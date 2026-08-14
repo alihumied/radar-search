@@ -1782,7 +1782,6 @@ function renderProfileScopedSearch(scope, type){
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    ${keyword ? `<div class="meta-chip">كلمة إضافية: <b>${esc(keyword)}</b></div>` : ''}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
