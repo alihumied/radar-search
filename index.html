@@ -1877,8 +1877,6 @@ async function renderProfileScopedSearch(scope, type){
     );
   }else if(scope.platform==='tiktok'){
     items.unshift({name:'❤️ إعجاباته العامة — تيك توك', color:'#010101', letter:'♪', url:`https://www.tiktok.com/@${handle.replace(/^@/,'')}/liked`, badge:'إذا كانت عامة'});
-  }else if(scope.platform==='facebook'){
-    items.unshift({name:'📊 النشاط العام — فيسبوك', color:'#1877F2', letter:'f', url:`${profileUrl}/allactivity`, badge:'إذا أتاحه الحساب والمنصة'});
   }
   items.forEach(eng=>{
     const card = document.createElement('div');
