@@ -1812,9 +1812,12 @@ async function resolvePublicFacebookName(scope){
   const candidates=[];
   const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
   const genericFacebookText=/^(facebook|فيسبوك|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
+  // عناوين نطاقات مجرّدة (facebook.com, www.facebook.com, m.facebook.com...) تظهر أحيانًا كعنوان
+  // صفحة عندما يفشل الوكيل بجلب المحتوى الحقيقي أو يعيد صفحة اعتراضية/حظر؛ يجب استبعادها كاسم.
+  const bareDomainRe=/^(?:https?:\/\/)?(?:www\.|m\.|mbasic\.|touch\.|web\.)*[a-z0-9-]+(?:\.[a-z0-9-]+)+\/?$/i;
   const isGenericFacebookName=v=>{
     const n=String(v||'').replace(/[|·—–:]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
-    return !n||genericFacebookText.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account|join\s+facebook|cover\s+photo|personal\s+details|digital\s+creator|follow\b|photos?\b|followers?\b)/.test(n);
+    return !n||genericFacebookText.test(n)||bareDomainRe.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account|join\s+facebook|cover\s+photo|personal\s+details|digital\s+creator|follow\b|photos?\b|followers?\b)/.test(n);
   };
   const add=(v,score=0,source='public')=>{
     const s=clean(v);
