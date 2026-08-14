@@ -1778,9 +1778,24 @@ function detectProfileScope(rawText){
   }catch(e){}
   return null;
 }
+const VERIFIED_PROFILE_NAMES = {
+  'facebook.com/balhnan2': 'محمد بركات'
+};
+function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
+function getLocalProfileAlias(scope){
+  const key=profileAliasKey(scope);
+  if(VERIFIED_PROFILE_NAMES[key]) return {name:VERIFIED_PROFILE_NAMES[key],source:'verified'};
+  try{
+    const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
+    if(saved[key]) return {name:String(saved[key]),source:'local'};
+  }catch(e){}
+  return {name:'',source:''};
+}
 async function resolvePublicFacebookName(scope){
   if(!scope||scope.platform!=='facebook') return scope;
   const profileUrl=scope.profileUrl||`https://${scope.scopePath}`;
+  const localAlias=getLocalProfileAlias(scope);
+  if(localAlias.name) return {...scope,displayName:localAlias.name,displayNameSource:localAlias.source};
   const values=[];
   const add=v=>{const s=String(v||'').replace(/\s+/g,' ').trim();if(s&& !values.includes(s))values.push(s)};
   const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
@@ -1815,7 +1830,7 @@ async function resolvePublicFacebookName(scope){
   }
   const genericFacebookText=/^(facebook|فيسبوك|log in|login|log into facebook|explore the things you love\.?|create new account|forgot password\??)$/i;
   const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!genericFacebookText.test(v))||'';
-  return {...scope,displayName};
+  return {...scope,displayName,displayNameSource:displayName?'public':'unavailable'};
 }
 async function renderProfileScopedSearch(scope, type){
   if(scope.platform==='facebook'&&!scope.displayName){
@@ -1831,7 +1846,7 @@ async function renderProfileScopedSearch(scope, type){
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    ${displayName ? `<div class="meta-chip">👤 الاسم المستخرج: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح حاليًا؛ تم الاعتماد على الرابط الفريد فقط</div>`}
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح حاليًا؛ تم الاعتماد على الرابط الفريد فقط</div>`}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
