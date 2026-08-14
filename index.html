@@ -1937,8 +1937,9 @@ async function renderProfileScopedSearch(scope, type){
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
-  const nameTerm = displayName ? ` OR "${displayName}"` : '';
-  const idTerms = `("${scope.identifier}" OR "${handle}"${nameTerm} OR "${scope.scopePath}" OR "${profileUrl}")`;
+  // فيسبوك: الاسم المستخرج له الأولوية، وإذا فشل الاستخراج نستخدم المعرّف بعد / فقط كبديل.
+  const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
+  const idTerms = `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
   const postsQ = `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
