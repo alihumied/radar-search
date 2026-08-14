@@ -1759,7 +1759,7 @@ function detectProfileScope(rawText){
       const idMatch = m[1].match(/profile\.php\?id=(\d+)/i);
       const identifier = idMatch ? idMatch[1] : m[1];
       const remainder = text.replace(m[0], '').trim();
-      return { platform:p.platform, domain:p.domain, identifier, scopePath, remainder };
+      return { platform:p.platform, domain:p.domain, identifier, scopePath, profileUrl:`https://${scopePath}`, displayName:'', remainder };
     }
   }
   // دعم رابط حساب عام على أي نطاق آخر بصيغة /username، مع إبقاء المحتوى الخاص خارج النطاق.
@@ -1770,18 +1770,65 @@ function detectProfileScope(rawText){
       const host=u.hostname.replace(/^www\./i,'');
       const first=(u.pathname.split('/').filter(Boolean)[0]||'').replace(/^@/,'');
       if(first&&!/^(search|explore|watch|status|p|reel|tv|video|stories|share|channel)$/i.test(first)){
-        return {platform:'generic',domain:host,identifier:first,scopePath:host+'/'+first,remainder:text.replace(m[0],'').trim()};
+        return {platform:'generic',domain:host,identifier:first,scopePath:host+'/'+first,profileUrl:m[0],displayName:'',remainder:text.replace(m[0],'').trim()};
       }
     }
   }catch(e){}
   return null;
 }
-function renderProfileScopedSearch(scope, type){
+async function resolvePublicFacebookName(scope){
+  if(!scope||scope.platform!=='facebook') return scope;
+  const profileUrl=scope.profileUrl||`https://${scope.scopePath}`;
+  const values=[];
+  const add=v=>{const s=String(v||'').replace(/\s+/g,' ').trim();if(s&& !values.includes(s))values.push(s)};
+  const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
+  // قارئ عام للصفحة: غالبًا يعيد Title واسم الحساب حتى عندما تعيد معاينة Facebook صفحة تسجيل الدخول.
+  try{
+    const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
+    const r=await fetchWithTimeout(readerUrl,7000);
+    if(r.ok){
+      const text=await r.text();
+      const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1]);
+      const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1]);
+    }
+  }catch(e){}
+  try{
+    const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,6000);
+    const d=await r.json(),m=d&&d.data;
+    if(m){add(m.title);add(m.description)}
+  }catch(e){}
+  if(!values.length){
+    const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`];
+    for(const make of proxies){
+      try{
+        const r=await fetchWithTimeout(make(profileUrl),6000);if(!r.ok)continue;
+        const html=await r.text();if(html.length<200)continue;
+        const doc=new DOMParser().parseFromString(html,'text/html');
+        add(doc.querySelector('meta[property="og:title"]')?.content);
+        add(doc.querySelector('meta[name="twitter:title"]')?.content);
+        add(doc.querySelector('title')?.textContent);
+        if(values.length)break;
+      }catch(e){}
+    }
+  }
+  const displayName=values.map(clean).find(v=>v&&v.length>1&&v.length<100&&!/^(facebook|فيسبوك|log in|login)$/i.test(v))||'';
+  return {...scope,displayName};
+}
+async function renderProfileScopedSearch(scope, type){
+  if(scope.platform==='facebook'&&!scope.displayName){
+    const meta=document.getElementById('resultMeta'),cards=document.getElementById('resultCards');
+    meta.innerHTML=`<div class="meta-chip">🎯 تحليل رابط الحساب: <b>${esc(scope.scopePath)}</b></div>`;
+    cards.innerHTML='<div class="hint">⏳ جارٍ استخراج الاسم العام من صفحة فيسبوك ثم تجهيز البحث العميق...</div>';
+    document.getElementById('resultsArea').classList.add('show');
+    try{scope=await resolvePublicFacebookName(scope)}catch(e){}
+  }
   saveToSearchHistory(document.getElementById('query').value.trim());
   const keyword = scope.remainder || '';
+  const displayName = String(scope.displayName||'').trim();
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
+    ${displayName ? `<div class="meta-chip">👤 الاسم المستخرج: <b>${esc(displayName)}</b></div>` : ''}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
@@ -1790,8 +1837,9 @@ function renderProfileScopedSearch(scope, type){
   const kwPart = keyword ? ` "${keyword}"` : '';
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
-  const idTerms = `("${scope.identifier}" OR "${handle}")`;
-  const profileUrl = `https://${scope.scopePath}`;
+  const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
+  const nameTerm = displayName ? ` OR "${displayName}"` : '';
+  const idTerms = `("${scope.identifier}" OR "${handle}"${nameTerm} OR "${scope.scopePath}" OR "${profileUrl}")`;
   const postsQ = `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
@@ -1800,7 +1848,7 @@ function renderProfileScopedSearch(scope, type){
     {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:'مقيّد بالحساب'},
     {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:'المفهرس علنًا'},
     {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:'إن كانت ظاهرة للعامة'},
-    {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:'رابط أصلي'},
+    {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:displayName?'الرابط الأصلي':'رابط الحساب'},
   ];
   if(scope.platform==='x'){
     const xSuffix = keyword ? ` ${keyword}` : '';
@@ -1846,7 +1894,7 @@ async function resolveShareLinkAndSearch(fullText, shareUrl, type){
     const resolved = data?.resolvedUrl;
     const scope = resolved ? detectProfileScope(fullText.replace(shareUrl, resolved)) : null;
     if(scope){
-      renderProfileScopedSearch(scope, type);
+      await renderProfileScopedSearch(scope, type);
     }else{
       showShareLinkGuidance();
     }
@@ -1879,7 +1927,7 @@ async function runSearch(){
 
   const profileScope = detectProfileScope(baseQuery);
   if(profileScope){
-    renderProfileScopedSearch(profileScope, type);
+    await renderProfileScopedSearch(profileScope, type);
     return;
   }
   saveToSearchHistory(baseQuery);
