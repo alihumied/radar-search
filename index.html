@@ -1741,7 +1741,16 @@ function detectProfileScope(rawText){
     { platform:'instagram', domain:'instagram.com',  re:/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/i },
     { platform:'x',         domain:'x.com',          re:/https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]+)/i },
     { platform:'tiktok',    domain:'tiktok.com',     re:/https?:\/\/(?:www\.)?tiktok\.com\/(@[A-Za-z0-9._]+)/i },
+    { platform:'youtube',   domain:'youtube.com',    re:/https?:\/\/(?:www\.)?youtube\.com\/(@[A-Za-z0-9._-]+|channel\/[A-Za-z0-9_-]+|user\/[A-Za-z0-9._-]+)/i },
+    { platform:'telegram',  domain:'t.me',           re:/https?:\/\/(?:t\.me|telegram\.me)\/([A-Za-z0-9_]+)/i },
   ];
+  // روابط المنشورات/الفيديوهات ليست روابط حسابات، لذلك نتركها للبحث العادي.
+  if(/https?:\/\/(?:www\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]+\/status\/\d+/i.test(text)||
+     /https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv|stories)\//i.test(text)||
+     /https?:\/\/(?:www\.)?youtube\.com\/(?:watch|shorts|live)\//i.test(text)||
+     /https?:\/\/(?:www\.)?tiktok\.com\/@[^/]+\/video\//i.test(text)||
+     /https?:\/\/(?:www\.)?facebook\.com\/(?:[^/]+\/(?:posts|photos|videos|reels|permalink)|watch|story\.php|photo\.php)/i.test(text)||
+     /https?:\/\/(?:t\.me|telegram\.me)\/[^/]+\/\d+/i.test(text)) return null;
   for(const p of patterns){
     const m = text.match(p.re);
     if(m){
@@ -1753,6 +1762,18 @@ function detectProfileScope(rawText){
       return { platform:p.platform, domain:p.domain, identifier, scopePath, remainder };
     }
   }
+  // دعم رابط حساب عام على أي نطاق آخر بصيغة /username، مع إبقاء المحتوى الخاص خارج النطاق.
+  try{
+    const m=text.match(/https?:\/\/[^\s"'<>]+/i); 
+    if(m){
+      const u=new URL(m[0]);
+      const host=u.hostname.replace(/^www\./i,'');
+      const first=(u.pathname.split('/').filter(Boolean)[0]||'').replace(/^@/,'');
+      if(first&&!/^(search|explore|watch|status|p|reel|tv|video|stories|share|channel)$/i.test(first)){
+        return {platform:'generic',domain:host,identifier:first,scopePath:host+'/'+first,remainder:text.replace(m[0],'').trim()};
+      }
+    }
+  }catch(e){}
   return null;
 }
 function renderProfileScopedSearch(scope, type){
@@ -1761,24 +1782,39 @@ function renderProfileScopedSearch(scope, type){
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    ${keyword ? `<div class="meta-chip">كلمة إضافية: <b>${esc(keyword)}</b></div>` : ''}`;
+    ${keyword ? `<div class="meta-chip">كلمة إضافية: <b>${esc(keyword)}</b></div>` : ''}
+    <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
+  const handle = String(scope.identifier||'').replace(/^@/,'');
   const kwPart = keyword ? ` "${keyword}"` : '';
-  const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود" OR "Like" OR "أعجبني")';
-  const idTerm = `"${scope.identifier}"`;
-
-  const postsQ = `site:${scope.domain} ${idTerm}${kwPart}`;
-  const commentsQ = `site:${scope.domain} ${idTerm}${kwPart} ${commentSignal}`;
-
+  const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
+  const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
+  const idTerms = `("${scope.identifier}" OR "${handle}")`;
+  const profileUrl = `https://${scope.scopePath}`;
+  const postsQ = `site:${scope.domain} ${idTerms}${kwPart}`;
+  const commentsQ = `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
+  const activityQ = `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
-
   const items = [
-    {name:'📝 منشورات — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:'مقيّد بالـ ID'},
-    {name:'💬 تعليقات — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:'مقيّد بالـ ID'},
-    {name:'👤 فتح البروفايل مباشرة', color:'#94a3b8', letter:'👤', url:`https://${scope.scopePath}`, badge:'رابط أصلي'},
+    {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:'مقيّد بالحساب'},
+    {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:'المفهرس علنًا'},
+    {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:'إن كانت ظاهرة للعامة'},
+    {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:'رابط أصلي'},
   ];
+  if(scope.platform==='x'){
+    const xSuffix = keyword ? ` ${keyword}` : '';
+    items.unshift(
+      {name:'📝 منشورات الحساب — X', color:'#000', letter:'𝕏', url:`https://x.com/search?q=${encodeURIComponent('from:'+handle+xSuffix)}&src=typed_query`, badge:'بحث أصلي'},
+      {name:'💬 ردود الحساب — X', color:'#000', letter:'𝕏', url:`https://x.com/search?q=${encodeURIComponent('from:'+handle+' (reply OR replies OR رد OR ردود)'+xSuffix)}&src=typed_query`, badge:'بحث أصلي'},
+      {name:'❤️ إعجاباته العامة — X', color:'#000', letter:'𝕏', url:`https://x.com/${handle}/likes`, badge:'إذا كانت قائمة الإعجابات عامة'}
+    );
+  }else if(scope.platform==='tiktok'){
+    items.unshift({name:'❤️ إعجاباته العامة — تيك توك', color:'#010101', letter:'♪', url:`https://www.tiktok.com/@${handle.replace(/^@/,'')}/liked`, badge:'إذا كانت عامة'});
+  }else if(scope.platform==='facebook'){
+    items.unshift({name:'📊 النشاط العام — فيسبوك', color:'#1877F2', letter:'f', url:`${profileUrl}/allactivity`, badge:'إذا أتاحه الحساب والمنصة'});
+  }
   items.forEach(eng=>{
     const card = document.createElement('div');
     card.className = 'result-card';
