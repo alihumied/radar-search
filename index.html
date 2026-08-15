@@ -1925,9 +1925,10 @@ async function renderProfileScopedSearch(scope, type){
   const keyword = scope.remainder || '';
   const displayName = String(scope.displayName||'').trim();
   const fallbackHandle = String(scope.identifier||'').replace(/^@/,'');
+  const fallbackSearchMode = scope.platform==='facebook' && !displayName;
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
-    <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
+    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b></div>
     ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
@@ -1938,17 +1939,19 @@ async function renderProfileScopedSearch(scope, type){
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
-  // فيسبوك: الاسم المستخرج له الأولوية، وإذا فشل الاستخراج نستخدم المعرّف بعد / فقط كبديل.
+  // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
-  const idTerms = `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
-  const postsQ = `site:${scope.domain} ${idTerms}${kwPart}`;
-  const commentsQ = `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
-  const activityQ = `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
+  const idTerms = fallbackSearchMode
+    ? `${profileSearchIdentity} Facebook`
+    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
+  const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
+  const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
+  const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
   const items = [
-    {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:'مقيّد بالحساب'},
-    {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:'المفهرس علنًا'},
-    {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:'إن كانت ظاهرة للعامة'},
+    {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'مقيّد بالحساب'},
+    {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'المفهرس علنًا'},
+    {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'إن كانت ظاهرة للعامة'},
     {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:displayName?'الرابط الأصلي':'رابط الحساب'},
   ];
   if(scope.platform==='x'){
