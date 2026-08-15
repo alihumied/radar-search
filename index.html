@@ -1837,22 +1837,24 @@ function getLocalProfileAlias(scope){
 function copyMetaChipValue(btn,text){
   const original=btn.textContent;
   const done=ok=>{btn.textContent=ok?'✅':'⚠️';setTimeout(()=>{btn.textContent=original;},1200);};
-  // execCommand أولاً: مضمون يشتغل بدون طلب إذن حتى بمتصفحات مدمجة زي Kiwi، اللي أحيانًا
-  // بتعلّق أو ترفض navigator.clipboard بصمت من غير ما توصل حتى لمرحلة catch.
+  // بعض المتصفحات المدمجة (زي Quetta) بتمنع النسخ التلقائي بصمت — نجرب الطرق البرمجية،
+  // ولو ما قدرنا نتأكد إنها نجحت، نفتح نافذة نسخ يدوية مضمونة 100% كخيار أخير.
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>{
+      window.prompt('انسخ النص (محدد جاهز — اضغط مطولًا واختر نسخ):',text);
+    });
+    return;
+  }
   let legacyOk=false;
   try{
     const ta=document.createElement('textarea');
-    ta.value=text;ta.style.position='fixed';ta.style.opacity='0';ta.style.top='0';ta.style.left='0';
-    document.body.appendChild(ta);ta.focus();ta.select();
+    ta.value=text;ta.style.position='fixed';ta.style.top='0';ta.style.left='0';ta.style.opacity='0.01';ta.style.width='2px';ta.style.height='2px';
+    document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,text.length);
     legacyOk=document.execCommand('copy');
     document.body.removeChild(ta);
   }catch(e){legacyOk=false}
   if(legacyOk){done(true);return}
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>done(false));
-  }else{
-    done(false);
-  }
+  window.prompt('انسخ النص (محدد جاهز — اضغط مطولًا واختر نسخ):',text);
 }
 async function resolvePublicFacebookName(scope){
   if(!scope||scope.platform!=='facebook') return scope;
