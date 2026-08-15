@@ -1104,11 +1104,11 @@ function openPastedLinkDirectly(){
 }
 
 /* جلب og:image و og:title من صفحة عبر وسيط CORS عام (بدون أي مفتاح API) — نجرب أكثر من وسيط لزيادة نسبة النجاح */
-async function fetchWithTimeout(url, ms=5000){
+async function fetchWithTimeout(url, ms=5000, options={}){
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), ms);
   try{
-    return await fetch(url, {signal: controller.signal});
+    return await fetch(url, {...options, signal: controller.signal});
   }finally{
     clearTimeout(timer);
   }
@@ -1855,32 +1855,39 @@ async function resolvePublicFacebookName(scope){
   };
   const escapeRegExp=v=>String(v||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');
   const slug=String(scope.identifier||'').replace(/^profile\\.php\\?id=/i,'');
-  // تشغيل المصادر الأساسية بالتوازي حتى لا يعلق الاسم بسبب مصدر واحد.
-  await Promise.all([
-    (async()=>{
-      try{
-        const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
-        const r=await fetchWithTimeout(readerUrl,4500);
-        if(r.ok){
-          const text=await r.text();
-          const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1],7,'jina-title');
-          const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1],6,'jina-heading');
-        }
-      }catch(e){}
-    })(),
-    (async()=>{
-      try{
-        const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,4500);
-        const d=await r.json(),m=d&&d.data;
-        if(m){add(m.title,8,'microlink-title');add(m.publisher,2,'microlink-publisher');}
-      }catch(e){}
-    })()
-  ]);
-  // مزود Facebook الداخلي: قد يعيد الاسم من snapshot/profile عندما تكون الصفحة غير مفهرسة.
-  try{
-    const provider=PLATFORM_DATA_PROVIDERS?.facebook?.workerUrl;
-    if(provider){
-      const r=await fetchWithTimeout(`${provider}/profile`,5000);
+  // تشغيل كل مصادر استخراج الاسم دفعة وحدة بالتوازي (بدل مراحل متتالية) — هذا يسرّع
+  // الاستخراج بشكل كبير ويضمن إن محركات البحث (المصدر الأهم للحسابات غير المفهرسة
+  // مباشرة بفيسبوك) ياخدوا فرصتهم كاملة قبل ما ينتهي الوقت المتاح بدل ما ياكل الوقت
+  // مراحل سابقة ما لقت شي.
+  const tasks=[];
+  tasks.push((async()=>{
+    try{
+      const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
+      const r=await fetchWithTimeout(readerUrl,4500);
+      if(r.ok){
+        const text=await r.text();
+        const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1],7,'jina-title');
+        const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1],6,'jina-heading');
+      }
+    }catch(e){}
+  })());
+  tasks.push((async()=>{
+    try{
+      const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,4500);
+      const d=await r.json(),m=d&&d.data;
+      if(m){add(m.title,8,'microlink-title');add(m.publisher,2,'microlink-publisher');}
+    }catch(e){}
+  })());
+  tasks.push((async()=>{
+    // مزود Facebook الداخلي: قد يعيد الاسم من snapshot/profile عندما تكون الصفحة غير مفهرسة.
+    try{
+      const provider=PLATFORM_DATA_PROVIDERS?.facebook?.workerUrl;
+      if(!provider) return;
+      const r=await fetchWithTimeout(`${provider}/profile`,5000,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:profileUrl})
+      });
       if(r.ok){
         const d=await r.json().catch(()=>null);
         const p=d?.result||d?.profile||d?.data||d;
@@ -1896,15 +1903,15 @@ async function resolvePublicFacebookName(scope){
           add(p.profile?.name,12,'facebook-provider');
         }
       }
-    }
-  }catch(e){}
+    }catch(e){}
+  })());
   // وكلاء HTML بديلة لالتقاط og:title/title عندما يفشل المصدر الأول.
   const proxies=[
     u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
     u=>`https://r.jina.ai/http://${u.replace(/^https?:\/\//i,'')}`
   ];
-  await Promise.all(proxies.map(async make=>{
+  proxies.forEach(make=>tasks.push((async()=>{
     try{
       const r=await fetchWithTimeout(make(profileUrl),4500);if(!r.ok) return;
       const html=await r.text();if(html.length<200) return;
@@ -1913,7 +1920,7 @@ async function resolvePublicFacebookName(scope){
       add(doc.querySelector('meta[name="twitter:title"]')?.content,7,'twitter-title');
       add(doc.querySelector('title')?.textContent,6,'html-title');
     }catch(e){}
-  }));
+  })()));
   // محركات بحث عامة: نلتقط عنوان النتيجة المرتبط بالرابط الفريد فقط، لا نصوص النتائج العشوائية.
   const slugRe=escapeRegExp(slug);
   const searchQueries=[`site:facebook.com/${slug}`,`"https://www.facebook.com/${slug}"`,`site:facebook.com "${slug}"`];
@@ -1925,7 +1932,7 @@ async function resolvePublicFacebookName(scope){
       `https://r.jina.ai/http://search.brave.com/search?q=${encoded}`
     ];
   });
-  await Promise.all(searchUrls.map(async url=>{
+  searchUrls.forEach(url=>tasks.push((async()=>{
     try{
       const r=await fetchWithTimeout(url,4500);if(!r.ok) return;
       const text=await r.text();
@@ -1934,7 +1941,8 @@ async function resolvePublicFacebookName(scope){
       const htmlRe=new RegExp('<a[^>]+href=["\\\\\\\'][^"\\\\\\\']*facebook\\\\.com\\\\/'+slugRe+'[^"\\\\\\\']*["\\\\\\\'][^>]*>([\\\\s\\\\S]{2,160}?)<\\\\/a>','ig');
       while((m=htmlRe.exec(text))) add(m[1].replace(/<[^>]+>/g,' '),9,'search-html-title');
     }catch(e){}
-  }));
+  })()));
+  await Promise.allSettled(tasks);
   candidates.sort((a,b)=>b.score-a.score);
   const best=candidates.find(x=>!isGenericFacebookName(x.text));
   return {...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable'};
@@ -1948,7 +1956,7 @@ async function renderProfileScopedSearch(scope, type){
     try{
       scope=await Promise.race([
         resolvePublicFacebookName(scope),
-        new Promise(resolve=>setTimeout(()=>resolve({...scope,displayName:'',displayNameSource:'timeout'}),12000))
+        new Promise(resolve=>setTimeout(()=>resolve({...scope,displayName:'',displayNameSource:'timeout'}),7000))
       ]);
     }catch(e){}
   }
