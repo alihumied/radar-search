@@ -1924,15 +1924,16 @@ async function renderProfileScopedSearch(scope, type){
   saveToSearchHistory(document.getElementById('query').value.trim());
   const keyword = scope.remainder || '';
   const displayName = String(scope.displayName||'').trim();
+  const fallbackHandle = String(scope.identifier||'').replace(/^@/,'');
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 بحث مقيّد بالبروفايل: <b>${esc(scope.scopePath)}</b></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح حاليًا؛ تم الاعتماد على الرابط الفريد فقط</div>`}
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
     <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
-  const handle = String(scope.identifier||'').replace(/^@/,'');
+  const handle = fallbackHandle;
   const kwPart = keyword ? ` "${keyword}"` : '';
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
