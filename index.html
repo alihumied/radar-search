@@ -110,13 +110,8 @@
   .results{margin-top:26px; display:none;}
   .results.show{display:block;}
   .result-meta{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; font-family:'JetBrains Mono',monospace; font-size:11px;}
-  .meta-chip{border:1px solid var(--line); padding:5px 12px; border-radius:100px; color:var(--muted); background:var(--bg-0); display:inline-flex; align-items:center; gap:7px;}
+  .meta-chip{border:1px solid var(--line); padding:5px 12px; border-radius:100px; color:var(--muted); background:var(--bg-0);}
   .meta-chip b{color:var(--cyan); font-weight:700;}
-  .meta-copy-btn{width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(63,212,255,.35); border-radius:8px; background:rgba(63,212,255,.08); color:var(--cyan); cursor:pointer; font-size:14px; line-height:1; transition:.18s;}
-  .meta-copy-btn:hover{background:rgba(63,212,255,.18); border-color:var(--cyan); transform:translateY(-1px);}
-  .meta-copy-btn:focus-visible{outline:2px solid var(--cyan); outline-offset:2px;}
-  .hx-search{grid-template-columns:2fr 1.2fr auto;}
-  .hx-post-label{color:var(--muted); font-weight:500;}
   .result-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:10px; transition:.15s; display:flex; align-items:center; gap:10px;}
   .result-card:hover{border-color:var(--blue);}
   .result-card a.main-link{color:inherit; text-decoration:none; display:flex; align-items:center; gap:14px; flex:1; min-width:0;}
@@ -1839,28 +1834,19 @@ function getLocalProfileAlias(scope){
   }catch(e){}
   return {name:'',source:''};
 }
-async function copyMetaChipValue(btn,text){
-  const original=btn.innerHTML;
-  const done=ok=>{btn.innerHTML=ok?'✓':'!';btn.title=ok?'تم النسخ':'تعذّر النسخ';setTimeout(()=>{btn.innerHTML=original;btn.title='نسخ';},1200);};
-  const fallback=()=>{
-    const ta=document.createElement('textarea');
-    ta.value=String(text||'');
-    ta.setAttribute('readonly','');
-    ta.style.position='fixed';ta.style.top='-9999px';ta.style.opacity='0';
-    document.body.appendChild(ta);ta.focus();ta.select();
-    const ok=document.execCommand('copy');
-    ta.remove();
-    return ok;
-  };
-  try{
-    if(navigator.clipboard?.writeText){
-      await navigator.clipboard.writeText(String(text||''));
-    }else if(!fallback()){
-      throw new Error('copy unavailable');
-    }
-    done(true);
-  }catch(e){
-    try{done(fallback());}catch(err){done(false);}
+function copyMetaChipValue(btn,text){
+  const original=btn.textContent;
+  const done=ok=>{btn.textContent=ok?'✅':'⚠️';setTimeout(()=>{btn.textContent=original;},1200);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>done(false));
+  }else{
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');document.body.removeChild(ta);
+      done(true);
+    }catch(e){done(false);}
   }
 }
 async function resolvePublicFacebookName(scope){
@@ -1995,8 +1981,8 @@ async function renderProfileScopedSearch(scope, type){
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
-    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button type="button" class="meta-copy-btn" onclick="copyMetaChipValue(this,${JSON.stringify(scope.scopePath)})" title="نسخ" aria-label="نسخ البحث المقيّد">⧉</button></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button type="button" class="meta-copy-btn" onclick="copyMetaChipValue(this,${JSON.stringify(displayName)})" title="نسخ" aria-label="نسخ الاسم المؤكد للرابط">⧉</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
+    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(scope.scopePath)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 6px;vertical-align:middle;opacity:.75;">📋</button></div>
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(displayName)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 6px;vertical-align:middle;opacity:.75;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
@@ -2520,6 +2506,7 @@ const PLATFORM_DATA_PROVIDERS = {
 handleSharedLink();
 
 
+
 /* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
 let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=80,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
 function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&').replace(/=3D/g,'=').replace(/\s+/g,' ').trim()}
@@ -2545,7 +2532,7 @@ function hxBestSrcset(srcset){
   cands.sort((a,b)=>b.score-a.score);
   return cands[0]?.url||'';
 }
-function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set(),pool=[],add=x=>{if(x&&!map.has(x.id))map.set(x.id,x)};doc.querySelectorAll('a[href]').forEach(a=>{const z=hxLink(a.getAttribute('href'),p);if(!z)return;const isFbProfile=p==='facebook'&&/^https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:[A-Za-z0-9._-]+|profile\.php\?id=\d+)\/?(?:\?[^#]*)?(?:#.*)?$/i.test(z.url)&&!/(?:story_fbid|fbid|photo\.php|video|reel|set=)/i.test(z.url);if(isFbProfile)return;const root=a.closest('article,[role="article"]')||a.parentElement;const img=a.querySelector('img')||root?.querySelector('img');const text=hxn(root?.textContent||a.textContent||'').slice(0,5000);const author=hxAuthorName(root?.querySelector('strong a[href],h1 a[href],h2 a[href],h3 a[href]')?.textContent||'');const mentions=[...(root?.querySelectorAll('a[href]')||[])].map(m=>({name:hxn(m.textContent),url:m.href})).filter(m=>m.name.length>=2&&m.name.length<=120&&/^https?:\/\/(?:www\.|m\.)?facebook\.com\//i.test(m.url)&&m.url!==z.url).slice(0,40);media.set(z.id,{...z,thumb:img?.getAttribute('src')||'',text,author,date:'',mentions})});doc.querySelectorAll('img[src],img[data-src],img[srcset],source[srcset]').forEach((img,i)=>{const thumbSrc=hxn(img.getAttribute('src')||img.getAttribute('data-src')||hxBestSrcset(img.getAttribute('srcset')));const src=hxImgQuality(thumbSrc);if(hxBad(img,thumbSrc))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const near=hxNear(img,p);if(near&&near.type!=='image'&&!(p==='x'&&near.type==='post')){const x=media.get(near.id)||{...near,text:'',author:'',date:''};if(!x.thumb)x.thumb=thumbSrc;if(!x.directUrl)x.directUrl=src;media.set(near.id,x)}else{const x={id:'img:'+i+':'+key,type:'image',url:near?.url||'',thumb:thumbSrc,directUrl:src,text:img.getAttribute('alt')||'',author:'',date:''};pool.push(x);add(x)}});
+function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set(),pool=[],add=x=>{if(x&&!map.has(x.id))map.set(x.id,x)};doc.querySelectorAll('a[href]').forEach(a=>{const z=hxLink(a.getAttribute('href'),p);if(!z)return;const isFbProfile=p==='facebook'&&/^https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:[A-Za-z0-9._-]+|profile\.php\?id=\d+)\/?(?:\?[^#]*)?(?:#.*)?$/i.test(z.url)&&!/(?:story_fbid|fbid|photo\.php|video|reel|set=)/i.test(z.url);if(isFbProfile)return;const root=a.closest('article,[role="article"]')||a.parentElement;const img=a.querySelector('img')||root?.querySelector('img');const text=hxn(root?.textContent||a.textContent||'').slice(0,5000);const author=hxn(root?.querySelector('strong a[href],h1 a[href],h2 a[href],h3 a[href]')?.textContent||'');const mentions=[...(root?.querySelectorAll('a[href]')||[])].map(m=>({name:hxn(m.textContent),url:m.href})).filter(m=>m.name.length>=2&&m.name.length<=120&&/^https?:\/\/(?:www\.|m\.)?facebook\.com\//i.test(m.url)&&m.url!==z.url).slice(0,40);media.set(z.id,{...z,thumb:img?.getAttribute('src')||'',text,author,date:'',mentions})});doc.querySelectorAll('img[src],img[data-src],img[srcset],source[srcset]').forEach((img,i)=>{const thumbSrc=hxn(img.getAttribute('src')||img.getAttribute('data-src')||hxBestSrcset(img.getAttribute('srcset')));const src=hxImgQuality(thumbSrc);if(hxBad(img,thumbSrc))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const near=hxNear(img,p);if(near&&near.type!=='image'&&!(p==='x'&&near.type==='post')){const x=media.get(near.id)||{...near,text:'',author:'',date:''};if(!x.thumb)x.thumb=thumbSrc;if(!x.directUrl)x.directUrl=src;media.set(near.id,x)}else{const x={id:'img:'+i+':'+key,type:'image',url:near?.url||'',thumb:thumbSrc,directUrl:src,text:img.getAttribute('alt')||'',author:'',date:''};pool.push(x);add(x)}});
  // Fallback: photos placed via CSS background-image (some layouts don't use <img> at all).
  doc.querySelectorAll('[style*="background-image"]').forEach((el,i)=>{const m=(el.getAttribute('style')||'').match(/background-image:\s*url\((['"]?)(.*?)\1\)/i);if(!m)return;const thumbSrc=hxn(m[2]),src=hxImgQuality(thumbSrc);if(hxBad(el,thumbSrc))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const near=hxNear(el,p);if(near&&near.type!=='image'&&!(p==='x'&&near.type==='post')){const x=media.get(near.id)||{...near,text:'',author:'',date:''};if(!x.thumb)x.thumb=thumbSrc;if(!x.directUrl)x.directUrl=src;media.set(near.id,x)}else{const x={id:'bg:'+i+':'+key,type:'image',url:near?.url||'',thumb:thumbSrc,directUrl:src,text:'',author:'',date:''};pool.push(x);add(x)}});
  const flat=String(raw||'').replace(/=\r?\n/g,'');
@@ -2586,7 +2573,7 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
      const am=aria.match(/^(?:Comment|Reply) by (.+?)(?:\s+to\s+(.+?)'s comment)?\s+((?:about\s+)?(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy]))$/i);
      let author='',replyTo='',date='',text=hxn(el.textContent);
      if(am){
-       author=hxAuthorName(am[1]);replyTo=hxn(am[2]||'');date=hxn(am[3]);
+       author=hxn(am[1]);replyTo=hxn(am[2]||'');date=hxn(am[3]);
        if(author)text=text.replace(new RegExp('^\\s*'+author.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),'');
        text=text.replace(/^\s*(?:Verified account)?\s*[·•]?\s*(?:\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|just now|\d+\s*[hmdwy])\s*[·•]?\s*(?:by\s+)?(?:Author)?\s*/i,'');
        text=text.replace(/See more\s*/gi,'').replace(/\s*(?:Like\s*)?Reply\s*\d*\s*$/i,'').replace(/\s*Like\s*\d*\s*$/i,'').trim();
@@ -2627,7 +2614,7 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    if(rawText.length<2||rawText.length>3000)return;
    let author='',date='',text=rawText;
    if(p==='snapchat'){const sp=hxSplitComment(rawText);author=sp.author;date=sp.date;text=sp.text||rawText}
-   else{author=hxAuthorName(el.querySelector('a[href],#author-text,[class*="author" i]')?.textContent);date=hxn(el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.getAttribute('datetime')||el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.textContent)}
+   else{author=hxn(el.querySelector('a[href],#author-text,[class*="author" i]')?.textContent);date=hxn(el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.getAttribute('datetime')||el.querySelector('time,[datetime],[class*="time" i],#published-time-text')?.textContent)}
    if(!text||text.length<1)return;
    const k=(author+'|'+text).toLowerCase();if(st.has(k))return;st.add(k);
    const mentions=[...el.querySelectorAll('a[href]')].map(m=>({name:hxn(m.textContent),url:m.href})).filter(m=>m.name.length>=2&&m.name.length<=120&&/^https?:\/\//i.test(m.url)).slice(0,40);
@@ -2665,7 +2652,7 @@ function hxCounts(){for(const k of['Image','Post','Reel','Comment','Story','Vide
 function hxSuggest(){
   const box=document.getElementById('hxSuggestBox'),q=hxn(document.getElementById('hxName')?.value).toLowerCase();
   if(!q){box.style.display='none';return}
-  const names=[...new Set(HX.map(x=>hxAuthorName(x.author)).filter(Boolean))].filter(n=>n.toLowerCase().includes(q)).slice(0,8);
+  const names=[...new Set(HX.filter(x=>x.author).map(x=>x.author))].filter(n=>n.toLowerCase().includes(q)).slice(0,8);
   if(!names.length){box.style.display='none';return}
   box.innerHTML=names.map(n=>`<div style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px" onmousedown="hxPickName('${n.replace(/'/g,"\\'")}')">${esc(n)}</div>`).join('');
   box.style.display='block';
@@ -2693,14 +2680,6 @@ function hxBindProfileLongPress(){
   ['pointerup','pointercancel','pointerleave'].forEach(name=>list.addEventListener(name,clear));
   list.addEventListener('contextmenu',e=>{if(e.target.closest('.hx-comment>img'))e.preventDefault()});
 }
-function hxAuthorName(v){
-  const s=hxn(v);
-  return /^(?:منشور محفوظ|اسم غير محفوظ|المحتوى المحفوظ|غير معروف|unknown|saved post)$/i.test(s)?'':s;
-}
-function hxPostAuthorLabel(v){
-  const name=hxAuthorName(v);
-  return name?esc(name):'<span class="hx-post-label">المنشور</span>';
-}
 function hxPostTextHtml(x){
   let html=esc(String(x.text||'')).replace(/\r?\n/g,'<br>');
   const mentions=Array.isArray(x.mentions)?x.mentions:[];
@@ -2711,7 +2690,7 @@ function hxPostTextHtml(x){
   });
   return html;
 }
-function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='post'){list.innerHTML=shown.map(x=>`<article class="result-card" style="display:flex;align-items:flex-start;gap:12px;text-align:right;direction:rtl;">${x.thumb?`<img src="${esc(x.thumb)}" style="width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;cursor:pointer;" onclick="openInlineSavedFocus('${esc(x.directUrl||x.thumb)}')" onerror="this.style.display='none'">`:''}<div style="min-width:0;flex:1;"><div style="font-size:14px;color:#45d9ff;font-weight:700;margin-bottom:4px;">${hxPostAuthorLabel(x.author)}</div><div style="font-size:15px;line-height:1.9;white-space:normal;overflow-wrap:anywhere;">${hxPostTextHtml(x)||'(بدون نص)'}</div>${x.date?`<div style="font-size:11px;color:#8fa0bb;margin-top:8px;">${esc(x.date)}</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" class="toggle" style="display:inline-flex;margin-top:10px;padding:6px 10px;color:#8feaff;border-color:#45d9ff88;text-decoration:none;">↗ فتح المنشور الأصلي</a>`:''}</div></article>`).join('')||'<div class="hint">لا توجد منشورات محفوظة.</div>';return}if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(hxAuthorName(x.author)||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(hxAuthorName(x.author)||'اسم غير محفوظ')}</div>`}${x.reaction?`<img class="hx-reaction" src="${esc(x.reaction)}" alt="">`:''}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${hxPostTextHtml(x)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}if(HXtype==='reactor'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<div style="position:relative;width:36px;height:36px"><img src="${esc(x.thumb)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">${x.reaction?`<img src="${esc(x.reaction)}" style="position:absolute;bottom:-3px;left:-3px;width:16px;height:16px;border-radius:50%;background:#0b1526;border:1px solid #0b1526">`:''}</div>`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(hxAuthorName(x.author)||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(hxAuthorName(x.author)||'اسم غير محفوظ')}</div>`}<div class="hx-date">${x.text?esc(x.text):''}</div></div></div>`).join('')||'<div class="hint">لا يوجد متفاعلين محفوظين.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.directUrl||x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
+function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='post'){list.innerHTML=shown.map(x=>`<article class="result-card" style="display:flex;align-items:flex-start;gap:12px;text-align:right;direction:rtl;">${x.thumb?`<img src="${esc(x.thumb)}" style="width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;cursor:pointer;" onclick="openInlineSavedFocus('${esc(x.directUrl||x.thumb)}')" onerror="this.style.display='none'">`:''}<div style="min-width:0;flex:1;"><div style="font-size:14px;color:#45d9ff;font-weight:700;margin-bottom:4px;">${esc(x.author||'منشور محفوظ')}</div><div style="font-size:15px;line-height:1.9;white-space:normal;overflow-wrap:anywhere;">${hxPostTextHtml(x)||'(بدون نص)'}</div>${x.date?`<div style="font-size:11px;color:#8fa0bb;margin-top:8px;">${esc(x.date)}</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" class="toggle" style="display:inline-flex;margin-top:10px;padding:6px 10px;color:#8feaff;border-color:#45d9ff88;text-decoration:none;">↗ فتح المنشور الأصلي</a>`:''}</div></article>`).join('')||'<div class="hint">لا توجد منشورات محفوظة.</div>';return}if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${x.reaction?`<img class="hx-reaction" src="${esc(x.reaction)}" alt="">`:''}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${hxPostTextHtml(x)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}if(HXtype==='reactor'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<div style="position:relative;width:36px;height:36px"><img src="${esc(x.thumb)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">${x.reaction?`<img src="${esc(x.reaction)}" style="position:absolute;bottom:-3px;left:-3px;width:16px;height:16px;border-radius:50%;background:#0b1526;border:1px solid #0b1526">`:''}</div>`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}<div class="hx-date">${x.text?esc(x.text):''}</div></div></div>`).join('')||'<div class="hint">لا يوجد متفاعلين محفوظين.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.directUrl||x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
   HX=[];HXtype='image';HXpage=1;
