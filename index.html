@@ -2688,9 +2688,11 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    add({id:'c:'+i+k.slice(0,30),type:'comment',url:el.querySelector('a[href]')?.href||'',thumb:avatarEl?.src||'',reaction:reactionEl?.src||'',text,author,date,mentions})
  });return[...map.values()]}
 window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ تحليل الملف والصور المصغرة...';const r=new FileReader();r.onload=x=>{try{const raw=x.target.result,doc=new DOMParser().parseFromString(raw,'text/html');HXplatform=hxPlatform(doc,raw);HX=hxExtract(doc,raw,HXplatform);
- // لو المستخدم حط رابط المنشور الأصلي يدويًا، نربطه بس بالمنشورات اللي ما انلقاها إلها رابط تلقائيًا من داخل الملف.
+ // لو المستخدم حط رابط المنشور الأصلي يدويًا، نربطه بس إذا كان فيه منشور واحد بالضبط
+ // ناقصه رابط — لتجنّب تكرار نفس الرابط اليدوي على أكتر من منشور مختلف عن غلط.
  const manualUrl=(document.getElementById('htmlImportSourceUrl')?.value||'').trim();
- if(manualUrl){HX.forEach(z=>{if(z.type==='post'&&!z.url)z.url=manualUrl})}
+ const postsWithoutUrl=HX.filter(z=>z.type==='post'&&!z.url);
+ if(manualUrl&&postsWithoutUrl.length===1){postsWithoutUrl[0].url=manualUrl}
  HXtype=HX.some(z=>z.type==='post')?'post':'image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type===HXtype));document.getElementById('hxPlatform').textContent='المنصة: '+HXL[HXplatform]+' · '+f.name;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');
  // Count media resources actually embedded in the saved file (ground-truth ceiling for how many photos we could ever recover from this file).
  const rawMatches=[...String(raw||'').replace(/=\r?\n/g,'').matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)|<img[^>]+src=["']([^"']+)["']/gi)],rawSet=new Set();rawMatches.forEach(m=>{const u=m[1]||m[2];if(u&&/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat/i.test(u))rawSet.add(u.split('?')[0])});
@@ -2698,6 +2700,7 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
   let msg=`✅ منشورات ${HX.filter(x=>x.type==='post').length} · صور ${HX.filter(x=>x.type==='image').length} · ريلز ${HX.filter(x=>x.type==='reel').length} · فيديو ${HX.filter(x=>x.type==='video').length} · ستوري ${HX.filter(x=>x.type==='story').length}`;
  msg+=` (الملف فيه ${rawSet.size} رابط صورة محفوظ فعليًا)`;
  if(rawSet.size>0 && rawSet.size<40){msg+=' ⚠️ عدد قليل — الأرجح إنك ما نزّلت/مررت على كل الصفحة قبل الحفظ. مرّر (scroll) ببطء لآخر الصفحة/البروفايل لين تتحمّل كل الصور، وبعدين احفظ الصفحة من جديد.'}
+ if(manualUrl&&postsWithoutUrl.length>1){msg+=` ⚠️ الرابط اليدوي ما انربط — فيه ${postsWithoutUrl.length} منشورات مختلفة بدون رابط، والرابط اليدوي يشتغل بس لو منشور واحد بالملف.`}
  st.textContent=msg;
  st.textContent+=' · ⏳ جارٍ حفظ نسخة بـ"الملفات المحفوظة"...';
  try{
