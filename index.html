@@ -233,6 +233,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div class="hint" style="margin-top:0; margin-bottom:8px;">افتحي صفحة الشخص/الريلز بفيسبوك بالمتصفح ← (⋮) ← "حفظ صفحة" أو "Save page" باسم "صفحة ويب، كاملة" ← ارفعي ملف الـ HTML هون. رح نطلعلك المنشورات والريلز والفيديوهات والصور مع معايناتها، بدون أي اتصال إنترنت — كله بيصير بجهازك. أو استخدمي سكربت RADAR Collector v6 (يعمل على X، فيسبوك، إنستجرام، سناب شات) وارفعي ملف JSON اللي بيصدّره من زر "{ } رفع ملف JSON".</div>
     <input type="file" id="htmlImportInput" accept=".html,.htm,.js,text/html,application/javascript,text/javascript" style="display:none;" onchange="handleHtmlImport(event)">
     <input type="file" id="jsonImportInput" accept=".json,application/json" style="display:none" onchange="handleOfficialJson(event)">
+    <div class="search-box" style="padding:0 14px; min-height:48px; margin-bottom:10px;">
+      <span style="font-size:15px; flex-shrink:0;">🔗</span>
+      <input type="text" id="htmlImportSourceUrl" placeholder="رابط المنشور الأصلي (اختياري) — يُربط بالمنشور المستخرج لو ما كان الرابط موجود بالملف نفسه" style="direction:ltr; text-align:left; font-family:'JetBrains Mono',monospace; font-size:13px;" autocomplete="off">
+    </div>
     <div class="toggles">
       <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📄</span><span>رفع ملف HTML/JS</span></div>
       <div class="toggle" onclick="document.getElementById('jsonImportInput').click()" style="cursor:pointer;border-color:#45d9ff88"><span>{ }</span><span>رفع ملف JSON</span></div>
@@ -2683,7 +2687,11 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
    const avatarEl=imageNodes.find(node=>node!==reactionEl&&!/sprite|emoji|icon|reaction|like/.test(imageText(node)))||imageNodes[0];
    add({id:'c:'+i+k.slice(0,30),type:'comment',url:el.querySelector('a[href]')?.href||'',thumb:avatarEl?.src||'',reaction:reactionEl?.src||'',text,author,date,mentions})
  });return[...map.values()]}
-window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ تحليل الملف والصور المصغرة...';const r=new FileReader();r.onload=x=>{try{const raw=x.target.result,doc=new DOMParser().parseFromString(raw,'text/html');HXplatform=hxPlatform(doc,raw);HX=hxExtract(doc,raw,HXplatform);HXtype=HX.some(z=>z.type==='post')?'post':'image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type===HXtype));document.getElementById('hxPlatform').textContent='المنصة: '+HXL[HXplatform]+' · '+f.name;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');
+window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ تحليل الملف والصور المصغرة...';const r=new FileReader();r.onload=x=>{try{const raw=x.target.result,doc=new DOMParser().parseFromString(raw,'text/html');HXplatform=hxPlatform(doc,raw);HX=hxExtract(doc,raw,HXplatform);
+ // لو المستخدم حط رابط المنشور الأصلي يدويًا، نربطه بس بالمنشورات اللي ما انلقاها إلها رابط تلقائيًا من داخل الملف.
+ const manualUrl=(document.getElementById('htmlImportSourceUrl')?.value||'').trim();
+ if(manualUrl){HX.forEach(z=>{if(z.type==='post'&&!z.url)z.url=manualUrl})}
+ HXtype=HX.some(z=>z.type==='post')?'post':'image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type===HXtype));document.getElementById('hxPlatform').textContent='المنصة: '+HXL[HXplatform]+' · '+f.name;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');
  // Count media resources actually embedded in the saved file (ground-truth ceiling for how many photos we could ever recover from this file).
  const rawMatches=[...String(raw||'').replace(/=\r?\n/g,'').matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)|<img[^>]+src=["']([^"']+)["']/gi)],rawSet=new Set();rawMatches.forEach(m=>{const u=m[1]||m[2];if(u&&/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat/i.test(u))rawSet.add(u.split('?')[0])});
  const totalMedia=HX.filter(x=>['image','reel','video','story'].includes(x.type)).length;
