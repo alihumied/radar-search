@@ -1834,6 +1834,7 @@ function getLocalProfileAlias(scope){
   }catch(e){}
   return {name:'',source:''};
 }
+function jsAttrStr(v){return String(v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 function copyMetaChipValue(btn,text){
   const original=btn.textContent;
   const done=ok=>{btn.textContent=ok?'✅':'⚠️';setTimeout(()=>{btn.textContent=original;},1200);};
@@ -1988,8 +1989,8 @@ async function renderProfileScopedSearch(scope, type){
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
-    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(scope.scopePath)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(displayName)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
+    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.scopePath))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
