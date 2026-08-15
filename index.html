@@ -202,6 +202,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       <div class="saved-images-grid" id="savedVideosList" style="margin-top:12px;"></div>
     </div>
     <div class="results" id="savedLinksArea">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:12px;flex-wrap:wrap;">
+        <button id="savedImagesZipBtn" class="toggle" style="cursor:pointer;border-color:#2eb87288;color:#8affb0;" onclick="downloadSavedImagesZip()">📦 تنزيل كل الصور ZIP</button>
+        <span class="hint" style="margin:0;">تجميع الصور المحفوظة في ملف واحد</span>
+      </div>
       <div id="savedLinksList" style="margin-top:12px;"></div>
     </div>
     <div class="results" id="savedUrlsArea"><div id="savedUrlsList" style="margin-top:12px;"></div></div>
@@ -1506,6 +1510,59 @@ async function renderSavedLinks(){
   }
   l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
+}
+async function downloadSavedImagesZip(){
+  const items=await idbGetAllImages();
+  if(!items.length){alert('ما في صور محفوظة بعد لتجميعها.');return}
+  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return}
+  if(!confirm(`تجميع ${items.length} صورة محفوظة في ملف ZIP واحد وتنزيله؟`))return;
+  const btn=document.getElementById('savedImagesZipBtn'),status=document.getElementById('imageSearchStatus');
+  if(btn){btn.disabled=true;btn.style.opacity='.65'}
+  if(status)status.textContent=`⏳ تجهيز 0 من ${items.length} صورة للملف المضغوط...`;
+  const zip=new JSZip();
+  let ok=0,failed=0,done=0;
+  const queue=items.map((_,i)=>i),CONCURRENCY=8;
+  const extFromBlob=(blob,src)=>{
+    const mime=String(blob?.type||'').toLowerCase();
+    if(mime.includes('png'))return'png';
+    if(mime.includes('webp'))return'webp';
+    if(mime.includes('gif'))return'gif';
+    if(mime.includes('svg'))return'svg';
+    if(mime.includes('avif'))return'avif';
+    if(mime.includes('bmp'))return'bmp';
+    if(mime.includes('jpeg')||mime.includes('jpg'))return'jpg';
+    const m=String(src||'').match(/\.(jpe?g|png|webp|gif|svg|avif|bmp)(?:[?#]|$)/i);
+    return m?m[1].toLowerCase().replace('jpeg','jpg'):'jpg';
+  };
+  async function worker(){
+    while(queue.length){
+      const i=queue.shift(),item=items[i],src=item?.imageUrl;
+      try{
+        if(!src)throw 0;
+        const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+        const blob=await res.blob();
+        zip.file(`radar-saved-${String(i+1).padStart(3,'0')}.${extFromBlob(blob,src)}`,blob,{compression:'STORE'});
+        ok++;
+      }catch(e){failed++}
+      done++;
+      if(status)status.textContent=`⏳ تجهيز ${done} من ${items.length} صورة للملف المضغوط...`;
+    }
+  }
+  try{
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,items.length)},()=>worker()));
+    if(!ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور المحفوظة مباشرة عبر CORS.';return}
+    if(status)status.textContent=`⏳ جارٍ إنشاء ملف ZIP من ${ok} صورة...`;
+    const content=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const url=URL.createObjectURL(content),a=document.createElement('a');
+    a.href=url;a.download=`radar-saved-images-${Date.now()}.zip`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    if(status)status.textContent=`✅ تم تنزيل ZIP فيه ${ok} صورة${failed?` · تعذّر ${failed} بسبب رابط منتهي أو CORS`:''}`;
+  }catch(e){
+    if(status)status.textContent='⚠️ تعذّر إنشاء ملف ZIP.';
+  }finally{
+    if(btn){btn.disabled=false;btn.style.opacity='1'}
+  }
 }
 async function removeSavedLink(id){
   await idbDeleteImage(id);
