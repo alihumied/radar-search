@@ -1836,6 +1836,21 @@ function getLocalProfileAlias(scope){
   }catch(e){}
   return {name:'',source:''};
 }
+function copyMetaChipValue(btn,text){
+  const original=btn.textContent;
+  const done=ok=>{btn.textContent=ok?'✅':'⚠️';setTimeout(()=>{btn.textContent=original;},1200);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>done(false));
+  }else{
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');document.body.removeChild(ta);
+      done(true);
+    }catch(e){done(false);}
+  }
+}
 async function resolvePublicFacebookName(scope){
   if(!scope||scope.platform!=='facebook') return scope;
   const profileUrl=scope.profileUrl||`https://${scope.scopePath}`;
@@ -1968,9 +1983,8 @@ async function renderProfileScopedSearch(scope, type){
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
-    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
-    <div class="meta-chip">🔒 النطاق: <b>المحتوى العام المفهرس فقط</b></div>`;
+    <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(scope.scopePath)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 6px;vertical-align:middle;opacity:.75;">📋</button></div>
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,${JSON.stringify(displayName)})" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 6px;vertical-align:middle;opacity:.75;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
