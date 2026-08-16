@@ -20,7 +20,7 @@
   body{
     background:
       radial-gradient(ellipse 900px 500px at 15% -10%, rgba(46,107,255,0.16), transparent 60%),
-      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(63,212,255,0.08), transparent 55%),
+      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(63,212,255,0.08), transparent 55https://www.facebook.com/nadine.s.nassar
       var(--bg-0);
     color:var(--text); font-family:'Tajawal', sans-serif; min-height:100vh; padding:28px 18px 60px;
   }
@@ -1792,7 +1792,7 @@ function detectProfileScope(rawText){
       const idMatch = m[1].match(/profile\.php\?id=(\d+)/i);
       const identifier = idMatch ? idMatch[1] : m[1];
       const remainder = text.replace(m[0], '').trim();
-      return { platform:p.platform, domain:p.domain, identifier, scopePath, profileUrl:`https://${scopePath}`, displayName:'', remainder };
+      return { platform:p.platform, domain:p.domain, identifier, scopePath, profileUrl:`https://${scopePath}`, displayName:'', remainder, isNumericFacebook:p.platform==='facebook'&&/^\d+$/.test(identifier) };
     }
   }
   // دعم رابط حساب عام على أي نطاق آخر بصيغة /username، مع إبقاء المحتوى الخاص خارج النطاق.
@@ -1972,6 +1972,23 @@ async function resolvePublicFacebookName(scope){
   return {...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable'};
 }
 async function renderProfileScopedSearch(scope, type){
+  const isNumericFacebook=scope.platform==='facebook'&&(/^\d+$/.test(String(scope.identifier||''))||scope.isNumericFacebook===true);
+  scope.isNumericFacebook=isNumericFacebook;
+  // عند إدخال رقم فيسبوك، نحلّه أولاً إلى رابط البروفايل المخصص عبر نفس مسار profile.php?id= المستخدم في بطاقات الأعضاء.
+  // هذا يجعل استعلامات Google وFacebook مرتبطة بصاحب الرقم، لا بأي شخص يشارك الاسم.
+  if(isNumericFacebook&&!scope.resolvedProfileUrl&&typeof hxMemberFindCustomUrl==='function'){
+    try{
+      const resolved=await Promise.race([
+        hxMemberFindCustomUrl(scope.profileUrl,scope.displayName||''),
+        new Promise(resolve=>setTimeout(()=>resolve(''),7000))
+      ]);
+      if(resolved){
+        scope.resolvedProfileUrl=resolved;
+        scope.profileUrl=resolved;
+        scope.resolvedHandle=(resolved.match(/facebook\.com\/([^/?#]+)/i)||[])[1]||'';
+      }
+    }catch(e){}
+  }
   if(scope.platform==='facebook'&&!scope.displayName){
     const meta=document.getElementById('resultMeta'),cards=document.getElementById('resultCards');
     meta.innerHTML=`<div class="meta-chip">🎯 تحليل رابط الحساب: <b>${esc(scope.scopePath)}</b></div>`;
@@ -1992,7 +2009,8 @@ async function renderProfileScopedSearch(scope, type){
   const meta = document.getElementById('resultMeta');
   meta.innerHTML = `
     <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.scopePath))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}`;
+    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
+    ${isNumericFacebook && scope.resolvedProfileUrl ? `<div class="meta-chip">🔗 الرابط المخصص المستخرج: <b>${esc(scope.resolvedProfileUrl)}</b></div>` : ''}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
@@ -2001,20 +2019,28 @@ async function renderProfileScopedSearch(scope, type){
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
-  // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
+  const resolvedProfileUrl = scope.resolvedProfileUrl||profileUrl;
+  const resolvedHandle = String(scope.resolvedHandle||'').replace(/^@/,'');
+  // في الرابط الرقمي يكون الرقم شرطاً أساسياً، والرابط المخصص - إن عُثر عليه - دليل إضافي لنفس الحساب.
+  // لا نستخدم OR مع اسم عام؛ لأن ذلك يخلط صاحب الرقم مع أشخاص آخرين يحملون الاسم نفسه.
+  const numericOwnerTerms = resolvedHandle
+    ? `site:facebook.com ("${resolvedProfileUrl}" OR "${handle}")${displayName?` "${displayName}"`:''}`
+    : `site:facebook.com "${handle}"${displayName?` "${displayName}"`:''}`;
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
   const idTerms = fallbackSearchMode
     ? `${profileSearchIdentity} Facebook`
     : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
-  const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
-  const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
-  const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
+  const postsQ = isNumericFacebook ? `${numericOwnerTerms}${kwPart}` : (fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`);
+  const commentsQ = isNumericFacebook ? `${numericOwnerTerms}${kwPart} ${commentSignal}` : (fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`);
+  const activityQ = isNumericFacebook ? `${numericOwnerTerms}${kwPart} ${activitySignal}` : (fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`);
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
+  const facebookSearchQ = isNumericFacebook ? `"${resolvedHandle||handle}"` : `"${displayName||handle}"`;
   const items = [
-    {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'مقيّد بالحساب'},
-    {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'المفهرس علنًا'},
-    {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'إن كانت ظاهرة للعامة'},
-    {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:displayName?'الرابط الأصلي':'رابط الحساب'},
+    ...(scope.platform==='facebook' ? [{name:'📘 منشورات صاحب الحساب — فيسبوك', color:'#1877F2', letter:'f', url:facebookUrl(facebookSearchQ), badge:isNumericFacebook?'بحث بالمعرّف':'بحث الحساب'}] : []),
+    {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:isNumericFacebook?'بحث صاحب المعرّف':(fallbackSearchMode?'بحث عميق عام بالمعرّف':'مقيّد بالحساب')},
+    {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:isNumericFacebook?'بحث صاحب المعرّف':(fallbackSearchMode?'بحث عميق عام بالمعرّف':'المفهرس علنًا')},
+    {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:isNumericFacebook?'بحث صاحب المعرّف':(fallbackSearchMode?'بحث عميق عام بالمعرّف':'إن كانت ظاهرة للعامة')},
+    {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:resolvedProfileUrl, badge:isNumericFacebook&&resolvedHandle?'الرابط المخصص المستخرج':(displayName?'الرابط الأصلي':'رابط الحساب')},
   ];
   if(scope.platform==='x'){
     const xSuffix = keyword ? ` ${keyword}` : '';
