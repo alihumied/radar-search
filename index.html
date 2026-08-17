@@ -1864,7 +1864,7 @@ function rememberFacebookNumericId(scope,id){
 }
 function getKnownFacebookVanityUrl(scope,id){
   const key=`facebook.com/${String(id||'')}`.toLowerCase();
-  const isValid=v=>{const s=String(v||'').trim();return s&&!/\/profile\.php(?:[/?#]|$)/i.test(s)&&!/(?:^|\/)\d{5,20}(?:[/?#]|$)/.test(s)&&!/(?:^|\/)(?:business|ads|advertising|developers|jobs|directory|fundraisers|donations)(?:[/?#]|$)/i.test(s)?s:''};
+  const isValid=v=>{const s=String(v||'').trim();return s&&!/\/profile\.php(?:[/?#]|$)/i.test(s)&&!/(?:^|\/)\d{5,20}(?:[/?#]|$)/.test(s)&&!/(?:^|\/)(?:reg|business|ads|advertising|developers|jobs|directory|fundraisers|donations)(?:[/?#]|$)/i.test(s)?s:''};
   try{
     const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
     const value=isValid(byId[key]);
@@ -1964,7 +1964,7 @@ async function resolvePublicFacebookName(scope){
   const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
   let foundVanityUrl=knownNumericId?getKnownFacebookVanityUrl(scope,knownNumericId):'';
-  const reservedFacebookPaths=/^(login|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
+  const reservedFacebookPaths=/^(login|reg|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
   const cleanFacebookVanity=v=>{
     const raw=String(v||'').trim();
     const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i);
@@ -2214,6 +2214,7 @@ async function renderProfileScopedSearch(scope, type){
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
   // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
+  const isNumericFacebookInput = scope.platform==='facebook' && /^\d{5,20}$/.test(String(scope.identifier||''));
   const vanityIdentity = scope.vanityUrl ? ` OR \"${scope.vanityUrl}\" OR \"${scope.vanityUrl.replace(/^https?:\/\/(?:www\.)?/i,'')}\"` : '';
   // نستخرج الرقم الموجود في الرابط أيضًا؛ فهو مفيد في روابط مثل lolo.ana.727666،
   // وفي الرابط الرقمي الكامل يكون هو المعرّف UID نفسه.
@@ -2223,20 +2224,27 @@ async function renderProfileScopedSearch(scope, type){
   const numericIdentityTerms = scope.numericId
     ? ` OR \"${numericIdentity}\" OR \"${scope.numericUrl}\" OR \"profile.php?id=${numericIdentity}\"`
     : (numericSuffix ? ` OR \"${numericSuffix}\"` : '');
-  // الطريقة السابقة بقيت كما هي، مع إضافة الرقم كبديل OR حتى لا تختفي النتائج.
-  const idTerms = fallbackSearchMode
-    ? `\"${profileSearchIdentity}\" Facebook`
-    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity}${numericIdentityTerms})`;
+  // عند إدخال UID رقمي يجب أن يبحث Google عن الاسم والرقم معًا، لا أن يعاملهما كبدائل OR.
+  const numericPairTerms = numericIdentity
+    ? `\"${profileSearchIdentity}\" \"${numericIdentity}\"`
+    : `\"${profileSearchIdentity}\"`;
+  const idTerms = isNumericFacebookInput
+    ? numericPairTerms
+    : (fallbackSearchMode
+      ? `\"${profileSearchIdentity}\" Facebook`
+      : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity}${numericIdentityTerms})`);
   const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
   const items = [];
   // هذه بطاقات مستقلة: الاسم وحده للمقارنة، الاسم مع الرابط، والاسم مع المعرّف.
-  // فصلها أفضل من إجبار Google على جمع كل الشروط في استعلام واحد قد يعيد صفر نتائج.
+  // عند UID رقمي نستخدم الاسم والرابط الرقمي مباشرةً بدل inurl وOR المركّبين.
   if(displayName){
     const nameOnlyQ = `\"${displayName}\"`;
-    const nameLinkQ = `\"${displayName}\" (inurl:${scope.identifier} OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
+    const nameLinkQ = isNumericFacebookInput
+      ? `\"${displayName}\" \"${scope.numericUrl||`https://www.facebook.com/${numericIdentity}`}\"`
+      : `\"${displayName}\" (inurl:${scope.identifier} OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
     items.push(
       {name:'🔎 الاسم فقط — جوجل', color:'#4285F4', letter:'G', url:gParams(`site:${scope.domain} ${nameOnlyQ}${kwPart}`), badge:'نتائج كثيرة للمقارنة'},
       {name:'🎯 الاسم + الرابط — جوجل', color:'#2e6bff', letter:'G', url:gParams(`site:${scope.domain} ${nameLinkQ}${kwPart}`), badge:'أدق بالرابط'}
@@ -2244,13 +2252,11 @@ async function renderProfileScopedSearch(scope, type){
     if(numericIdentity){
       const hasRealNumericId=Boolean(scope.numericId&&scope.numericUrl);
       const idLabel=hasRealNumericId?'الرابط الرقمي الحقيقي':'الرقم الموجود في الرابط';
-      const nameIdQ=hasRealNumericId
-        ? `\"${displayName}\" (inurl:${numericIdentity} OR \"${scope.numericUrl}\" OR \"profile.php?id=${numericIdentity}\")`
-        : `\"${displayName}\" \"${numericIdentity}\"`;
-      items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'بحث أدق'});
+      const nameIdQ=`\"${displayName}\" \"${numericIdentity}\"`;
+      items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'الاسم والرقم معًا'});
       if(hasRealNumericId){
-        const flexibleQ=`(site:${scope.domain} \"${displayName}\" inurl:${scope.identifier}) OR (site:${scope.domain} \"${displayName}\" inurl:${numericIdentity}) OR (site:${scope.domain} \"${displayName}\" \"${scope.numericUrl}\")`;
-        items.push({name:'🧩 الاسم + الرابطين — بحث مرن', color:'#0f766e', letter:'OR', url:gParams(`${flexibleQ}${kwPart}`), badge:'بديل عند عدم وجود نتائج'});
+        const profileIdQ=`\"${displayName}\" \"profile.php?id=${numericIdentity}\"`;
+        items.push({name:'🔗 الاسم + profile.php?id — جوجل', color:'#0f766e', letter:'ID', url:gParams(`site:${scope.domain} ${profileIdQ}${kwPart}`), badge:'بديل للرابط الرقمي'});
       }
     }
   }
