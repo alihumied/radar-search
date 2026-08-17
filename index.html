@@ -1878,6 +1878,9 @@ async function resolvePublicFacebookName(scope){
   const add=(v,score=0,source='public')=>{
     const s=clean(v);
     if(!s||s.length<2||s.length>120||isGenericFacebookName(s)) return;
+    // اسم حقيقي ما بيكون أرقام بس — لو المرشّح رقم تعريفي (UID) بالكامل، هذا مش اسم عام،
+    // هذا نفس الرقم اللي بحثنا فيه أصلاً (مثلاً عنوان صفحة بحث رجع الرقم نفسه كنص).
+    if(/^\d+$/.test(s)) return;
     if(candidates.some(x=>x.text.toLowerCase()===s.toLowerCase())) return;
     candidates.push({text:s,score,source});
   };
