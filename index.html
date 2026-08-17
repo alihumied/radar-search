@@ -1827,6 +1827,23 @@ function localFacebookShareResolution(url){
   }catch(e){return '';}
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
+// قائمة استبعاد موحّدة لمسارات فيسبوك النظامية (تسجيل دخول/تسجيل حساب/إعلانات...) — تُستخدم بكل مكان
+// نتحقق فيه من صحة "رابط تعريفي" مستخرج، عشان ما نتحمّس ونعتبر صفحة نظامية رابط شخص حقيقي.
+const RESERVED_FACEBOOK_PATHS=/^(login|reg|register|signup|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
+function isReservedFacebookPath(s){return RESERVED_FACEBOOK_PATHS.test(String(s||'').trim())}
+// تنظيف لمرة واحدة عند التحميل: أي رابط تعريفي محفوظ سابقًا بالكاش يطابق مسار نظامي (زي reg/login)
+// كان اتخزّن بنسخة أقدم قبل هالفلتر — نشيله عشان ما يفضل يظهر غلط.
+(function sanitizeStaleFacebookVanityCache(){
+  try{
+    const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
+    let changed=false;
+    for(const k of Object.keys(byId)){
+      const seg=String(byId[k]||'').replace(/^https?:\/\/(?:www\.)?facebook\.com\//i,'').split(/[/?#]/)[0];
+      if(!seg||isReservedFacebookPath(seg)||/^\d{5,20}$/.test(seg)){delete byId[k];changed=true}
+    }
+    if(changed) localStorage.setItem('radar_facebook_vanity_by_id',JSON.stringify(byId));
+  }catch(e){}
+})();
 // لا توجد خريطة ثابتة للمستخدمين؛ كل رقم جديد يمر عبر resolver العام والمصادر العامة.
 const VERIFIED_FACEBOOK_NUMERIC_IDS = Object.freeze({});
 const VERIFIED_FACEBOOK_VANITY_BY_ID = Object.freeze({});
@@ -1864,7 +1881,7 @@ function rememberFacebookNumericId(scope,id){
 }
 function getKnownFacebookVanityUrl(scope,id){
   const key=`facebook.com/${String(id||'')}`.toLowerCase();
-  const isValid=v=>{const s=String(v||'').trim();return s&&!/\/profile\.php(?:[/?#]|$)/i.test(s)&&!/(?:^|\/)\d{5,20}(?:[/?#]|$)/.test(s)&&!/(?:^|\/)(?:reg|business|ads|advertising|developers|jobs|directory|fundraisers|donations)(?:[/?#]|$)/i.test(s)?s:''};
+  const isValid=v=>{const s=String(v||'').trim();if(!s) return '';const seg=s.replace(/^https?:\/\/(?:www\.)?facebook\.com\//i,'').split(/[/?#]/)[0];return seg&&!isReservedFacebookPath(seg)&&!/^\d{5,20}$/.test(seg)?s:''};
   try{
     const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
     const value=isValid(byId[key]);
@@ -1964,7 +1981,7 @@ async function resolvePublicFacebookName(scope){
   const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
   let foundVanityUrl=knownNumericId?getKnownFacebookVanityUrl(scope,knownNumericId):'';
-  const reservedFacebookPaths=/^(login|reg|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
+  const reservedFacebookPaths=RESERVED_FACEBOOK_PATHS;
   const cleanFacebookVanity=v=>{
     const raw=String(v||'').trim();
     const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i);
