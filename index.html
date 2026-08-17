@@ -1813,14 +1813,8 @@ function detectProfileScope(rawText){
   }catch(e){}
   return null;
 }
-const VERIFIED_PROFILE_NAMES = {
-  'facebook.com/majed.nsar.1': 'Baraa Alhajaira',
-  'facebook.com/dina.tareq.330284': 'Dina Tareq',
-  'facebook.com/balhnan2': 'محمد بركات',
-  'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
-  'facebook.com/sarah.ali.969': 'SaRah Ali SalmAn',
-  'facebook.com/dina.alshaer.961839': 'Dina Alshaer'
-};
+// لا توجد أسماء ثابتة؛ الاسم يُستخرج من الصفحة العامة أو نتائج البحث ويُحفظ محليًا بعد التحقق.
+const VERIFIED_PROFILE_NAMES = Object.freeze({});
 const VERIFIED_FACEBOOK_SHARE_MAP = {
   '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661'
 };
@@ -1833,15 +1827,9 @@ function localFacebookShareResolution(url){
   }catch(e){return '';}
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
-const VERIFIED_FACEBOOK_NUMERIC_IDS = {
-  // روابط وأرقام موثقة من أمثلة المستخدم.
-  'facebook.com/dina.tareq.330284': '100007085296474',
-  'facebook.com/majed.nsar.1': '100008479923577'
-};
-const VERIFIED_FACEBOOK_VANITY_BY_ID = {
-  'facebook.com/100007085296474': 'https://www.facebook.com/dina.tareq.330284',
-  'facebook.com/100008479923577': 'https://www.facebook.com/majed.nsar.1'
-};
+// لا توجد خريطة ثابتة للمستخدمين؛ كل رقم جديد يمر عبر resolver العام والمصادر العامة.
+const VERIFIED_FACEBOOK_NUMERIC_IDS = Object.freeze({});
+const VERIFIED_FACEBOOK_VANITY_BY_ID = Object.freeze({});
 function readFacebookAliases(){
   try{
     const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
@@ -1857,7 +1845,6 @@ function readFacebookNumericIds(){
 function getKnownFacebookNumericId(scope){
   const key=profileAliasKey(scope);
   if(/^\d{5,20}$/.test(String(scope?.identifier||''))) return String(scope.identifier);
-  if(VERIFIED_FACEBOOK_NUMERIC_IDS[key]) return VERIFIED_FACEBOOK_NUMERIC_IDS[key];
   const saved=readFacebookNumericIds();
   return String(saved[key]||'').match(/^\d{5,20}$/)?.[0]||'';
 }
@@ -1877,10 +1864,12 @@ function rememberFacebookNumericId(scope,id){
 }
 function getKnownFacebookVanityUrl(scope,id){
   const key=`facebook.com/${String(id||'')}`.toLowerCase();
-  if(VERIFIED_FACEBOOK_VANITY_BY_ID[key]) return VERIFIED_FACEBOOK_VANITY_BY_ID[key];
+  const isValid=v=>{const s=String(v||'').trim();return s&&!/\/profile\.php(?:[/?#]|$)/i.test(s)&&!/(?:^|\/)\d{5,20}(?:[/?#]|$)/.test(s)&&!/(?:^|\/)(?:business|ads|advertising|developers|jobs|directory|fundraisers|donations)(?:[/?#]|$)/i.test(s)?s:''};
   try{
     const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
-    return String(byId[key]||'');
+    const value=isValid(byId[key]);
+    if(!value&&byId[key]){delete byId[key];localStorage.setItem('radar_facebook_vanity_by_id',JSON.stringify(byId))}
+    return value;
   }catch(e){return ''}
 }
 function withFacebookNumericIdentity(scope,id){
@@ -1906,11 +1895,6 @@ function rememberFacebookAlias(scope,name,vanityUrl=''){
 function getLocalProfileAlias(scope){
   const key=profileAliasKey(scope);
   if(VERIFIED_PROFILE_NAMES[key]) return {name:VERIFIED_PROFILE_NAMES[key],source:'verified'};
-  const mappedVanity=VERIFIED_FACEBOOK_VANITY_BY_ID[key];
-  if(mappedVanity){
-    const mappedKey=profileAliasKey({scopePath:new URL(mappedVanity).hostname.replace(/^www\\./i,'')+new URL(mappedVanity).pathname});
-    if(VERIFIED_PROFILE_NAMES[mappedKey]) return {name:VERIFIED_PROFILE_NAMES[mappedKey],source:'verified'};
-  }
   const saved=readFacebookAliases();
   if(saved[key]) return {name:String(saved[key]),source:'local'};
   return {name:'',source:''};
@@ -1980,6 +1964,41 @@ async function resolvePublicFacebookName(scope){
   const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
   let foundVanityUrl=knownNumericId?getKnownFacebookVanityUrl(scope,knownNumericId):'';
+  const reservedFacebookPaths=/^(login|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
+  const cleanFacebookVanity=v=>{
+    const raw=String(v||'').trim();
+    const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i);
+    if(peopleMatch&&peopleMatch[1]) return `https://www.facebook.com/${peopleMatch[1]}`;
+    let s=raw.replace(/^https?:\/\/(?:www\.)?/i,'').replace(/^facebook\.com\//i,'').split(/[/?#\s]/)[0];
+    if(!s||/^\d{5,20}$/.test(s)||/\.php$/i.test(s)||reservedFacebookPaths.test(s)||s.length<3||s.length>80) return '';
+    return `https://www.facebook.com/${s}`;
+  };
+  const extractFacebookVanity=text=>{
+    const s=String(text||'');
+    const directPatterns=[
+      /[\"'](?:userVanity|user_vanity|username|vanity|profileUsername)[\"']\s*:\s*[\"']([A-Za-z][A-Za-z0-9._-]{2,79})[\"']/ig,
+      /(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\"' ]|$)/ig,
+      /(?:https?:\/\/)?(?:www\.)?facebook\.com\/([A-Za-z][A-Za-z0-9._-]{2,79})(?:[/?#)\"' ]|$)/ig
+    ];
+    for(const re of directPatterns){let m;while((m=re.exec(s))){const v=cleanFacebookVanity(m[1]);if(v)return v}}
+    return '';
+  };
+  const recordFacebookVanity=text=>{if(!foundVanityUrl){const v=extractFacebookVanity(text);if(v) foundVanityUrl=v}return foundVanityUrl};
+  const recordNamedFacebookVanity=(text,name)=>{
+    if(foundVanityUrl) return foundVanityUrl;
+    const wanted=String(name||'').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').trim();
+    if(!wanted) return '';
+    const s=String(text||'');
+    const md=/\[([^\]\n]{2,160})\]\((https?:\/\/(?:www\.)?facebook\.com\/[^)\s]+)\)/ig;
+    let m;
+    while((m=md.exec(s))){
+      const label=m[1].replace(/<[^>]+>/g,' ').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').trim();
+      if(label.includes(wanted)||wanted.split(' ').filter(Boolean).every(part=>label.includes(part))){
+        const v=cleanFacebookVanity(m[2]);if(v){foundVanityUrl=v;return v}
+      }
+    }
+    return '';
+  };
   // المسار الأساسي للمعرّف الرقمي: نقرأ عنوان profile.php مباشرة قبل تشغيل المصادر الأبطأ.
   // هذا يجعل أي UID عامًا قابلًا للاستخراج، وليس فقط الأرقام الموجودة في خريطة ثابتة.
   if(isNumericId){
@@ -1987,10 +2006,21 @@ async function resolvePublicFacebookName(scope){
       const r=await fetchWithTimeout(`https://r.jina.ai/http://${lookupUrl.replace(/^https?:\/\//i,'')}`,6000);
       if(r.ok){
         const text=await r.text();
+        recordFacebookVanity(text);
         const title=(text.match(/^Title:\s*(.+)$/mi)||[])[1]||((text.match(/^#\s+(.+)$/m)||[])[1]||'');
         add(title,20,'facebook-id-title');
-        // لا نرجع هنا مباشرة؛ يجب إكمال المصادر لاستخراج الرابط المخصّص (canonical/og:url).
-        // الاسم الذي أُضيف إلى candidates سيُستخدم في النتيجة النهائية بعد اكتمال بقية المصادر.
+      }
+    }catch(e){}
+    // Facebook Lite يضع الرابط العام من نوع /people/اسم/UID داخل الصفحة حتى عندما
+    // لا يظهر في نسخة www أو في صفحة تسجيل الدخول.
+    try{
+      const mobileUrl=`https://m.facebook.com/profile.php?id=${numericId}`;
+      const r=await fetchWithTimeout(`https://r.jina.ai/http://${mobileUrl.replace(/^https?:\/\//i,'')}`,5000);
+      if(r.ok){
+        const text=await r.text();
+        recordFacebookVanity(text);
+        const title=(text.match(/^Title:\s*(.+)$/mi)||[])[1]||((text.match(/^#\s+(.+)$/m)||[])[1]||'');
+        add(title,22,'facebook-mobile-title');
       }
     }catch(e){}
   }
@@ -2005,6 +2035,7 @@ async function resolvePublicFacebookName(scope){
       const r=await fetchWithTimeout(readerUrl,4500);
       if(r.ok){
         const text=await r.text();
+        recordFacebookVanity(text);
         const title=text.match(/^Title:\s*(.+)$/mi); if(title) add(title[1],7,'jina-title');
         const heading=text.match(/^#\s+(.+)$/m); if(heading) add(heading[1],6,'jina-heading');
       }
@@ -2075,6 +2106,7 @@ async function resolvePublicFacebookName(scope){
     try{
       const r=await fetchWithTimeout(make(lookupUrl),4500);if(!r.ok) return;
       const html=await r.text();if(html.length<200) return;
+      recordFacebookVanity(html);
       const foundId=extractFacebookNumericId(html);
       if(foundId&&!discoveredNumericId){discoveredNumericId=foundId;rememberFacebookNumericId(scope,foundId)}
       const doc=new DOMParser().parseFromString(html,'text/html');
@@ -2085,8 +2117,8 @@ async function resolvePublicFacebookName(scope){
       // لو فيسبوك بيكشفه بصفحة البروفايل العامة.
       if(isNumericId&&!foundVanityUrl){
         const canon=doc.querySelector('link[rel="canonical"]')?.getAttribute('href')||doc.querySelector('meta[property="og:url"]')?.getAttribute('content')||'';
-        const vm=canon.match(/facebook\.com\/(?!profile\.php)([A-Za-z0-9.\-_]+)\/?(?:[?#].*)?$/i);
-        if(vm&&vm[1]&&vm[1]!==slug&&!/^(login|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share)$/i.test(vm[1])) foundVanityUrl=`https://www.facebook.com/${vm[1]}`;
+        const canonicalVanity=cleanFacebookVanity(canon);
+        if(canonicalVanity&&!canonicalVanity.endsWith(`/${slug}`)) foundVanityUrl=canonicalVanity;
       }
     }catch(e){}
   })()));
@@ -2113,7 +2145,22 @@ async function resolvePublicFacebookName(scope){
   })()));
   await Promise.allSettled(tasks);
   candidates.sort((a,b)=>b.score-a.score);
-  const best=candidates.find(x=>!isGenericFacebookName(x.text));
+  let best=candidates.find(x=>!isGenericFacebookName(x.text));
+  // إذا أعاد المصدر الاسم فقط، نستخدم الاسم مع UID في بحث ثانٍ ونستخرج أي رابط Facebook مخصّص مطابق.
+  if(isNumericId&&!foundVanityUrl&&best?.text){
+    const nameQueries=[
+      `site:facebook.com \"${best.text}\" \"${slug}\"`,
+      `\"${best.text}\" Facebook \"${slug}\"`,
+      `site:facebook.com \"${best.text}\" profile`
+    ];
+    const nameUrls=nameQueries.flatMap(q=>{
+      const e=encodeURIComponent(q);
+      return [`https://r.jina.ai/http://www.google.com/search?q=${e}`,`https://r.jina.ai/http://www.bing.com/search?q=${e}`];
+    });
+    await Promise.allSettled(nameUrls.map(async url=>{
+      try{const r=await fetchWithTimeout(url,3500);if(r.ok)recordNamedFacebookVanity(await r.text(),best.text)}catch(e){}
+    }));
+  }
   const resolved=withFacebookNumericIdentity({...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable',vanityUrl:foundVanityUrl},discoveredNumericId);
   // بعد نجاح الاستخراج نحفظ الاسم والرابط الرقمي محليًا حتى يصبح الإدخال التالي فوريًا.
   if(resolved.displayName) rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
