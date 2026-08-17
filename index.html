@@ -1814,8 +1814,6 @@ function detectProfileScope(rawText){
   return null;
 }
 const VERIFIED_PROFILE_NAMES = {
-  // هذا الربط مقدم من المستخدم: الرابط الرقمي لنفس حساب Nadine Nassar.
-  'facebook.com/100000767983930': 'Nadine Nassar',
   'facebook.com/balhnan2': 'محمد بركات',
   'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
   'facebook.com/sarah.ali.969': 'SaRah Ali SalmAn',
@@ -1833,10 +1831,6 @@ function localFacebookShareResolution(url){
   }catch(e){return '';}
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
-const VERIFIED_FACEBOOK_ID_NAMES = {
-  // نقطة بداية موثوقة للحالة التي أرسلها المستخدم، مع إبقاء المحلل عامًا لبقية الروابط.
-  '100000767983930': 'Nadine Nassar'
-};
 function readFacebookAliases(){
   try{
     const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
@@ -1862,10 +1856,6 @@ function rememberFacebookAlias(scope,name,vanityUrl=''){
 function getLocalProfileAlias(scope){
   const key=profileAliasKey(scope);
   if(VERIFIED_PROFILE_NAMES[key]) return {name:VERIFIED_PROFILE_NAMES[key],source:'verified'};
-  if(scope?.platform==='facebook'){
-    const numeric=String(scope.identifier||'').match(/^\d{5,20}$/)?.[0];
-    if(numeric&&VERIFIED_FACEBOOK_ID_NAMES[numeric]) return {name:VERIFIED_FACEBOOK_ID_NAMES[numeric],source:'verified-id'};
-  }
   const saved=readFacebookAliases();
   if(saved[key]) return {name:String(saved[key]),source:'local'};
   return {name:'',source:''};
@@ -1896,6 +1886,9 @@ function copyMetaChipValue(btn,text){
 async function resolvePublicFacebookName(scope){
   if(!scope||scope.platform!=='facebook') return scope;
   const profileUrl=scope.profileUrl||`https://${scope.scopePath}`;
+  // روابط /UID قد تعيد صفحة تسجيل الدخول؛ صيغة profile.php?id=UID تكشف الاسم العام عندما يكون متاحًا.
+  const numericId=String(scope.identifier||'').match(/^\d{5,20}$/)?.[0]||'';
+  const lookupUrl=numericId ? `https://www.facebook.com/profile.php?id=${numericId}` : profileUrl;
   const localAlias=getLocalProfileAlias(scope);
   if(localAlias.name) return {...scope,displayName:localAlias.name,displayNameSource:localAlias.source};
   const candidates=[];
@@ -1915,9 +1908,27 @@ async function resolvePublicFacebookName(scope){
     candidates.push({text:s,score,source});
   };
   const escapeRegExp=v=>String(v||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');
-  const slug=String(scope.identifier||'').replace(/^profile\\.php\\?id=/i,'');
+  const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
   let foundVanityUrl='';
+  // المسار الأساسي للمعرّف الرقمي: نقرأ عنوان profile.php مباشرة قبل تشغيل المصادر الأبطأ.
+  // هذا يجعل أي UID عامًا قابلًا للاستخراج، وليس فقط الأرقام الموجودة في خريطة ثابتة.
+  if(isNumericId){
+    try{
+      const r=await fetchWithTimeout(`https://r.jina.ai/http://${lookupUrl.replace(/^https?:\/\//i,'')}`,6000);
+      if(r.ok){
+        const text=await r.text();
+        const title=(text.match(/^Title:\s*(.+)$/mi)||[])[1]||((text.match(/^#\s+(.+)$/m)||[])[1]||'');
+        add(title,20,'facebook-id-title');
+        const direct=candidates.find(x=>!isGenericFacebookName(x.text));
+        if(direct){
+          const resolved={...scope,displayName:direct.text,displayNameSource:direct.source,vanityUrl:''};
+          rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
+          return resolved;
+        }
+      }
+    }catch(e){}
+  }
   // تشغيل كل مصادر استخراج الاسم دفعة وحدة بالتوازي (بدل مراحل متتالية) — هذا يسرّع
   // الاستخراج بشكل كبير ويضمن إن محركات البحث (المصدر الأهم للحسابات غير المفهرسة
   // مباشرة بفيسبوك) ياخدوا فرصتهم كاملة قبل ما ينتهي الوقت المتاح بدل ما ياكل الوقت
@@ -1925,7 +1936,7 @@ async function resolvePublicFacebookName(scope){
   const tasks=[];
   tasks.push((async()=>{
     try{
-      const readerUrl=`https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i,'')}`;
+      const readerUrl=`https://r.jina.ai/http://${lookupUrl.replace(/^https?:\/\//i,'')}`;
       const r=await fetchWithTimeout(readerUrl,4500);
       if(r.ok){
         const text=await r.text();
@@ -1936,7 +1947,7 @@ async function resolvePublicFacebookName(scope){
   })());
   tasks.push((async()=>{
     try{
-      const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(profileUrl)}`,4500);
+      const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(lookupUrl)}`,4500);
       const d=await r.json(),m=d&&d.data;
       if(m){add(m.title,8,'microlink-title');add(m.publisher,2,'microlink-publisher');}
     }catch(e){}
@@ -1949,7 +1960,7 @@ async function resolvePublicFacebookName(scope){
       const r=await fetchWithTimeout(`${provider}/profile`,5000,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:profileUrl})
+        body:JSON.stringify({url:lookupUrl})
       });
       if(r.ok){
         const d=await r.json().catch(()=>null);
@@ -1976,7 +1987,7 @@ async function resolvePublicFacebookName(scope){
   ];
   proxies.forEach(make=>tasks.push((async()=>{
     try{
-      const r=await fetchWithTimeout(make(profileUrl),4500);if(!r.ok) return;
+      const r=await fetchWithTimeout(make(lookupUrl),4500);if(!r.ok) return;
       const html=await r.text();if(html.length<200) return;
       const doc=new DOMParser().parseFromString(html,'text/html');
       add(doc.querySelector('meta[property="og:title"]')?.content,8,'og-title');
@@ -2029,7 +2040,7 @@ async function renderProfileScopedSearch(scope, type){
     try{
       scope=await Promise.race([
         resolvePublicFacebookName(scope),
-        new Promise(resolve=>setTimeout(()=>resolve({...scope,displayName:'',displayNameSource:'timeout'}),7000))
+        new Promise(resolve=>setTimeout(()=>resolve({...scope,displayName:'',displayNameSource:'timeout'}),15000))
       ]);
     }catch(e){}
   }
@@ -2054,12 +2065,10 @@ async function renderProfileScopedSearch(scope, type){
   // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
   const vanityIdentity = scope.vanityUrl ? ` OR \"${scope.vanityUrl}\" OR \"${scope.vanityUrl.replace(/^https?:\/\/(?:www\.)?/i,'')}\"` : '';
-  // فيسبوك: عند توفر الاسم نربطه بمعرّف الحساب بدل ترك جوجل يطابق أشخاصًا آخرين بالاسم وحده.
+  // الطريقة السابقة: بدائل OR حتى لا تختفي النتائج عندما لا يفهرس محرك البحث الاسم والرابط معًا.
   const idTerms = fallbackSearchMode
     ? `\"${profileSearchIdentity}\" Facebook`
-    : (scope.platform==='facebook' && displayName
-      ? `\"${displayName}\" AND (\"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`
-      : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`);
+    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
   const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
