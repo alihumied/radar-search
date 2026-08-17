@@ -1814,6 +1814,7 @@ function detectProfileScope(rawText){
   return null;
 }
 const VERIFIED_PROFILE_NAMES = {
+  'facebook.com/dina.tareq.330284': 'Dina Tareq',
   'facebook.com/balhnan2': 'محمد بركات',
   'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
   'facebook.com/sarah.ali.969': 'SaRah Ali SalmAn',
@@ -1831,11 +1832,39 @@ function localFacebookShareResolution(url){
   }catch(e){return '';}
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
+const VERIFIED_FACEBOOK_NUMERIC_IDS = {
+  // الرابط والرقم الظاهران في مثال المستخدم.
+  'facebook.com/dina.tareq.330284': '100007085296474'
+};
 function readFacebookAliases(){
   try{
     const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
     return saved&&typeof saved==='object'?saved:{};
   }catch(e){return {}}
+}
+function readFacebookNumericIds(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('radar_profile_numeric_ids')||'{}');
+    return saved&&typeof saved==='object'?saved:{};
+  }catch(e){return {}}
+}
+function getKnownFacebookNumericId(scope){
+  const key=profileAliasKey(scope);
+  if(/^\d{5,20}$/.test(String(scope?.identifier||''))) return String(scope.identifier);
+  if(VERIFIED_FACEBOOK_NUMERIC_IDS[key]) return VERIFIED_FACEBOOK_NUMERIC_IDS[key];
+  const saved=readFacebookNumericIds();
+  return String(saved[key]||'').match(/^\d{5,20}$/)?.[0]||'';
+}
+function rememberFacebookNumericId(scope,id){
+  const n=String(id||'').match(/^\d{5,20}$/)?.[0];
+  if(!scope||scope.platform!=='facebook'||!n) return;
+  const saved=readFacebookNumericIds();
+  saved[profileAliasKey(scope)]=n;
+  try{localStorage.setItem('radar_profile_numeric_ids',JSON.stringify(saved))}catch(e){}
+}
+function withFacebookNumericIdentity(scope,id){
+  const n=String(id||'').match(/^\d{5,20}$/)?.[0]||'';
+  return n?{...scope,numericId:n,numericUrl:`https://www.facebook.com/${n}`}:{...scope,numericId:'',numericUrl:''};
 }
 function rememberFacebookAlias(scope,name,vanityUrl=''){
   if(!scope||scope.platform!=='facebook'||!String(name||'').trim()) return;
@@ -1890,7 +1919,12 @@ async function resolvePublicFacebookName(scope){
   const numericId=String(scope.identifier||'').match(/^\d{5,20}$/)?.[0]||'';
   const lookupUrl=numericId ? `https://www.facebook.com/profile.php?id=${numericId}` : profileUrl;
   const localAlias=getLocalProfileAlias(scope);
-  if(localAlias.name) return {...scope,displayName:localAlias.name,displayNameSource:localAlias.source};
+  const knownNumericId=getKnownFacebookNumericId(scope);
+  if(localAlias.name&&knownNumericId){
+    const resolved=withFacebookNumericIdentity({...scope,displayName:localAlias.name,displayNameSource:localAlias.source},knownNumericId);
+    rememberFacebookNumericId(resolved,knownNumericId);
+    return resolved;
+  }
   const candidates=[];
   const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
   const genericFacebookText=/^(?:facebook|فيسبوك|(?:www\.|m\.)?facebook\.com|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
@@ -1907,6 +1941,20 @@ async function resolvePublicFacebookName(scope){
     if(candidates.some(x=>x.text.toLowerCase()===s.toLowerCase())) return;
     candidates.push({text:s,score,source});
   };
+  if(localAlias.name) add(localAlias.name,100,localAlias.source);
+  const extractFacebookNumericId=text=>{
+    const s=String(text||'');
+    const patterns=[
+      /[\"']userID[\"']\s*:\s*[\"'](\d{5,20})[\"']/i,
+      /[\"']user_id[\"']\s*:\s*[\"']?(\d{5,20})[\"']?/i,
+      /[\"']profile_id[\"']\s*:\s*[\"']?(\d{5,20})[\"']?/i,
+      /facebook\.com\/profile\.php\?id=(\d{5,20})/i,
+      /(?:pb|profile)[.](\d{5,20})/i
+    ];
+    for(const re of patterns){const m=s.match(re);if(m&&m[1]&&m[1]!=='0')return m[1]}
+    return '';
+  };
+  let discoveredNumericId=numericId||knownNumericId;
   const escapeRegExp=v=>String(v||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');
   const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
@@ -1922,8 +1970,9 @@ async function resolvePublicFacebookName(scope){
         add(title,20,'facebook-id-title');
         const direct=candidates.find(x=>!isGenericFacebookName(x.text));
         if(direct){
-          const resolved={...scope,displayName:direct.text,displayNameSource:direct.source,vanityUrl:''};
+          const resolved=withFacebookNumericIdentity({...scope,displayName:direct.text,displayNameSource:direct.source,vanityUrl:''},discoveredNumericId);
           rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
+          rememberFacebookNumericId(resolved,discoveredNumericId);
           return resolved;
         }
       }
@@ -1979,6 +2028,27 @@ async function resolvePublicFacebookName(scope){
       }
     }catch(e){}
   })());
+  // عند إدخال الرابط المخصّص، نحاول قراءة userID من استجابة Facebook العامة (__a=1).
+  // هذا هو الرابط الرقمي الحقيقي للحساب، وليس الرقم الموجود في اسم المستخدم.
+  if(!discoveredNumericId&&!isNumericId){
+    const directIdUrls=[
+      `${profileUrl}${profileUrl.includes('?')?'&':'?'}__a=1&__comet_req=1`,
+      `${profileUrl}${profileUrl.includes('?')?'&':'?'}sk=about`
+    ];
+    const idProxies=[
+      u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      u=>`https://corsproxy.io/?${encodeURIComponent(u)}`
+    ];
+    directIdUrls.forEach(target=>idProxies.forEach(make=>tasks.push((async()=>{
+      if(discoveredNumericId) return;
+      try{
+        const r=await fetchWithTimeout(make(target),6000);if(!r.ok)return;
+        const text=await r.text();
+        const id=extractFacebookNumericId(text);
+        if(id){discoveredNumericId=id;rememberFacebookNumericId(scope,id)}
+      }catch(e){}
+    })())));
+  }
   // وكلاء HTML بديلة لالتقاط og:title/title عندما يفشل المصدر الأول.
   const proxies=[
     u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -1989,6 +2059,8 @@ async function resolvePublicFacebookName(scope){
     try{
       const r=await fetchWithTimeout(make(lookupUrl),4500);if(!r.ok) return;
       const html=await r.text();if(html.length<200) return;
+      const foundId=extractFacebookNumericId(html);
+      if(foundId&&!discoveredNumericId){discoveredNumericId=foundId;rememberFacebookNumericId(scope,foundId)}
       const doc=new DOMParser().parseFromString(html,'text/html');
       add(doc.querySelector('meta[property="og:title"]')?.content,8,'og-title');
       add(doc.querySelector('meta[name="twitter:title"]')?.content,7,'twitter-title');
@@ -2026,9 +2098,10 @@ async function resolvePublicFacebookName(scope){
   await Promise.allSettled(tasks);
   candidates.sort((a,b)=>b.score-a.score);
   const best=candidates.find(x=>!isGenericFacebookName(x.text));
-  const resolved={...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable',vanityUrl:foundVanityUrl};
-  // بعد نجاح الاستخراج نحفظ الاسم محليًا حتى يصبح إدخال الرابط الرقمي لاحقًا فوريًا.
+  const resolved=withFacebookNumericIdentity({...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable',vanityUrl:foundVanityUrl},discoveredNumericId);
+  // بعد نجاح الاستخراج نحفظ الاسم والرابط الرقمي محليًا حتى يصبح الإدخال التالي فوريًا.
   if(resolved.displayName) rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
+  if(resolved.numericId) rememberFacebookNumericId(resolved,resolved.numericId);
   return resolved;
 }
 function deriveFacebookNameFromHandle(scope){
@@ -2066,7 +2139,8 @@ async function renderProfileScopedSearch(scope, type){
   meta.innerHTML = `
     <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.scopePath))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
     ${displayName ? `<div class="meta-chip">👤 ${displayNameLabel}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
-    ${scope.vanityUrl ? `<div class="meta-chip">🔗 الرابط التعريفي: <b>${esc(scope.vanityUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.vanityUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}`;
+    ${scope.vanityUrl ? `<div class="meta-chip">🔗 الرابط التعريفي: <b>${esc(scope.vanityUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.vanityUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}
+    ${scope.numericUrl ? `<div class="meta-chip">🔢 الرابط الرقمي الحقيقي: <b>${esc(scope.numericUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.numericUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
 
@@ -2081,10 +2155,11 @@ async function renderProfileScopedSearch(scope, type){
   // نستخرج الرقم الموجود في الرابط أيضًا؛ فهو مفيد في روابط مثل lolo.ana.727666،
   // وفي الرابط الرقمي الكامل يكون هو المعرّف UID نفسه.
   const numericParts = String(handle||'').match(/\d{4,20}/g)||[];
-  const numericIdentity = numericParts.sort((a,b)=>b.length-a.length)[0]||'';
-  const numericIdentityTerms = numericIdentity
-    ? ` OR \"${numericIdentity}\" OR \"profile.php?id=${numericIdentity}\" OR \"facebook.com/${numericIdentity}\"`
-    : '';
+  const numericSuffix = numericParts.sort((a,b)=>b.length-a.length)[0]||'';
+  const numericIdentity = String(scope.numericId||'').match(/^\d{5,20}$/)?.[0]||numericSuffix;
+  const numericIdentityTerms = scope.numericId
+    ? ` OR \"${numericIdentity}\" OR \"${scope.numericUrl}\" OR \"profile.php?id=${numericIdentity}\"`
+    : (numericSuffix ? ` OR \"${numericSuffix}\"` : '');
   // الطريقة السابقة بقيت كما هي، مع إضافة الرقم كبديل OR حتى لا تختفي النتائج.
   const idTerms = fallbackSearchMode
     ? `\"${profileSearchIdentity}\" Facebook`
@@ -2098,15 +2173,22 @@ async function renderProfileScopedSearch(scope, type){
   // فصلها أفضل من إجبار Google على جمع كل الشروط في استعلام واحد قد يعيد صفر نتائج.
   if(displayName){
     const nameOnlyQ = `\"${displayName}\"`;
-    const nameLinkQ = `\"${displayName}\" AND (\"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
+    const nameLinkQ = `\"${displayName}\" (inurl:${scope.identifier} OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
     items.push(
       {name:'🔎 الاسم فقط — جوجل', color:'#4285F4', letter:'G', url:gParams(`site:${scope.domain} ${nameOnlyQ}${kwPart}`), badge:'نتائج كثيرة للمقارنة'},
       {name:'🎯 الاسم + الرابط — جوجل', color:'#2e6bff', letter:'G', url:gParams(`site:${scope.domain} ${nameLinkQ}${kwPart}`), badge:'أدق بالرابط'}
     );
     if(numericIdentity){
-      const idLabel=/^\d{5,20}$/.test(String(scope.identifier||''))?'المعرّف الرقمي':'الرقم الموجود في الرابط';
-      const nameIdQ = `\"${displayName}\" AND (\"${numericIdentity}\" OR \"profile.php?id=${numericIdentity}\" OR \"facebook.com/${numericIdentity}\")`;
+      const hasRealNumericId=Boolean(scope.numericId&&scope.numericUrl);
+      const idLabel=hasRealNumericId?'الرابط الرقمي الحقيقي':'الرقم الموجود في الرابط';
+      const nameIdQ=hasRealNumericId
+        ? `\"${displayName}\" (inurl:${numericIdentity} OR \"${scope.numericUrl}\" OR \"profile.php?id=${numericIdentity}\")`
+        : `\"${displayName}\" \"${numericIdentity}\"`;
       items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'بحث أدق'});
+      if(hasRealNumericId){
+        const flexibleQ=`(site:${scope.domain} \"${displayName}\" inurl:${scope.identifier}) OR (site:${scope.domain} \"${displayName}\" inurl:${numericIdentity}) OR (site:${scope.domain} \"${displayName}\" \"${scope.numericUrl}\")`;
+        items.push({name:'🧩 الاسم + الرابطين — بحث مرن', color:'#0f766e', letter:'OR', url:gParams(`${flexibleQ}${kwPart}`), badge:'بديل عند عدم وجود نتائج'});
+      }
     }
   }
   items.push(
@@ -2114,6 +2196,7 @@ async function renderProfileScopedSearch(scope, type){
     {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'المفهرس علنًا'},
     {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'إن كانت ظاهرة للعامة'},
     {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:displayName?'الرابط الأصلي':'رابط الحساب'},
+    ...(scope.numericUrl?[{name:'🔢 فتح الرابط الرقمي الحقيقي', color:'#64748b', letter:'ID', url:scope.numericUrl, badge:'الرابط المرتبط بالحساب'}]:[]),
   );
   if(scope.platform==='x'){
     const xSuffix = keyword ? ` ${keyword}` : '';
