@@ -1954,7 +1954,7 @@ async function resolvePublicFacebookName(scope){
       if(isNumericId&&!foundVanityUrl){
         const canon=doc.querySelector('link[rel="canonical"]')?.getAttribute('href')||doc.querySelector('meta[property="og:url"]')?.getAttribute('content')||'';
         const vm=canon.match(/facebook\.com\/(?!profile\.php)([A-Za-z0-9.\-_]+)\/?(?:[?#].*)?$/i);
-        if(vm&&vm[1]&&vm[1]!==slug) foundVanityUrl=`https://www.facebook.com/${vm[1]}`;
+        if(vm&&vm[1]&&vm[1]!==slug&&!/^(login|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share)$/i.test(vm[1])) foundVanityUrl=`https://www.facebook.com/${vm[1]}`;
       }
     }catch(e){}
   })()));
@@ -2700,33 +2700,26 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
  }
  }catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 async function hxResolveMemberVanity(btn,uid){
-  btn.disabled=true;btn.textContent='⏳ جارٍ الجلب...';
-  const profileUrl=`https://www.facebook.com/${uid}`;
-  const proxies=[
-    u=>`https://r.jina.ai/http://${u.replace(/^https?:\/\//i,'')}`,
-    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`
-  ];
-  let vanity='';
-  for(const make of proxies){
-    try{
-      const r=await fetchWithTimeout(make(profileUrl),5000);
-      if(!r.ok) continue;
-      const html=await r.text();if(html.length<200) continue;
-      const doc=new DOMParser().parseFromString(html,'text/html');
-      const canon=doc.querySelector('link[rel="canonical"]')?.getAttribute('href')||doc.querySelector('meta[property="og:url"]')?.getAttribute('content')||'';
-      const vm=canon.match(/facebook\.com\/(?!profile\.php)([A-Za-z0-9.\-_]+)\/?(?:[?#].*)?$/i);
-      if(vm&&vm[1]&&vm[1]!==uid){vanity=vm[1];break}
-    }catch(e){}
-  }
-  if(vanity){
+  btn.disabled=true;btn.textContent='⏳ جارٍ الجلب (قد يستغرق حتى 7 ثواني)...';
+  // نستخدم نفس محرك البحث القوي المستخدم بالبحث الرئيسي (يشمل محركات بحث كخط دفاع
+  // ضد حجب فيسبوك لصفحة تسجيل الدخول)، بدل محاولة مصغّرة أضعف.
+  const scope={platform:'facebook',domain:'facebook.com',identifier:uid,scopePath:`facebook.com/${uid}`,profileUrl:`https://www.facebook.com/${uid}`,displayName:'',remainder:''};
+  let result=scope;
+  try{
+    result=await Promise.race([
+      resolvePublicFacebookName(scope),
+      new Promise(resolve=>setTimeout(()=>resolve({...scope,vanityUrl:'',displayName:''}),7000))
+    ]);
+  }catch(e){}
+  if(result.vanityUrl){
     const a=document.createElement('a');
-    a.href=`https://www.facebook.com/${vanity}`;a.target='_blank';a.className='toggle';
+    a.href=result.vanityUrl;a.target='_blank';a.className='toggle';
     a.style.cssText='margin-top:6px;padding:4px 8px;font-size:12px;border-color:#45d9ff88;color:#8feaff;text-decoration:none;display:inline-block;';
-    a.textContent=`🔗 facebook.com/${vanity}`;
+    a.textContent=`🔗 ${result.vanityUrl.replace(/^https?:\/\//i,'')}`;
     btn.replaceWith(a);
   }else{
-    btn.disabled=false;btn.textContent='⚠️ ما لقيت رابط مخصّص — إعادة المحاولة';
+    btn.disabled=false;
+    btn.textContent=result.displayName?`⚠️ لقينا الاسم (${result.displayName}) بس مش رابط مخصّص — إعادة`:'⚠️ ما لقيت رابط مخصّص — إعادة المحاولة';
   }
 }
 function hxCounts(){for(const k of['Image','Post','Reel','Comment','Story','Video','Reactor','Member'])document.getElementById('hx'+k).textContent=HX.filter(x=>x.type===k.toLowerCase()).length}function hxPick(t,b){HXtype=t;HXpage=1;document.querySelectorAll('.hx-type').forEach(x=>x.classList.remove('active'));b.classList.add('active');hxRender()}function hxReset(){HXpage=1;hxRender()}function hxClear(){['hxText','hxName'].forEach(id=>document.getElementById(id).value='');document.getElementById('hxSuggestBox').style.display='none';hxReset()}
