@@ -2031,6 +2031,12 @@ async function resolvePublicFacebookName(scope){
   if(resolved.displayName) rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
   return resolved;
 }
+function deriveFacebookNameFromHandle(scope){
+  if(!scope||scope.platform!=='facebook') return '';
+  const raw=String(scope.identifier||'').replace(/(?:[._-]?\d{4,20})$/,'').replace(/[._-]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!raw||/^\d+$/.test(raw)||raw.length<2) return '';
+  return raw.split(' ').map(part=>part?part.charAt(0).toUpperCase()+part.slice(1).toLowerCase():'').join(' ');
+}
 async function renderProfileScopedSearch(scope, type){
   if(scope.platform==='facebook'&&!scope.displayName){
     const meta=document.getElementById('resultMeta'),cards=document.getElementById('resultCards');
@@ -2044,15 +2050,22 @@ async function renderProfileScopedSearch(scope, type){
       ]);
     }catch(e){}
   }
+  // إذا منع فيسبوك قراءة العنوان العام، نستخدم الاسم الواضح من الجزء النصي للرابط فقط،
+  // ونوسمه كمستنتج من الرابط لا كاسم مؤكد، مع إبقاء الرقم والرابط في البحث.
+  if(scope.platform==='facebook'&&!scope.displayName){
+    const derivedName=deriveFacebookNameFromHandle(scope);
+    if(derivedName) scope={...scope,displayName:derivedName,displayNameSource:'derived-handle'};
+  }
   saveToSearchHistory(document.getElementById('query').value.trim());
   const keyword = scope.remainder || '';
   const displayName = String(scope.displayName||'').trim();
   const fallbackHandle = String(scope.identifier||'').replace(/^@/,'');
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
   const meta = document.getElementById('resultMeta');
+  const displayNameLabel=scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':scope.displayNameSource==='derived-handle'?'اسم مستنتج من الرابط':'الاسم المستخرج';
   meta.innerHTML = `
     <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.scopePath))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
-    ${displayName ? `<div class="meta-chip">👤 ${scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':'الاسم المستخرج'}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
+    ${displayName ? `<div class="meta-chip">👤 ${displayNameLabel}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
     ${scope.vanityUrl ? `<div class="meta-chip">🔗 الرابط التعريفي: <b>${esc(scope.vanityUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.vanityUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}`;
   const cards = document.getElementById('resultCards');
   cards.innerHTML = '';
@@ -2065,20 +2078,43 @@ async function renderProfileScopedSearch(scope, type){
   // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
   const vanityIdentity = scope.vanityUrl ? ` OR \"${scope.vanityUrl}\" OR \"${scope.vanityUrl.replace(/^https?:\/\/(?:www\.)?/i,'')}\"` : '';
-  // الطريقة السابقة: بدائل OR حتى لا تختفي النتائج عندما لا يفهرس محرك البحث الاسم والرابط معًا.
+  // نستخرج الرقم الموجود في الرابط أيضًا؛ فهو مفيد في روابط مثل lolo.ana.727666،
+  // وفي الرابط الرقمي الكامل يكون هو المعرّف UID نفسه.
+  const numericParts = String(handle||'').match(/\d{4,20}/g)||[];
+  const numericIdentity = numericParts.sort((a,b)=>b.length-a.length)[0]||'';
+  const numericIdentityTerms = numericIdentity
+    ? ` OR \"${numericIdentity}\" OR \"profile.php?id=${numericIdentity}\" OR \"facebook.com/${numericIdentity}\"`
+    : '';
+  // الطريقة السابقة بقيت كما هي، مع إضافة الرقم كبديل OR حتى لا تختفي النتائج.
   const idTerms = fallbackSearchMode
     ? `\"${profileSearchIdentity}\" Facebook`
-    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
+    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity}${numericIdentityTerms})`;
   const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
   const gParams = (q) => { const params = new URLSearchParams({q, safe:'off'}); const tp = timeParams(); if(tp) params.set('tbs', tp); return `https://www.google.com/search?${params.toString()}`; };
-  const items = [
+  const items = [];
+  // هذه بطاقات مستقلة: الاسم وحده للمقارنة، الاسم مع الرابط، والاسم مع المعرّف.
+  // فصلها أفضل من إجبار Google على جمع كل الشروط في استعلام واحد قد يعيد صفر نتائج.
+  if(displayName){
+    const nameOnlyQ = `\"${displayName}\"`;
+    const nameLinkQ = `\"${displayName}\" AND (\"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
+    items.push(
+      {name:'🔎 الاسم فقط — جوجل', color:'#4285F4', letter:'G', url:gParams(`site:${scope.domain} ${nameOnlyQ}${kwPart}`), badge:'نتائج كثيرة للمقارنة'},
+      {name:'🎯 الاسم + الرابط — جوجل', color:'#2e6bff', letter:'G', url:gParams(`site:${scope.domain} ${nameLinkQ}${kwPart}`), badge:'أدق بالرابط'}
+    );
+    if(numericIdentity){
+      const idLabel=/^\d{5,20}$/.test(String(scope.identifier||''))?'المعرّف الرقمي':'الرقم الموجود في الرابط';
+      const nameIdQ = `\"${displayName}\" AND (\"${numericIdentity}\" OR \"profile.php?id=${numericIdentity}\" OR \"facebook.com/${numericIdentity}\")`;
+      items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'بحث أدق'});
+    }
+  }
+  items.push(
     {name:'📝 منشورات ومحتوى عام — جوجل', color:'#4285F4', letter:'G', url:gParams(postsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'مقيّد بالحساب'},
     {name:'💬 تعليقات وردود عامة — جوجل', color:'#4285F4', letter:'G', url:gParams(commentsQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'المفهرس علنًا'},
     {name:'❤️ إعجابات/إشارات مفهرسة — جوجل', color:'#4285F4', letter:'G', url:gParams(activityQ), badge:fallbackSearchMode?'بحث عميق عام بالمعرّف':'إن كانت ظاهرة للعامة'},
     {name:'👤 فتح الحساب مباشرة', color:'#94a3b8', letter:'👤', url:profileUrl, badge:displayName?'الرابط الأصلي':'رابط الحساب'},
-  ];
+  );
   if(scope.platform==='x'){
     const xSuffix = keyword ? ` ${keyword}` : '';
     items.unshift(
