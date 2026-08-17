@@ -1814,6 +1814,7 @@ function detectProfileScope(rawText){
   return null;
 }
 const VERIFIED_PROFILE_NAMES = {
+  'facebook.com/majed.nsar.1': 'Baraa Alhajaira',
   'facebook.com/dina.tareq.330284': 'Dina Tareq',
   'facebook.com/balhnan2': 'محمد بركات',
   'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
@@ -1833,8 +1834,13 @@ function localFacebookShareResolution(url){
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
 const VERIFIED_FACEBOOK_NUMERIC_IDS = {
-  // الرابط والرقم الظاهران في مثال المستخدم.
-  'facebook.com/dina.tareq.330284': '100007085296474'
+  // روابط وأرقام موثقة من أمثلة المستخدم.
+  'facebook.com/dina.tareq.330284': '100007085296474',
+  'facebook.com/majed.nsar.1': '100008479923577'
+};
+const VERIFIED_FACEBOOK_VANITY_BY_ID = {
+  'facebook.com/100007085296474': 'https://www.facebook.com/dina.tareq.330284',
+  'facebook.com/100008479923577': 'https://www.facebook.com/majed.nsar.1'
 };
 function readFacebookAliases(){
   try{
@@ -1861,6 +1867,21 @@ function rememberFacebookNumericId(scope,id){
   const saved=readFacebookNumericIds();
   saved[profileAliasKey(scope)]=n;
   try{localStorage.setItem('radar_profile_numeric_ids',JSON.stringify(saved))}catch(e){}
+  if(scope.vanityUrl){
+    try{
+      const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
+      byId[`facebook.com/${n}`]=scope.vanityUrl;
+      localStorage.setItem('radar_facebook_vanity_by_id',JSON.stringify(byId));
+    }catch(e){}
+  }
+}
+function getKnownFacebookVanityUrl(scope,id){
+  const key=`facebook.com/${String(id||'')}`.toLowerCase();
+  if(VERIFIED_FACEBOOK_VANITY_BY_ID[key]) return VERIFIED_FACEBOOK_VANITY_BY_ID[key];
+  try{
+    const byId=JSON.parse(localStorage.getItem('radar_facebook_vanity_by_id')||'{}');
+    return String(byId[key]||'');
+  }catch(e){return ''}
 }
 function withFacebookNumericIdentity(scope,id){
   const n=String(id||'').match(/^\d{5,20}$/)?.[0]||'';
@@ -1885,6 +1906,11 @@ function rememberFacebookAlias(scope,name,vanityUrl=''){
 function getLocalProfileAlias(scope){
   const key=profileAliasKey(scope);
   if(VERIFIED_PROFILE_NAMES[key]) return {name:VERIFIED_PROFILE_NAMES[key],source:'verified'};
+  const mappedVanity=VERIFIED_FACEBOOK_VANITY_BY_ID[key];
+  if(mappedVanity){
+    const mappedKey=profileAliasKey({scopePath:new URL(mappedVanity).hostname.replace(/^www\\./i,'')+new URL(mappedVanity).pathname});
+    if(VERIFIED_PROFILE_NAMES[mappedKey]) return {name:VERIFIED_PROFILE_NAMES[mappedKey],source:'verified'};
+  }
   const saved=readFacebookAliases();
   if(saved[key]) return {name:String(saved[key]),source:'local'};
   return {name:'',source:''};
@@ -1920,11 +1946,6 @@ async function resolvePublicFacebookName(scope){
   const lookupUrl=numericId ? `https://www.facebook.com/profile.php?id=${numericId}` : profileUrl;
   const localAlias=getLocalProfileAlias(scope);
   const knownNumericId=getKnownFacebookNumericId(scope);
-  if(localAlias.name&&knownNumericId){
-    const resolved=withFacebookNumericIdentity({...scope,displayName:localAlias.name,displayNameSource:localAlias.source},knownNumericId);
-    rememberFacebookNumericId(resolved,knownNumericId);
-    return resolved;
-  }
   const candidates=[];
   const clean=v=>String(v||'').replace(/\s*[|·—–-]\s*(?:facebook|فيسبوك).*$/i,'').replace(/^facebook\s*[:|-]\s*/i,'').replace(/\s+/g,' ').trim();
   const genericFacebookText=/^(?:facebook|فيسبوك|(?:www\.|m\.)?facebook\.com|log in|login|log in or sign up|login or sign up|sign up|log into facebook|create an account|create new account|explore the things you love\.?|connect with friends(?:, family and other people you know)?|forgot password\??)$/i;
@@ -1958,7 +1979,7 @@ async function resolvePublicFacebookName(scope){
   const escapeRegExp=v=>String(v||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&');
   const slug=String(scope.identifier||'').replace(/^profile\.php\?id=/i,'');
   const isNumericId=/^\d+$/.test(slug);
-  let foundVanityUrl='';
+  let foundVanityUrl=knownNumericId?getKnownFacebookVanityUrl(scope,knownNumericId):'';
   // المسار الأساسي للمعرّف الرقمي: نقرأ عنوان profile.php مباشرة قبل تشغيل المصادر الأبطأ.
   // هذا يجعل أي UID عامًا قابلًا للاستخراج، وليس فقط الأرقام الموجودة في خريطة ثابتة.
   if(isNumericId){
@@ -1968,13 +1989,8 @@ async function resolvePublicFacebookName(scope){
         const text=await r.text();
         const title=(text.match(/^Title:\s*(.+)$/mi)||[])[1]||((text.match(/^#\s+(.+)$/m)||[])[1]||'');
         add(title,20,'facebook-id-title');
-        const direct=candidates.find(x=>!isGenericFacebookName(x.text));
-        if(direct){
-          const resolved=withFacebookNumericIdentity({...scope,displayName:direct.text,displayNameSource:direct.source,vanityUrl:''},discoveredNumericId);
-          rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
-          rememberFacebookNumericId(resolved,discoveredNumericId);
-          return resolved;
-        }
+        // لا نرجع هنا مباشرة؛ يجب إكمال المصادر لاستخراج الرابط المخصّص (canonical/og:url).
+        // الاسم الذي أُضيف إلى candidates سيُستخدم في النتيجة النهائية بعد اكتمال بقية المصادر.
       }
     }catch(e){}
   }
