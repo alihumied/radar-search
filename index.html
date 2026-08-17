@@ -2020,9 +2020,12 @@ async function renderProfileScopedSearch(scope, type){
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
   // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
+  // مهم: لما يكون عندنا اسم مستخرج، نطلب الاسم والرابط الفريد مع بعض (AND) مش أي واحد لحاله (OR) —
+  // "أو" كانت بترجع نتائج لأي شخص تاني بنفس الاسم لأن مجرد وجود الاسم لوحده كان كافي للمطابقة.
+  // "و" بتضمن إن النتيجة تخص نفس الحساب المحدد بالضبط.
   const idTerms = fallbackSearchMode
     ? `${profileSearchIdentity} Facebook`
-    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
+    : (displayName && displayName!==handle ? `\"${scope.scopePath}\" \"${displayName}\"` : `(\"${scope.scopePath}\" OR \"${profileUrl}\")`);
   const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
