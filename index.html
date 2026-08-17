@@ -2241,9 +2241,10 @@ async function renderProfileScopedSearch(scope, type){
   const numericIdentityTerms = scope.numericId
     ? ` OR \"${numericIdentity}\" OR \"${scope.numericUrl}\" OR \"profile.php?id=${numericIdentity}\"`
     : (numericSuffix ? ` OR \"${numericSuffix}\"` : '');
-  // عند إدخال UID رقمي يجب أن يبحث Google عن الاسم والرقم معًا، لا أن يعاملهما كبدائل OR.
+  // عند إدخال UID رقمي: بنخلي الاسم أو الرقم بدائل (OR) بدل شرط إجباري (AND) — النتائج المفهرسة
+  // نادرًا ما تحتوي الاسم والرقم مع بعض بالحرف بنفس الصفحة، فـAND كانت ترجع صفر نتائج غالبًا.
   const numericPairTerms = numericIdentity
-    ? `\"${profileSearchIdentity}\" \"${numericIdentity}\"`
+    ? `(\"${profileSearchIdentity}\" OR \"${numericIdentity}\")`
     : `\"${profileSearchIdentity}\"`;
   const idTerms = isNumericFacebookInput
     ? numericPairTerms
@@ -2259,9 +2260,11 @@ async function renderProfileScopedSearch(scope, type){
   // عند UID رقمي نستخدم الاسم والرابط الرقمي مباشرةً بدل inurl وOR المركّبين.
   if(displayName){
     const nameOnlyQ = `\"${displayName}\"`;
+    // رجّعناها OR بدل AND الصارم: الرابط/الرقم يصير احتمال إضافي يقوّي النتيجة لو انطابق،
+    // مو شرط إجباري يفشّل البحث بالكامل لو ما انطابق بالحرف (وهو الأغلب فعليًا).
     const nameLinkQ = isNumericFacebookInput
-      ? `\"${displayName}\" \"${scope.numericUrl||`https://www.facebook.com/${numericIdentity}`}\"`
-      : `\"${displayName}\" (inurl:${scope.identifier} OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
+      ? `(\"${displayName}\" OR \"${scope.numericUrl||`https://www.facebook.com/${numericIdentity}`}\")`
+      : `(\"${displayName}\" OR inurl:${scope.identifier} OR \"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`;
     items.push(
       {name:'🔎 الاسم فقط — جوجل', color:'#4285F4', letter:'G', url:gParams(`site:${scope.domain} ${nameOnlyQ}${kwPart}`), badge:'نتائج كثيرة للمقارنة'},
       {name:'🎯 الاسم + الرابط — جوجل', color:'#2e6bff', letter:'G', url:gParams(`site:${scope.domain} ${nameLinkQ}${kwPart}`), badge:'أدق بالرابط'}
@@ -2269,10 +2272,10 @@ async function renderProfileScopedSearch(scope, type){
     if(numericIdentity){
       const hasRealNumericId=Boolean(scope.numericId&&scope.numericUrl);
       const idLabel=hasRealNumericId?'الرابط الرقمي الحقيقي':'الرقم الموجود في الرابط';
-      const nameIdQ=`\"${displayName}\" \"${numericIdentity}\"`;
-      items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'الاسم والرقم معًا'});
+      const nameIdQ=`(\"${displayName}\" OR \"${numericIdentity}\")`;
+      items.push({name:`🆔 الاسم + ${idLabel} — جوجل`, color:'#1747c9', letter:'ID', url:gParams(`site:${scope.domain} ${nameIdQ}${kwPart}`), badge:'الاسم أو الرقم'});
       if(hasRealNumericId){
-        const profileIdQ=`\"${displayName}\" \"profile.php?id=${numericIdentity}\"`;
+        const profileIdQ=`(\"${displayName}\" OR \"profile.php?id=${numericIdentity}\")`;
         items.push({name:'🔗 الاسم + profile.php?id — جوجل', color:'#0f766e', letter:'ID', url:gParams(`site:${scope.domain} ${profileIdQ}${kwPart}`), badge:'بديل للرابط الرقمي'});
       }
     }
