@@ -1814,6 +1814,8 @@ function detectProfileScope(rawText){
   return null;
 }
 const VERIFIED_PROFILE_NAMES = {
+  // هذا الربط مقدم من المستخدم: الرابط الرقمي لنفس حساب Nadine Nassar.
+  'facebook.com/100000767983930': 'Nadine Nassar',
   'facebook.com/balhnan2': 'محمد بركات',
   'facebook.com/maysoon.suleiman.549661': 'Maysoon Suleiman',
   'facebook.com/sarah.ali.969': 'SaRah Ali SalmAn',
@@ -1831,13 +1833,41 @@ function localFacebookShareResolution(url){
   }catch(e){return '';}
 }
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
+const VERIFIED_FACEBOOK_ID_NAMES = {
+  // نقطة بداية موثوقة للحالة التي أرسلها المستخدم، مع إبقاء المحلل عامًا لبقية الروابط.
+  '100000767983930': 'Nadine Nassar'
+};
+function readFacebookAliases(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
+    return saved&&typeof saved==='object'?saved:{};
+  }catch(e){return {}}
+}
+function rememberFacebookAlias(scope,name,vanityUrl=''){
+  if(!scope||scope.platform!=='facebook'||!String(name||'').trim()) return;
+  const aliases=readFacebookAliases();
+  const cleanName=String(name).trim();
+  const key=profileAliasKey(scope);
+  if(key) aliases[key]=cleanName;
+  const numeric=String(scope.identifier||'').match(/^\d{5,20}$/)?.[0];
+  if(numeric) aliases[`facebook.com/${numeric}`]=cleanName;
+  if(vanityUrl){
+    try{
+      const u=new URL(vanityUrl);
+      aliases[`facebook.com${u.pathname.replace(/\/$/,'')}`]=cleanName;
+    }catch(e){}
+  }
+  try{localStorage.setItem('radar_profile_aliases',JSON.stringify(aliases))}catch(e){}
+}
 function getLocalProfileAlias(scope){
   const key=profileAliasKey(scope);
   if(VERIFIED_PROFILE_NAMES[key]) return {name:VERIFIED_PROFILE_NAMES[key],source:'verified'};
-  try{
-    const saved=JSON.parse(localStorage.getItem('radar_profile_aliases')||'{}');
-    if(saved[key]) return {name:String(saved[key]),source:'local'};
-  }catch(e){}
+  if(scope?.platform==='facebook'){
+    const numeric=String(scope.identifier||'').match(/^\d{5,20}$/)?.[0];
+    if(numeric&&VERIFIED_FACEBOOK_ID_NAMES[numeric]) return {name:VERIFIED_FACEBOOK_ID_NAMES[numeric],source:'verified-id'};
+  }
+  const saved=readFacebookAliases();
+  if(saved[key]) return {name:String(saved[key]),source:'local'};
   return {name:'',source:''};
 }
 function jsAttrStr(v){return String(v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
@@ -1985,7 +2015,10 @@ async function resolvePublicFacebookName(scope){
   await Promise.allSettled(tasks);
   candidates.sort((a,b)=>b.score-a.score);
   const best=candidates.find(x=>!isGenericFacebookName(x.text));
-  return {...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable',vanityUrl:foundVanityUrl};
+  const resolved={...scope,displayName:best?.text||'',displayNameSource:best?.source||'unavailable',vanityUrl:foundVanityUrl};
+  // بعد نجاح الاستخراج نحفظ الاسم محليًا حتى يصبح إدخال الرابط الرقمي لاحقًا فوريًا.
+  if(resolved.displayName) rememberFacebookAlias(resolved,resolved.displayName,resolved.vanityUrl);
+  return resolved;
 }
 async function renderProfileScopedSearch(scope, type){
   if(scope.platform==='facebook'&&!scope.displayName){
@@ -2020,9 +2053,13 @@ async function renderProfileScopedSearch(scope, type){
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
   // عند فشل اسم فيسبوك نستخدم بحثًا عاديًا عميقًا بالمعرّف، لا بحث site: مقيّدًا.
   const profileSearchIdentity = scope.platform==='facebook' ? (displayName || handle) : handle;
+  const vanityIdentity = scope.vanityUrl ? ` OR \"${scope.vanityUrl}\" OR \"${scope.vanityUrl.replace(/^https?:\/\/(?:www\.)?/i,'')}\"` : '';
+  // فيسبوك: عند توفر الاسم نربطه بمعرّف الحساب بدل ترك جوجل يطابق أشخاصًا آخرين بالاسم وحده.
   const idTerms = fallbackSearchMode
-    ? `${profileSearchIdentity} Facebook`
-    : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`;
+    ? `\"${profileSearchIdentity}\" Facebook`
+    : (scope.platform==='facebook' && displayName
+      ? `\"${displayName}\" AND (\"${scope.scopePath}\" OR \"${profileUrl}\"${vanityIdentity})`
+      : `(\"${profileSearchIdentity}\" OR \"${scope.scopePath}\" OR \"${profileUrl}\")`);
   const postsQ = fallbackSearchMode ? `${idTerms}${kwPart}` : `site:${scope.domain} ${idTerms}${kwPart}`;
   const commentsQ = fallbackSearchMode ? `${idTerms}${kwPart} ${commentSignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${commentSignal}`;
   const activityQ = fallbackSearchMode ? `${idTerms}${kwPart} ${activitySignal}` : `site:${scope.domain} ${idTerms}${kwPart} ${activitySignal}`;
