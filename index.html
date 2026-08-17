@@ -2273,7 +2273,12 @@ async function renderProfileScopedSearch(scope, type){
     if(vanitySlug && vanitySlug!==rawIdentifierPath) exactUrlPaths.push(`site:${scope.domain}/${vanitySlug}`);
   }
   if(exactUrlPaths.length){
-    items.push({name:'🎯 هذا الحساب بالضبط (بلا اسماء مشابهة)', color:'#16a34a', letter:'✓', url:gParams(`(${exactUrlPaths.join(' OR ')})${kwPart}`), badge:'مقيّد بالرابط الفعلي — الأدق إطلاقًا'});
+    const exactQ = `(${exactUrlPaths.join(' OR ')})${kwPart}`;
+    items.push({name:'🎯 هذا الحساب بالضبط (بلا اسماء مشابهة) — جوجل', color:'#16a34a', letter:'✓', url:gParams(exactQ), badge:'مقيّد بالرابط الفعلي — الأدق إطلاقًا'});
+    // بينج بيفهرس أحيانًا صفحات فيسبوك ما وصلها جوجل، فبنضيفه كمحاولة ثانية بنفس دقة الرابط
+    // الفعلي (site:) بدون ما نفقد الدقة — لو جوجل رجع صفر، بينج ممكن يلقط شي جوجل فاته.
+    const bingParams=(q)=>`https://www.bing.com/search?${new URLSearchParams({q}).toString()}`;
+    items.push({name:'🎯 هذا الحساب بالضبط (بلا اسماء مشابهة) — بينج', color:'#008373', letter:'✓', url:bingParams(exactQ), badge:'بديل لو جوجل ما فهرس الصفحة'});
   }
   // هذه بطاقات مستقلة: الاسم وحده للمقارنة، الاسم مع الرابط، والاسم مع المعرّف.
   // عند UID رقمي نستخدم الاسم والرابط الرقمي مباشرةً بدل inurl وOR المركّبين.
