@@ -1829,7 +1829,7 @@ function localFacebookShareResolution(url){
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
 // قائمة استبعاد موحّدة لمسارات فيسبوك النظامية (تسجيل دخول/تسجيل حساب/إعلانات...) — تُستخدم بكل مكان
 // نتحقق فيه من صحة "رابط تعريفي" مستخرج، عشان ما نتحمّس ونعتبر صفحة نظامية رابط شخص حقيقي.
-const RESERVED_FACEBOOK_PATHS=/^(login|reg|register|signup|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations|lite|mobile|apps|app|download|policy|terms|legal|cookies|adsmanager|pixel|business_help|creatorstudio|billing|payments|security|support|hashtag|live|dating|gaming_creators)$/i;
+const RESERVED_FACEBOOK_PATHS=/^(login|reg|register|signup|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|ad_campaign|ad_center|adcenter|campaign|campaigns|developers|jobs|directory|fundraisers|donations|lite|mobile|apps|app|download|policy|terms|legal|cookies|adsmanager|pixel|business_help|creatorstudio|billing|payments|security|support|hashtag|live|dating|gaming_creators|l|dialog|tr|badge|whitehat|sponsored|impressum)$/i;
 function isReservedFacebookPath(s){return RESERVED_FACEBOOK_PATHS.test(String(s||'').trim())}
 // تنظيف لمرة واحدة عند التحميل: أي رابط تعريفي محفوظ سابقًا بالكاش يطابق مسار نظامي (زي reg/login)
 // كان اتخزّن بنسخة أقدم قبل هالفلتر — نشيله عشان ما يفضل يظهر غلط.
@@ -1993,7 +1993,10 @@ async function resolvePublicFacebookName(scope){
     const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i);
     if(peopleMatch&&peopleMatch[1]) return `https://www.facebook.com/${peopleMatch[1]}`;
     let s=raw.replace(/^https?:\/\/(?:www\.)?/i,'').replace(/^facebook\.com\//i,'').split(/[/?#\s]/)[0];
-    if(!s||/^\d{5,20}$/.test(s)||/\.php$/i.test(s)||reservedFacebookPaths.test(s)||s.length<3||s.length>80) return '';
+    // رفض أي شبه-اسم مستخدم يحمل كلمات دلالتها إعلانية/تتبّعية — هذي روابط تظهر بصفحات
+    // فيسبوك المحجوبة/العامة (بروكسي محظور) وليست رابط بروفايل حقيقي أبدًا.
+    const looksLikeAdOrTracking=/^(ad|ads|utm|track|redirect|click|sponsor|pixel|analytics)[_-]|[_-](ad|ads|utm|track|redirect|click|sponsor|pixel|analytics)$|campaign|tracking/i;
+    if(!s||/^\d{5,20}$/.test(s)||/\.php$/i.test(s)||reservedFacebookPaths.test(s)||looksLikeAdOrTracking.test(s)||s.length<3||s.length>80) return '';
     return `https://www.facebook.com/${s}`;
   };
   const extractFacebookVanity=text=>{
