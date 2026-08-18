@@ -1829,7 +1829,7 @@ function localFacebookShareResolution(url){
 function profileAliasKey(scope){return String(scope?.scopePath||'').replace(/^www\./i,'').replace(/\/$/,'').toLowerCase()}
 // قائمة استبعاد موحّدة لمسارات فيسبوك النظامية (تسجيل دخول/تسجيل حساب/إعلانات...) — تُستخدم بكل مكان
 // نتحقق فيه من صحة "رابط تعريفي" مستخرج، عشان ما نتحمّس ونعتبر صفحة نظامية رابط شخص حقيقي.
-const RESERVED_FACEBOOK_PATHS=/^(login|reg|register|signup|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations)$/i;
+const RESERVED_FACEBOOK_PATHS=/^(login|reg|register|signup|checkpoint|recover|help|home|watch|reel|reels|photo|photos|permalink|groups|pages|events|marketplace|gaming|share|public|people|profile|plugins|ajax|story|stories|video|videos|search|settings|notifications|privacy|policies|about|images|business|ads|advertising|developers|jobs|directory|fundraisers|donations|lite|mobile|apps|app|download|policy|terms|legal|cookies|adsmanager|pixel|business_help|creatorstudio|billing|payments|security|support|hashtag|live|dating|gaming_creators)$/i;
 function isReservedFacebookPath(s){return RESERVED_FACEBOOK_PATHS.test(String(s||'').trim())}
 // تنظيف لمرة واحدة عند التحميل: أي رابط تعريفي محفوظ سابقًا بالكاش يطابق مسار نظامي (زي reg/login)
 // كان اتخزّن بنسخة أقدم قبل هالفلتر — نشيله عشان ما يفضل يظهر غلط.
