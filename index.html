@@ -2216,7 +2216,12 @@ async function renderProfileScopedSearch(scope, type){
     if(derivedName) scope={...scope,displayName:derivedName,displayNameSource:'derived-handle'};
   }
   saveToSearchHistory(document.getElementById('query').value.trim());
-  const keyword = scope.remainder || '';
+  // نتحقق إن "الكلمة الدقيقة" فعلاً كلمة بحث بسيطة، مش بقايا رابط (أحيانًا تفضل شظية رابط
+  // مشفّرة عالقة بالنص لو كان ملفوف برابط تتبّع من فيسبوك) — لأن رابط كهذا لما يُضاف كشرط
+  // إجباري (AND) بكل الاستعلامات، يخلي كل زر يرجع صفر نتائج حتى الأزرار اللي كانت شغّالة.
+  const rawKeyword = scope.remainder || '';
+  const looksLikeUrlJunk = /https?:\/\/|%[0-9a-f]{2}|facebook\.com|\.php\?|&[a-z_]+=|#/i.test(rawKeyword) || rawKeyword.length>60 || !/\s|^[\u0600-\u06FF\w-]+$/.test(rawKeyword);
+  const keyword = looksLikeUrlJunk ? '' : rawKeyword;
   const displayName = String(scope.displayName||'').trim();
   const fallbackHandle = String(scope.identifier||'').replace(/^@/,'');
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
@@ -2231,7 +2236,10 @@ async function renderProfileScopedSearch(scope, type){
   cards.innerHTML = '';
 
   const handle = fallbackHandle;
-  const kwPart = keyword ? ` "${keyword}"` : '';
+  // ضمان نهائي صارم: مهما كان مصدر keyword، لو فيه أي أثر لرابط أو ترميز نسبة مئوية أو رموز
+  // روابط، نفشله بالكامل — أفضل بحث بدون كلمة دقيقة من بحث مكسور بالكامل ببقايا رابط.
+  const safeKeyword = /https?:\/\/|%[0-9a-f]{2}|facebook\.com|[?#&]/i.test(keyword) ? '' : keyword;
+  const kwPart = safeKeyword ? ` "${safeKeyword}"` : '';
   const commentSignal = '(inurl:comment OR inurl:comments OR inurl:reply OR inurl:replies OR "تعليق" OR "تعليقات" OR "رد" OR "ردود")';
   const activitySignal = '(like OR liked OR likes OR "أعجبني" OR "إعجاب" OR mention OR mentions OR "ذُكر")';
   const profileUrl = scope.profileUrl||`https://${scope.scopePath}`;
@@ -2400,7 +2408,7 @@ async function runSearch(){
   const type = effectiveType;
 
   // رابط مشاركة مختصر (facebook.com/share/xxx) — نحلّه لرابط بروفايل حقيقي أول (مجاني، بدون API مدفوع)
-  const shareMatch = baseQuery.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/share(?:\/[A-Za-z0-9_-]+)?\/?(?:\?[^\s]*)?/i);
+  const shareMatch = baseQuery.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/share(?:\/[A-Za-z0-9_-]+)?\/?(?:[?#][^\s]*)?/i);
   if(shareMatch){
     const shareUrl = /^https?:\/\//i.test(shareMatch[0]) ? shareMatch[0] : `https://${shareMatch[0]}`;
     await resolveShareLinkAndSearch(baseQuery, shareUrl, type);
