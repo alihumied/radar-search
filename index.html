@@ -2103,11 +2103,15 @@ async function resolvePublicFacebookName(scope){
   if(!discoveredNumericId&&!isNumericId){
     const directIdUrls=[
       `${profileUrl}${profileUrl.includes('?')?'&':'?'}__a=1&__comet_req=1`,
-      `${profileUrl}${profileUrl.includes('?')?'&':'?'}sk=about`
+      `${profileUrl}${profileUrl.includes('?')?'&':'?'}sk=about`,
+      // مرايا أخف لفيسبوك أحيانًا بتعرض معرّف المستخدم بصفحات أبسط أقل حجبًا للزيارات المجهولة.
+      profileUrl.replace(/^https?:\/\/(?:www\.)?facebook\.com/i,'https://mbasic.facebook.com'),
+      profileUrl.replace(/^https?:\/\/(?:www\.)?facebook\.com/i,'https://m.facebook.com')
     ];
     const idProxies=[
       u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      u=>`https://corsproxy.io/?${encodeURIComponent(u)}`
+      u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u=>`https://r.jina.ai/http://${u.replace(/^https?:\/\//i,'')}`
     ];
     directIdUrls.forEach(target=>idProxies.forEach(make=>tasks.push((async()=>{
       if(discoveredNumericId) return;
@@ -2118,6 +2122,23 @@ async function resolvePublicFacebookName(scope){
         if(id){discoveredNumericId=id;rememberFacebookNumericId(scope,id)}
       }catch(e){}
     })())));
+    // مصدر مختلف تمامًا: نطلب من محركات البحث أي صفحة مفهرسة فيها رابط profile.php?id= مرتبط
+    // بنفس الرابط التعريفي/الاسم — هذا بيشتغل حتى لو فيسبوك حجب الزيارة المباشرة تمامًا، لأنه
+    // بيعتمد على ما هو مفهرس أصلاً عند جوجل/بينج (زي منشورات ذكرت الحساب أو تاغات صور).
+    const idSearchQueries=[`"profile.php?id=" "${slug}"`,`"profile.php?id=" facebook "${slug}"`];
+    const idSearchUrls=idSearchQueries.flatMap(q=>{
+      const enc=encodeURIComponent(`site:facebook.com ${q}`);
+      return [`https://r.jina.ai/http://www.google.com/search?q=${enc}`,`https://r.jina.ai/http://www.bing.com/search?q=${enc}`];
+    });
+    idSearchUrls.forEach(url=>tasks.push((async()=>{
+      if(discoveredNumericId) return;
+      try{
+        const r=await fetchWithTimeout(url,4500);if(!r.ok) return;
+        const text=await r.text();
+        const m=text.match(/profile\.php\?id=(\d{5,20})/i);
+        if(m&&m[1]){discoveredNumericId=m[1];rememberFacebookNumericId(scope,m[1])}
+      }catch(e){}
+    })()));
   }
   // وكلاء HTML بديلة لالتقاط og:title/title عندما يفشل المصدر الأول.
   const proxies=[
