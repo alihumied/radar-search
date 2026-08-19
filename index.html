@@ -3166,7 +3166,32 @@ async function hxDownloadAll(){
 }
 
 
-function applyOfficialJsonData(d,filename){const st=document.getElementById('htmlImportStatus');const platform=d.platform||'x';const label=HXL[platform]||platform;HX=[];(d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));(d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));HXplatform=platform;HXtype='image';HXpage=1;document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type==='image'));document.getElementById('hxPlatform').textContent=`المنصة: ${label} · JSON رسمي · ${filename}`;hxCounts();hxRender();document.getElementById('htmlImportResultsArea').classList.add('show');const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}`}
+function applyOfficialJsonData(d,filename){
+  const st=document.getElementById('htmlImportStatus');
+  const platform=d.platform||'x';
+  const label=HXL[platform]||platform;
+  HX=[];
+  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
+  (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
+  // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
+  // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
+  (d.members||[]).forEach((m,i)=>{
+    const subtitleParts=[];
+    if(m.subtitle)subtitleParts.push(m.subtitle);
+    if(m.addedBy)subtitleParts.push(`أضافه ${m.addedBy}${m.addedDate?` (${m.addedDate})`:''}`);
+    HX.push({id:'m:'+(m.uid||i),type:'member',url:m.profileUrl||'',thumb:'',text:subtitleParts.join(' · '),author:m.name||'',date:m.addedDate||'',platform});
+  });
+  HXplatform=platform;
+  HXtype=HX.some(z=>z.type==='video')?'video':HX.some(z=>z.type==='image')?'image':HX.some(z=>z.type==='member')?'member':'image';
+  HXpage=1;
+  document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type===HXtype));
+  document.getElementById('hxPlatform').textContent=`المنصة: ${label} · JSON رسمي · ${filename}`;
+  hxCounts();hxRender();
+  document.getElementById('htmlImportResultsArea').classList.add('show');
+  const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;
+  const memberCount=HX.filter(z=>z.type==='member').length;
+  if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}`;
+}
 async function toggleSavedFilesView(){
   const area=document.getElementById('savedFilesArea');
   const showing=area.classList.contains('show');
