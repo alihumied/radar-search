@@ -3179,7 +3179,7 @@ function applyOfficialJsonData(d,filename){
     const subtitleParts=[];
     if(m.subtitle)subtitleParts.push(m.subtitle);
     if(m.addedBy)subtitleParts.push(`أضافه ${m.addedBy}${m.addedDate?` (${m.addedDate})`:''}`);
-    HX.push({id:'m:'+(m.uid||i),type:'member',url:m.profileUrl||'',thumb:'',text:subtitleParts.join(' · '),author:m.name||'',date:m.addedDate||'',platform});
+    HX.push({id:'m:'+(m.uid||i),type:'member',url:m.profileUrl||'',thumb:m.avatar||'',text:subtitleParts.join(' · '),author:m.name||'',date:m.addedDate||'',platform});
   });
   HXplatform=platform;
   HXtype=HX.some(z=>z.type==='video')?'video':HX.some(z=>z.type==='image')?'image':HX.some(z=>z.type==='member')?'member':'image';
