@@ -827,10 +827,14 @@ function updateHashtagHint(text){
 }
 
 /* دمج نص البحث الأساسي مع الترجمة إن وُجدت */
-function fullQueryText(){
-  const translated = document.getElementById('translatedInput').value.trim();
-  const base = translated || document.getElementById('query').value.trim();
-  return base;
+function fullQueryText(baseQuery){
+  // الترجمة التلقائية مرتبطة فقط بصندوق البحث الرئيسي (#query)؛ في أي صندوق بحث ثانوي
+  // (زي hxDeepQuery الخاص بالبحث العميق داخل ملف مستورد) لازم نستخدم القيمة الفعلية
+  // المُمرَّرة (baseQuery) بدل الرجوع لحقل #query اللي غالبًا فاضي أو فيه نص قديم مختلف تمامًا.
+  const isPrimary = !SEARCH_TARGET || SEARCH_TARGET.queryId === 'query';
+  const translated = isPrimary ? document.getElementById('translatedInput').value.trim() : '';
+  const fallback = baseQuery !== undefined ? baseQuery : document.getElementById('query').value.trim();
+  return translated || fallback;
 }
 
 /* ===================== SUGGESTIONS (محلي بالكامل، لا يعتمد على شبكة خارجية) ===================== */
@@ -1937,14 +1941,10 @@ function jsAttrStr(v){return String(v||'').replace(/\\/g,'\\\\').replace(/'/g,"\
 function copyMetaChipValue(btn,text){
   const original=btn.textContent;
   const done=ok=>{btn.textContent=ok?'✅':'⚠️';setTimeout(()=>{btn.textContent=original;},1200);};
-  // بعض المتصفحات المدمجة (زي Quetta) بتمنع النسخ التلقائي بصمت — نجرب الطرق البرمجية،
-  // ولو ما قدرنا نتأكد إنها نجحت، نفتح نافذة نسخ يدوية مضمونة 100% كخيار أخير.
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>{
-      window.prompt('انسخ النص (محدد جاهز — اضغط مطولًا واختر نسخ):',text);
-    });
-    return;
-  }
+  // بعض المتصفحات المدمجة (زي Quetta أو ويبفيو اليوزرسكربت) بترجع "نجاح" من
+  // navigator.clipboard.writeText بدون ما تنسخ فعليًا (الـ Promise بتتحل بصمت بدون تنفيذ حقيقي).
+  // لهيك نجرب الطريقة القديمة execCommand('copy') أولًا لأنها أوثق بهالبيئات المدمجة،
+  // ولو فشلت (متصفح حديث ما بيدعمها) ننتقل لـ Clipboard API، وأخيرًا نافذة نسخ يدوية.
   let legacyOk=false;
   try{
     const ta=document.createElement('textarea');
@@ -1954,6 +1954,12 @@ function copyMetaChipValue(btn,text){
     document.body.removeChild(ta);
   }catch(e){legacyOk=false}
   if(legacyOk){done(true);return}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>done(true)).catch(()=>{
+      window.prompt('انسخ النص (محدد جاهز — اضغط مطولًا واختر نسخ):',text);
+    });
+    return;
+  }
   window.prompt('انسخ النص (محدد جاهز — اضغط مطولًا واختر نسخ):',text);
 }
 async function resolvePublicFacebookName(scope){
@@ -1971,9 +1977,13 @@ async function resolvePublicFacebookName(scope){
     const n=String(v||'').replace(/[|·—–:]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
     return !n||genericFacebookText.test(n)||/(?:log\s*in|login|log\s*into)\s+facebook\b/.test(n)||/(?:start\s+sharing|connect(?:ing)?\s+with\s+(?:your\s+)?friends|create\s+an\s+account|join\s+facebook|cover\s+photo|personal\s+details|digital\s+creator|follow\b|photos?\b|followers?\b)/.test(n);
   };
+  // مرشّح شكله رابط/مسار فيسبوك (زي profile.php?id=..., facebook.com/..., ?sk=about) مش اسم
+  // عام أبدًا — هذا بيصير أحيانًا لما يرجع مصدر ما (عنوان صفحة بحث مثلًا) نص الرابط نفسه
+  // بدل اسم الشخص الحقيقي.
+  const looksLikeFacebookUrlOrPath=v=>/(?:https?:\/\/|www\.|profile\.php|[?&](?:id|sk)=|facebook\.com|\.com\/)/i.test(String(v||''));
   const add=(v,score=0,source='public')=>{
     const s=clean(v);
-    if(!s||s.length<2||s.length>120||isGenericFacebookName(s)) return;
+    if(!s||s.length<2||s.length>120||isGenericFacebookName(s)||looksLikeFacebookUrlOrPath(s)) return;
     // اسم حقيقي ما بيكون أرقام بس — لو المرشّح رقم تعريفي (UID) بالكامل، هذا مش اسم عام،
     // هذا نفس الرقم اللي بحثنا فيه أصلاً (مثلاً عنوان صفحة بحث رجع الرقم نفسه كنص).
     if(/^\d+$/.test(s)) return;
@@ -2462,7 +2472,7 @@ async function runSearch(){
     return;
   }
   saveToSearchHistory(baseQuery);
-  let query = fullQueryText();
+  let query = fullQueryText(baseQuery);
 
   // إضافة كلمة الجودة كنص فعلي (لا يوجد باراميتر مباشر للجودة عند أغلب المنصات)
   if(type === 'video'){
