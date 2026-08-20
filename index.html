@@ -257,8 +257,8 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
           <button class="hx-type" data-type="member" onclick="hxPick('member',this)">👥 أعضاء <b id="hxMember">0</b></button>
         </div>
         <div class="hx-search">
-          <div style="position:relative"><input id="hxText" class="filter-input" placeholder="بحث ذكي بنص التعليقات..." oninput="hxReset()" style="width:100%"></div>
-          <div style="position:relative"><input id="hxName" class="filter-input" placeholder="بحث ذكي باسم شخص (زي: الدولة)..." oninput="hxReset();hxSuggest()" onfocus="hxSuggest()" onblur="setTimeout(()=>document.getElementById('hxSuggestBox').style.display='none',150)" style="width:100%"><div id="hxSuggestBox" style="display:none;position:absolute;top:100%;right:0;left:0;z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:220px;overflow-y:auto"></div></div>
+          <div style="position:relative"><input id="hxText" class="filter-input" placeholder="بحث ذكي بنص التعليقات..." oninput="hxReset()" style="width:100%"><button onclick="document.getElementById('hxText').value='';hxReset()" title="مسح" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:inherit;opacity:.6;cursor:pointer;font-size:14px;padding:4px">✕</button></div>
+          <div style="position:relative"><input id="hxName" class="filter-input" placeholder="بحث ذكي باسم شخص (زي: الدولة)..." oninput="hxReset();hxSuggest()" onfocus="hxSuggest()" onblur="setTimeout(()=>document.getElementById('hxSuggestBox').style.display='none',150)" style="width:100%;padding-left:26px"><button onclick="document.getElementById('hxName').value='';hxReset()" title="مسح" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:inherit;opacity:.6;cursor:pointer;font-size:14px;padding:4px">✕</button><div id="hxSuggestBox" style="display:none;position:absolute;top:100%;right:0;left:0;z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:220px;overflow-y:auto"></div></div>
           <button class="toggle" onclick="hxClear()">مسح البحث</button>
         </div>
       </div>
@@ -266,6 +266,14 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button id="hxMore" class="toggle" style="display:none;flex:1;justify-content:center" onclick="hxMore()">عرض المزيد</button>
         <button class="toggle" style="flex:1;justify-content:center;border-color:#2eb87288;color:#8affb0" onclick="hxDownloadAll()">⬇ تنزيل الكل للجهاز</button>
+      </div>
+      <div class="results" id="hxDeepArea" style="margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <b style="color:var(--cyan);font-size:13px;">🌐 بحث عميق (لهاد الملف)</b>
+          <div class="toggle" style="cursor:pointer;padding:5px 10px;color:#ff8a8a;border-color:#ff8a8a55;font-size:12px" onclick="hxDeepClose()">✕ إغلاق</div>
+        </div>
+        <div class="result-meta" id="hxDeepMeta"></div>
+        <div id="hxDeepCards"></div>
       </div>
     </div>
   </div>
@@ -2222,10 +2230,10 @@ function deriveFacebookNameFromHandle(scope){
 }
 async function renderProfileScopedSearch(scope, type){
   if(scope.platform==='facebook'&&!scope.displayName){
-    const meta=document.getElementById('resultMeta'),cards=document.getElementById('resultCards');
+    const meta=document.getElementById(SEARCH_TARGET.meta),cards=document.getElementById(SEARCH_TARGET.cards);
     meta.innerHTML=`<div class="meta-chip">🎯 تحليل رابط الحساب: <b>${esc(scope.scopePath)}</b></div>`;
     cards.innerHTML='<div class="hint">⏳ جارٍ استخراج الاسم العام من صفحة فيسبوك ثم تجهيز البحث العميق...</div>';
-    document.getElementById('resultsArea').classList.add('show');
+    document.getElementById(SEARCH_TARGET.area).classList.add('show');
     try{
       scope=await Promise.race([
         resolvePublicFacebookName(scope),
@@ -2249,14 +2257,14 @@ async function renderProfileScopedSearch(scope, type){
   const displayName = String(scope.displayName||'').trim();
   const fallbackHandle = String(scope.identifier||'').replace(/^@/,'');
   const fallbackSearchMode = scope.platform==='facebook' && !displayName;
-  const meta = document.getElementById('resultMeta');
+  const meta = document.getElementById(SEARCH_TARGET.meta);
   const displayNameLabel=scope.displayNameSource==='verified'?'الاسم المؤكد للرابط':scope.displayNameSource==='derived-handle'?'اسم مستنتج من الرابط':'الاسم المستخرج';
   meta.innerHTML = `
     <div class="meta-chip">🎯 ${fallbackSearchMode?'بحث عميق عام بالمعرّف':'بحث مقيّد بالبروفايل'}: <b>${esc(scope.scopePath)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.scopePath))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>
     ${displayName ? `<div class="meta-chip">👤 ${displayNameLabel}: <b>${esc(displayName)}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(displayName))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : `<div class="meta-chip">👤 الاسم العام غير متاح؛ البحث بالمعرّف: <b>${esc(fallbackHandle)}</b></div>`}
     ${scope.vanityUrl ? `<div class="meta-chip">🔗 الرابط التعريفي: <b>${esc(scope.vanityUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.vanityUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}
     ${scope.numericUrl ? `<div class="meta-chip">🔢 الرابط الرقمي الحقيقي: <b>${esc(scope.numericUrl.replace(/^https?:\/\//i,''))}</b> <button onclick="copyMetaChipValue(this,'${esc(jsAttrStr(scope.numericUrl))}')" title="نسخ" style="background:none;border:none;color:inherit;cursor:pointer;padding:6px 4px 6px 8px;vertical-align:middle;opacity:.8;font-size:14px;">📋</button></div>` : ''}`;
-  const cards = document.getElementById('resultCards');
+  const cards = document.getElementById(SEARCH_TARGET.cards);
   cards.innerHTML = '';
 
   const handle = fallbackHandle;
@@ -2367,8 +2375,8 @@ async function renderProfileScopedSearch(scope, type){
       </a>`;
     cards.appendChild(card);
   });
-  document.getElementById('resultsArea').classList.add('show');
-  document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById(SEARCH_TARGET.area).classList.add('show');
+  document.getElementById(SEARCH_TARGET.area).scrollIntoView({behavior:'smooth', block:'start'});
 }
 function cleanResolvedFacebookUrl(url){
   try{
@@ -2383,22 +2391,22 @@ function renderShareFallbackSearch(shareUrl,type){
   const token=(String(shareUrl).match(/facebook\.com\/share\/([^/?#]+)/i)||[])[1]||'';
   const q=encodeURIComponent(token?`site:facebook.com "${token}"`:'site:facebook.com/share');
   const q2=encodeURIComponent(token?`site:facebook.com/share "${token}"`:'site:facebook.com/share');
-  const cards=document.getElementById('resultCards');
-  document.getElementById('resultMeta').innerHTML=`<div class="meta-chip">🔗 رابط مشاركة: <b>${esc(shareUrl)}</b></div><div class="meta-chip">🔒 البحث العام فقط</div>`;
+  const cards=document.getElementById(SEARCH_TARGET.cards);
+  document.getElementById(SEARCH_TARGET.meta).innerHTML=`<div class="meta-chip">🔗 رابط مشاركة: <b>${esc(shareUrl)}</b></div><div class="meta-chip">🔒 البحث العام فقط</div>`;
   cards.innerHTML=`
     <div class="hint" style="margin-top:0;">⚠️ تعذّر حلّ رابط المشاركة تلقائيًا. لن أعتبره بروفايلًا ولن أستخدم كلمة share كاسم؛ أضفت فقط بحثًا قريبًا وفتح الرابط مباشرة.</div>
     <div class="result-card"><a class="main-link" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener"><div class="result-icon" style="background:#4285F4">G</div><div class="result-body"><div class="result-title">🔗 صفحات مرتبطة برمز المشاركة <span class="badge">بحث قريب</span></div><div class="result-desc">https://www.google.com/search?q=${q}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>
     <div class="result-card"><a class="main-link" href="https://www.google.com/search?q=${q2}" target="_blank" rel="noopener"><div class="result-icon" style="background:#4285F4">G</div><div class="result-body"><div class="result-title">👤 بحث قريب عن بروفايل Facebook <span class="badge">بدون معاملات طويلة</span></div><div class="result-desc">https://www.google.com/search?q=${q2}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>
     <div class="result-card"><a class="main-link" href="${esc(shareUrl)}" target="_blank" rel="noopener"><div class="result-icon" style="background:#1877F2">f</div><div class="result-body"><div class="result-title">🔗 فتح رابط المشاركة مباشرة <span class="badge">الرابط الأصلي</span></div><div class="result-desc">${esc(shareUrl)}</div></div><svg class="result-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg></a></div>`;
-  document.getElementById('resultsArea').classList.add('show');
+  document.getElementById(SEARCH_TARGET.area).classList.add('show');
 }
 async function resolveShareLinkAndSearch(fullText, shareUrl, type){
-  const meta = document.getElementById('resultMeta');
-  const cards = document.getElementById('resultCards');
+  const meta = document.getElementById(SEARCH_TARGET.meta);
+  const cards = document.getElementById(SEARCH_TARGET.cards);
   meta.innerHTML = '';
   cards.innerHTML = '<div class="hint">⏳ جاري تحليل الرابط المختصر...</div>';
-  document.getElementById('resultsArea').classList.add('show');
-  document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById(SEARCH_TARGET.area).classList.add('show');
+  document.getElementById(SEARCH_TARGET.area).scrollIntoView({behavior:'smooth', block:'start'});
 
   const workerUrl = PLATFORM_DATA_PROVIDERS.facebook.workerUrl;
   try{
@@ -2462,7 +2470,7 @@ async function runSearch(){
 
   updateHashtagHint(query);
 
-  const meta = document.getElementById('resultMeta');
+  const meta = document.getElementById(SEARCH_TARGET.meta);
   meta.innerHTML = `
     <div class="meta-chip">الدولة: <b>${selectedCountry ? selectedCountry.ar : '—'}</b></div>
     <div class="meta-chip">اللغة: <b>${selectedCountry ? langName(selectedCountry.hl) : '—'}</b></div>
@@ -2472,7 +2480,7 @@ async function runSearch(){
     <div class="meta-chip">SafeSearch: <b>متوقف</b></div>
   `;
 
-  const cards = document.getElementById('resultCards');
+  const cards = document.getElementById(SEARCH_TARGET.cards);
   cards.innerHTML = '';
 
   if(type === 'file'){
@@ -2497,8 +2505,8 @@ async function runSearch(){
         </a>`;
       cards.appendChild(card);
     });
-    document.getElementById('resultsArea').classList.add('show');
-    document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+    document.getElementById(SEARCH_TARGET.area).classList.add('show');
+    document.getElementById(SEARCH_TARGET.area).scrollIntoView({behavior:'smooth', block:'start'});
     return;
   }
 
@@ -2538,8 +2546,8 @@ async function runSearch(){
       ${googleExtraHtml}`;
     cards.appendChild(card);
   });
-  document.getElementById('resultsArea').classList.add('show');
-  document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById(SEARCH_TARGET.area).classList.add('show');
+  document.getElementById(SEARCH_TARGET.area).scrollIntoView({behavior:'smooth', block:'start'});
   // ملاحظة: لا تفريغ تلقائي بعد البحث — يبقى كل شيء كما هو حتى يضغط المستخدم زر إعادة الضبط يدويًا
 }
 function resetAllInputs(){
@@ -2846,6 +2854,10 @@ handleSharedLink();
 
 /* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
 let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=80,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
+// أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
+// المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
+// المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
+let SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea'};
 function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&').replace(/=3D/g,'=').replace(/\s+/g,' ').trim()}
 // ترقية جودة صور X/تويتر لأعلى دقة متاحة (name=orig) — الرابط الأساسي نفسه بيضل شغّال بس بيرجّع أعلى دقة.
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
@@ -3048,14 +3060,21 @@ function hxSearchThisPerson(name){
   document.querySelector('.hx-search')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // جسر مباشر لمحرك البحث الرئيسي (تحديد هوية بروابط رقمية/تعريف + استخراج اسم) — نفس الآلية
-// اللي مبنية أسفل الصفحة، بس نقدر نطلقها فورًا من جوا نتائج ملف الـ HTML/JS المستورد.
+// اللي مبنية أسفل الصفحة، بس بنوجّه نتائجها هون لمكان محلي تحت بطاقة الاستيراد نفسها،
+// مش آخر الصفحة، عشان تضلي داخل نفس السياق وما تحتاجي تتنقلي.
 function hxDeepSearch(value){
   if(!value)return;
+  SEARCH_TARGET={meta:'hxDeepMeta',cards:'hxDeepCards',area:'hxDeepArea'};
   const q=document.getElementById('query');
-  if(!q)return;
-  q.value=value;
-  document.querySelector('.search-row')?.scrollIntoView({behavior:'smooth',block:'start'});
-  runSearch();
+  if(q)q.value=value;
+  runSearch().finally(()=>{SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea'}});
+  document.getElementById('hxDeepArea')?.classList.add('show');
+  document.getElementById('hxDeepArea')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function hxDeepClose(){
+  document.getElementById('hxDeepArea')?.classList.remove('show');
+  document.getElementById('hxDeepMeta').innerHTML='';
+  document.getElementById('hxDeepCards').innerHTML='';
 }
 function hxBindProfileLongPress(){
   const list=document.getElementById('htmlImportResultsList');
