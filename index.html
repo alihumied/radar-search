@@ -269,9 +269,18 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       </div>
       <div class="results" id="hxDeepArea" style="margin-top:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <b style="color:var(--cyan);font-size:13px;">🌐 بحث عميق (لهاد الملف)</b>
+          <b style="color:var(--cyan);font-size:13px;">🌐 محرك البحث العميق (خاص بهاد الملف فقط)</b>
           <div class="toggle" style="cursor:pointer;padding:5px 10px;color:#ff8a8a;border-color:#ff8a8a55;font-size:12px" onclick="hxDeepClose()">✕ إغلاق</div>
         </div>
+        <div class="search-box" style="margin-bottom:10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" id="hxDeepQuery" placeholder="رابط رقمي، اسم مستخدم، أو اسم شخص..." autocomplete="off" onkeydown="if(event.key==='Enter')hxDeepRun()">
+          <button onclick="document.getElementById('hxDeepQuery').value=''" title="مسح النص" style="background:none;border:none;color:inherit;opacity:.6;cursor:pointer;font-size:14px;padding:4px">✕</button>
+        </div>
+        <button class="go-btn" style="width:100%;justify-content:center;margin-bottom:12px" onclick="hxDeepRun()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          بحث عميق
+        </button>
         <div class="result-meta" id="hxDeepMeta"></div>
         <div id="hxDeepCards"></div>
       </div>
@@ -2247,7 +2256,7 @@ async function renderProfileScopedSearch(scope, type){
     const derivedName=deriveFacebookNameFromHandle(scope);
     if(derivedName) scope={...scope,displayName:derivedName,displayNameSource:'derived-handle'};
   }
-  saveToSearchHistory(document.getElementById('query').value.trim());
+  saveToSearchHistory(document.getElementById(SEARCH_TARGET.queryId).value.trim());
   // نتحقق إن "الكلمة الدقيقة" فعلاً كلمة بحث بسيطة، مش بقايا رابط (أحيانًا تفضل شظية رابط
   // مشفّرة عالقة بالنص لو كان ملفوف برابط تتبّع من فيسبوك) — لأن رابط كهذا لما يُضاف كشرط
   // إجباري (AND) بكل الاستعلامات، يخلي كل زر يرجع صفر نتائج حتى الأزرار اللي كانت شغّالة.
@@ -2433,8 +2442,8 @@ async function resolveShareLinkAndSearch(fullText, shareUrl, type){
   }
 }
 async function runSearch(){
-  const baseQuery = document.getElementById('query').value.trim();
-  if(!baseQuery){ document.getElementById('query').focus(); return; }
+  const baseQuery = document.getElementById(SEARCH_TARGET.queryId).value.trim();
+  if(!baseQuery){ document.getElementById(SEARCH_TARGET.queryId).focus(); return; }
   hideSuggestions();
   refreshEffectiveType();
   const type = effectiveType;
@@ -2857,7 +2866,7 @@ let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=80,HXL={fac
 // أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
 // المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
 // المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
-let SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea'};
+let SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'};
 function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&').replace(/=3D/g,'=').replace(/\s+/g,' ').trim()}
 // ترقية جودة صور X/تويتر لأعلى دقة متاحة (name=orig) — الرابط الأساسي نفسه بيضل شغّال بس بيرجّع أعلى دقة.
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
@@ -3060,16 +3069,21 @@ function hxSearchThisPerson(name){
   document.querySelector('.hx-search')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // جسر مباشر لمحرك البحث الرئيسي (تحديد هوية بروابط رقمية/تعريف + استخراج اسم) — نفس الآلية
-// اللي مبنية أسفل الصفحة، بس بنوجّه نتائجها هون لمكان محلي تحت بطاقة الاستيراد نفسها،
-// مش آخر الصفحة، عشان تضلي داخل نفس السياق وما تحتاجي تتنقلي.
-function hxDeepSearch(value){
-  if(!value)return;
-  SEARCH_TARGET={meta:'hxDeepMeta',cards:'hxDeepCards',area:'hxDeepArea'};
-  const q=document.getElementById('query');
-  if(q)q.value=value;
-  runSearch().finally(()=>{SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea'}});
+// اللي مبنية أسفل الصفحة، بس بخانة بحث مستقلة تمامًا (hxDeepQuery) ونتائج محلية (hxDeep*)
+// تحت بطاقة الاستيراد نفسها. ما بنلمس خانة البحث الرئيسي ولا نتائجه إطلاقًا.
+function hxDeepRun(){
+  const val=document.getElementById('hxDeepQuery').value.trim();
+  if(!val)return;
+  SEARCH_TARGET={meta:'hxDeepMeta',cards:'hxDeepCards',area:'hxDeepArea',queryId:'hxDeepQuery'};
   document.getElementById('hxDeepArea')?.classList.add('show');
   document.getElementById('hxDeepArea')?.scrollIntoView({behavior:'smooth',block:'start'});
+  runSearch().finally(()=>{SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'}});
+}
+// تستدعى من أزرار 🌐 عند أي رابط/اسم بنتائج الملف المستورد — بتعبّي خانة البحث المحلية وتشغّلها فورًا.
+function hxDeepSearch(value){
+  if(!value)return;
+  document.getElementById('hxDeepQuery').value=value;
+  hxDeepRun();
 }
 function hxDeepClose(){
   document.getElementById('hxDeepArea')?.classList.remove('show');
