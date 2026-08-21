@@ -2017,8 +2017,15 @@ async function resolvePublicFacebookName(scope){
   const reservedFacebookPaths=RESERVED_FACEBOOK_PATHS;
   const cleanFacebookVanity=v=>{
     const raw=String(v||'').trim();
-    const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/\d{5,20})(?:[/?#)\s]|$)/i);
-    if(peopleMatch&&peopleMatch[1]) return `https://www.facebook.com/${peopleMatch[1]}`;
+    const peopleMatch=raw.match(/(?:https?:\/\/)?(?:www\.)?facebook\.com\/(people\/[A-Za-z0-9._-]{2,120}\/(\d{5,20}))(?:[/?#)\s]|$)/i)||raw.match(/^(people\/[A-Za-z0-9._-]{2,120}\/(\d{5,20}))(?:[/?#)\s]|$)/i);
+    if(peopleMatch&&peopleMatch[1]){
+      // مهم جدًا: نمط /people/الاسم/الرقم لازم يحمل نفس الرقم التعريفي الحقيقي يلي عم نبحث
+      // عنه فعلًا (discoveredNumericId) — وإلا هذا رابط شخص تاني تمامًا اتلقط غلط من نتيجة
+      // بحث فيها اسم متشابه جزئيًا (مثلاً "Vanessa" لشخصين مختلفين).
+      const peopleId=peopleMatch[2];
+      if(discoveredNumericId&&peopleId!==String(discoveredNumericId)) return '';
+      return `https://www.facebook.com/${peopleMatch[1]}`;
+    }
     let s=raw.replace(/^https?:\/\/(?:www\.)?/i,'').replace(/^facebook\.com\//i,'').split(/[/?#\s]/)[0];
     // رفض أي شبه-اسم مستخدم يحمل كلمات دلالتها إعلانية/تتبّعية — هذي روابط تظهر بصفحات
     // فيسبوك المحجوبة/العامة (بروكسي محظور) وليست رابط بروفايل حقيقي أبدًا.
@@ -3258,8 +3265,13 @@ function applyOfficialJsonData(d,filename){
     if(m.addedBy)subtitleParts.push(`أضافه ${m.addedBy}${m.addedDate?` (${m.addedDate})`:''}`);
     HX.push({id:'m:'+(m.uid||i),type:'member',url:m.profileUrl||'',thumb:m.avatar||'',text:subtitleParts.join(' · '),author:m.name||'',date:m.addedDate||'',platform});
   });
+  // تعليقات فيسبوك (من زر "استخراج التعليقات" باليوزرسكربت) — نفس شكل عنصر "comment" اللي مستورد
+  // الـ HTML بيستخدمه أصلًا (author/url/thumb/text/date)، فبتظهر وتنبحث بنفس تبويب "💬 تعليقات" الجاهز.
+  (d.comments||[]).forEach((c,i)=>{
+    HX.push({id:'c:'+i,type:'comment',url:c.profileUrl||'',thumb:c.avatar||'',text:c.text||'',author:c.name||'',date:c.timeAgo||'',postUrl:c.postUrl||'',platform});
+  });
   HXplatform=platform;
-  HXtype=HX.some(z=>z.type==='video')?'video':HX.some(z=>z.type==='image')?'image':HX.some(z=>z.type==='member')?'member':'image';
+  HXtype=HX.some(z=>z.type==='video')?'video':HX.some(z=>z.type==='image')?'image':HX.some(z=>z.type==='member')?'member':HX.some(z=>z.type==='comment')?'comment':'image';
   HXpage=1;
   document.querySelectorAll('.hx-type').forEach(b=>b.classList.toggle('active',b.dataset.type===HXtype));
   document.getElementById('hxPlatform').textContent=`المنصة: ${label} · JSON رسمي · ${filename}`;
@@ -3267,7 +3279,8 @@ function applyOfficialJsonData(d,filename){
   document.getElementById('htmlImportResultsArea').classList.add('show');
   const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;
   const memberCount=HX.filter(z=>z.type==='member').length;
-  if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}`;
+  const commentCount=HX.filter(z=>z.type==='comment').length;
+  if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
 }
 async function toggleSavedFilesView(){
   const area=document.getElementById('savedFilesArea');
