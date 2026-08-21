@@ -3268,7 +3268,8 @@ function applyOfficialJsonData(d,filename){
   // تعليقات فيسبوك (من زر "استخراج التعليقات" باليوزرسكربت) — نفس شكل عنصر "comment" اللي مستورد
   // الـ HTML بيستخدمه أصلًا (author/url/thumb/text/date)، فبتظهر وتنبحث بنفس تبويب "💬 تعليقات" الجاهز.
   (d.comments||[]).forEach((c,i)=>{
-    HX.push({id:'c:'+i,type:'comment',url:c.profileUrl||'',thumb:c.avatar||'',text:c.text||'',author:c.name||'',date:c.timeAgo||'',postUrl:c.postUrl||'',platform});
+    const textWithId=c.numericUrl?`${c.text||''}\n\n🆔 ${c.numericUrl}`:(c.text||'');
+    HX.push({id:'c:'+i,type:'comment',url:c.profileUrl||'',thumb:c.avatar||'',text:textWithId,author:c.name||'',date:c.timeAgo||'',postUrl:c.postUrl||'',platform});
   });
   HXplatform=platform;
   HXtype=HX.some(z=>z.type==='video')?'video':HX.some(z=>z.type==='image')?'image':HX.some(z=>z.type==='member')?'member':HX.some(z=>z.type==='comment')?'comment':'image';
