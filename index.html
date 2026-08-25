@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RADAR // محرك البحث العميق</title>
+<title>RADAR // محرك البحث العميق // HLS FIX 2</title>
+<meta name="radar-build" content="hls-fix-2-2026-08-25">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#040609">
 <link rel="icon" href="icon-192.png">
@@ -3200,12 +3201,12 @@ function openRemoteVideoLight(x){
           if(hlsAttempt===0 && isHlsUrl(fallback) && fallback!==url){
             hlsAttempt++; st.textContent='⏳ تعذّر master؛ أجرب رابط HLS البديل...'; attachHls(fallback); return;
           }
-          st.textContent='⚠️ تعذّر تشغيل HLS في هذا المتصفح/الشبكة؛ افتحي المنشور الأصلي أو أعيدي الاستخراج.';
+          st.innerHTML='⚠️ تعذّر تشغيل HLS داخل الصفحة. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a> أو افتحي المنشور الأصلي.';
         });
         _remoteHls.loadSource(url); _remoteHls.attachMedia(v);
         _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — يمكن حفظه في 📌 فيديو بصيغة WebM'; v.play().catch(()=>{})});
       }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=url; v.play().catch(()=>{})}
-      else st.textContent='⚠️ هذا المتصفح لا يدعم HLS؛ افتحي الرابط الأصلي في Chrome.';
+      else st.innerHTML='⚠️ هذا المتصفح لا يدعم HLS. <a href="'+esc(src)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
     };
     attachHls(src);
   }else{v.src=src; v.play().catch(()=>{});}
