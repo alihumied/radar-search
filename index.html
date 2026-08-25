@@ -157,6 +157,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .hx-toolbar{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg-0)}.hx-platform{color:var(--cyan);font-size:12px;font-weight:700;margin-bottom:10px;word-break:break-word}.hx-types{display:flex;gap:7px;flex-wrap:wrap}.hx-type{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:8px 12px;font-family:Tajawal}.hx-type.active{border-color:var(--cyan);background:rgba(63,212,255,.12)}.hx-type b{color:var(--cyan);font:10px 'JetBrains Mono'}.hx-search{display:grid;grid-template-columns:2fr 1.2fr 1fr auto;gap:8px;margin-top:10px}.hx-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;padding:10px;direction:rtl}.hx-comment{display:grid;grid-template-columns:38px 1fr;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:11px;margin-bottom:8px}.hx-comment img{width:36px;height:36px;border-radius:50%;object-fit:cover}.hx-comment>img{cursor:zoom-in;touch-action:pan-y;-webkit-touch-callout:none}.hx-name{color:var(--cyan);font-size:12px;font-weight:700;text-decoration:none;display:inline-block}.hx-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.hx-reaction{width:18px;height:18px;object-fit:contain;display:inline-block}.hx-date{color:var(--muted);font-size:10px}.hx-text{font-size:13px;line-height:1.7}.hx-embed{position:fixed;inset:0;z-index:10080;background:#020408ed;display:flex;align-items:center;justify-content:center;padding:14px}.hx-box{width:min(96vw,580px);max-height:94vh;padding:11px;border:1px solid var(--line);border-radius:18px;background:var(--bg-1);display:flex;flex-direction:column;gap:9px}.hx-head{display:flex;justify-content:space-between;align-items:center}.hx-head button{width:36px;height:36px;border-radius:50%}.hx-embed iframe{width:100%;height:68vh;border:0;border-radius:12px;background:#000}.hx-actions{display:flex;gap:8px}.hx-actions>*{flex:1;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-0);color:var(--text);text-align:center;text-decoration:none}@media(max-width:700px){.hx-search{grid-template-columns:1fr 1fr}.hx-search #hxText{grid-column:1/-1}.hx-embed iframe{height:65vh}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -3151,75 +3152,144 @@ function hxCloseImport(){
 // النقر على الصورة يحددها ويظهر الأزرار فقط؛ فتح أعلى دقة يتم من زر التكبير الكبير.
 function hxSelect(e,img,id){e.stopPropagation();const t=img.closest('.saved-image-tile');const already=t.classList.contains('selected');document.querySelectorAll('.saved-image-tile.selected').forEach(x=>{if(x!==t)x.classList.remove('selected')});if(already){openInlineSavedFocus(img.currentSrc||img.src);return}t.classList.add('selected')}
 if(!window.__radarIconDismissBound){window.__radarIconDismissBound=true;document.addEventListener('click',e=>{if(e.target.closest('.saved-image-tile'))return;document.querySelectorAll('.saved-image-tile.selected').forEach(x=>x.classList.remove('selected'))})}
+let _remoteVideoItem = null;
+let _remoteHls = null;
+function isHlsUrl(src){ return /\.m3u8(?:[?#]|$)/i.test(String(src||'')); }
+function isSmallOrInvalidVideoBlob(blob){
+  return !blob || blob.size < 4096 || !/^video\//i.test(String(blob.type||''));
+}
+async function fetchVideoBlob(src){
+  const res = await fetch(src, {mode:'cors', credentials:'omit'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const blob = await res.blob();
+  if(isSmallOrInvalidVideoBlob(blob)) throw new Error('استجابة فيديو غير صالحة أو صغيرة جدًا ('+blob.size+' بايت)');
+  return blob;
+}
+function closeRemoteVideo(){
+  const d=document.getElementById('remoteVideoModal');
+  if(_remoteHls){try{_remoteHls.destroy()}catch(e){} _remoteHls=null;}
+  if(d){const v=d.querySelector('video');if(v){try{v.pause()}catch(e){}} d.remove();}
+  _remoteVideoItem=null;
+  document.documentElement.style.overflow=''; document.body.style.overflow='';
+}
+function openRemoteVideoLight(x){
+  closeRemoteVideo();
+  _remoteVideoItem=x;
+  const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+  if(!src){if(x.postUrl)window.open(x.postUrl,'_blank','noopener');return;}
+  const d=document.createElement('div'); d.id='remoteVideoModal'; d.className='hx-embed';
+  d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()" style="width:min(96vw,680px);">
+    <div class="hx-head"><b>تشغيل الفيديو</b><button onclick="closeRemoteVideo()">×</button></div>
+    <video id="remoteVideoEl" controls playsinline crossorigin="anonymous" style="width:100%;max-height:70vh;border-radius:12px;background:#000"></video>
+    <div class="hx-actions"><button id="remoteSaveBtn" onclick="saveRemoteVideoToGallery()">💾 حفظ في 📌 فيديو</button><a href="${esc(x.postUrl||x.url||'')}" target="_blank" rel="noopener">فتح المنشور الأصلي ↗</a></div>
+    <div id="remoteVideoStatus" class="hint">${isHlsUrl(src)?'⏳ جارٍ تشغيل HLS...':'⏳ جارٍ تحميل الفيديو...'}</div>
+  </div>`;
+  d.onclick=e=>{if(e.target===d)closeRemoteVideo()}; document.body.appendChild(d);
+  document.documentElement.style.overflow='hidden'; document.body.style.overflow='hidden';
+  const v=d.querySelector('#remoteVideoEl'), st=d.querySelector('#remoteVideoStatus');
+  v.addEventListener('error',()=>{st.textContent='⚠️ تعذّر تشغيل الرابط؛ افتحي المنشور الأصلي أو أعيدي استخراج JSON.'});
+  if(isHlsUrl(src)){
+    if(window.Hls && Hls.isSupported()){
+      _remoteHls=new Hls({enableWorker:true, lowLatencyMode:false});
+      _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{if(data?.fatal)st.textContent='⚠️ رفض الخادم تشغيل HLS؛ حدّثي ملف JSON ثم جربي من جديد.'});
+      _remoteHls.loadSource(src); _remoteHls.attachMedia(v);
+      _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — يمكن حفظه في 📌 فيديو بصيغة WebM'; v.play().catch(()=>{})});
+    }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=src; v.play().catch(()=>{})}
+    else st.textContent='⚠️ هذا المتصفح لا يدعم HLS؛ افتحي الرابط الأصلي في Chrome.';
+  }else{v.src=src; v.play().catch(()=>{});}
+}
+async function recordRemoteHlsToBlob(v, status){
+  if(!v.captureStream || !window.MediaRecorder) throw new Error('المتصفح لا يدعم تسجيل HLS داخل الصفحة');
+  const stream=v.captureStream();
+  const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':(MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')?'video/webm;codecs=vp8,opus':'video/webm');
+  const chunks=[]; const rec=new MediaRecorder(stream,{mimeType:mime});
+  const oldTime=v.currentTime||0; try{v.currentTime=0}catch(e){}
+  await v.play();
+  return await new Promise((resolve,reject)=>{
+    let finished=false;
+    const done=()=>{if(finished)return;finished=true;try{rec.stop()}catch(e){reject(e)}};
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+    rec.onerror=e=>{finished=true;reject(e.error||new Error('MediaRecorder error'))};
+    rec.onstop=()=>{try{v.pause();v.currentTime=oldTime}catch(e){};resolve(new Blob(chunks,{type:mime}))};
+    v.addEventListener('ended',done,{once:true});
+    rec.start(1000); status.textContent='⏳ جارٍ حفظ HLS كفيديو WebM؛ اتركي الصفحة مفتوحة حتى النهاية...';
+  });
+}
+async function saveRemoteVideoToGallery(){
+  const x=_remoteVideoItem, v=document.getElementById('remoteVideoEl'), st=document.getElementById('remoteVideoStatus'), btn=document.getElementById('remoteSaveBtn');
+  if(!x||!v||!st)return;
+  if(btn)btn.disabled=true;
+  try{
+    let blob;
+    const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+    if(isHlsUrl(src)) blob=await recordRemoteHlsToBlob(v,st); else blob=await fetchVideoBlob(src);
+    if(isSmallOrInvalidVideoBlob(blob))throw new Error('الملف الناتج غير صالح');
+    await idbAddVideo(blob,'');
+    st.textContent=isHlsUrl(src)?'✅ تم الحفظ في 📌 فيديو بصيغة WebM':'✅ تم الحفظ في 📌 فيديو';
+  }catch(e){st.textContent='⚠️ تعذّر الحفظ: '+(e?.message||e)+' — لا تحفظي ملف 0.90 كيلوبايت لأنه ليس فيديو كاملًا';}
+  finally{if(btn)btn.disabled=false;}
+}
+
 function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram\.com\/(p|reel|tv)\/([\w.-]+)/)))return`https://www.instagram.com/${m[1]}/${m[2]}/embed/captioned/`;if(HXplatform==='facebook')return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(x.url)+'&show_text=false&width=500';if(HXplatform==='youtube'&&(m=x.url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]+)/)))return'https://www.youtube.com/embed/'+m[1];if(HXplatform==='tiktok'&&(m=x.url.match(/video\/(\d+)/)))return'https://www.tiktok.com/player/v1/'+m[1];if(HXplatform==='telegram')return x.url+'?embed=1';if(HXplatform==='x')return'https://twitframe.com/show?url='+encodeURIComponent(x.url);return x.url}
-function hxOpen(id){const x=HX.find(y=>y.id===id);if(!x?.url)return;if(HXplatform==='snapchat'||!['reel','video','post'].includes(x.type)){window.open(x.url,'_blank','noopener');return}hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.dataset.source=x.url;d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>${HXL[HXplatform]} Embed</b><button onclick="hxClose()">×</button></div><iframe src="${hxEmbed(x)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe><div class="hx-actions"><label for="hxShot">📸 اختر لقطة شاشة واحفظها</label><a href="${esc(x.url)}" target="_blank">فتح الأصلي ↗</a></div><input id="hxShot" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0" onchange="hxShot(event)"><div id="hxStatus" class="hint">خذ لقطة بأزرار الهاتف ثم اخترها</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d)}
+function hxOpen(id){
+  const x=HX.find(y=>y.id===id); if(!x)return;
+  if(x.type==='video'){
+    if(x.videoMp4||x.hlsBest||x.master||x.directUrl) openRemoteVideoLight(x);
+    else if(x.postUrl||x.url) window.open(x.postUrl||x.url,'_blank','noopener');
+    return;
+  }
+  if(!x.url)return;
+  if(HXplatform==='snapchat'||!['reel','video','post'].includes(x.type)){window.open(x.url,'_blank','noopener');return}
+  hxClose(); const d=document.createElement('div'); d.id='hxEmbed'; d.className='hx-embed'; d.dataset.source=x.url;
+  d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>${HXL[HXplatform]} Embed</b><button onclick="hxClose()">×</button></div><iframe src="${hxEmbed(x)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe><div class="hx-actions"><label for="hxShot">📸 اختر لقطة شاشة واحفظها</label><a href="${esc(x.url)}" target="_blank">فتح الأصلي ↗</a></div><input id="hxShot" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0" onchange="hxShot(event)"><div id="hxStatus" class="hint">خذ لقطة بأزرار الهاتف ثم اخترها</div></div>`;
+  d.onclick=e=>{if(e.target===d)hxClose()}; document.body.appendChild(d);
+}
 async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById('hxStatus');e.target.value='';if(!f)return;const r=new FileReader();r.onload=async x=>{try{await saveLinkToStorage(x.target.result,document.getElementById('hxEmbed')?.dataset.source||x.target.result);st.textContent='✅ حُفظت في 📌 صور';await renderSavedLinks()}catch{st.textContent='⚠️ تعذّر الحفظ'}};r.readAsDataURL(f)}function hxClose(){document.getElementById('hxEmbed')?.remove()}async function hxSave(id){
-  const x=HX.find(y=>y.id===id);if(!x)return;
+  const x=HX.find(y=>y.id===id); if(!x)return;
   const st=document.getElementById('htmlImportStatus');
   if(x.type==='image'){
-    const src=x.directUrl||x.thumb||x.url;if(!src)return;
-    await saveLinkToStorage(src,x.url||src);
-    renderSavedLinksIfVisible();
-    if(st)st.textContent='✅ حُفظت في 📌 صور';
+    const src=x.directUrl||x.thumb||x.url; if(!src)return;
+    await saveLinkToStorage(src,x.url||src); renderSavedLinksIfVisible();
+    if(st)st.textContent='✅ حُفظت في 📌 صور'; return;
+  }
+  if(!x.directUrl&&!x.hlsBest&&!x.master){
+    if(x.thumb){await saveLinkToStorage(x.thumb,x.url||x.thumb);renderSavedLinksIfVisible();if(st)st.textContent='⚠️ لا يوجد رابط فيديو — حُفظت الصورة المصغرة فقط في 📌 صور';}
+    else if(st)st.textContent='⚠️ لا يوجد رابط فيديو مباشر لهذا العنصر';
     return;
   }
-  // فيديو: لازم نجيب البايتات الحقيقية ونحطها بمعرض 📌 فيديو (متل باقي الفيديوهات بالتطبيق)، مش مجرد رابط
-  if(!x.directUrl){
-    if(!x.thumb){if(st)st.textContent='⚠️ ما في رابط فيديو مباشر ولا صورة مصغّرة لهاد العنصر';return}
-    await saveLinkToStorage(x.thumb,x.url||x.thumb);
-    renderSavedLinksIfVisible();
-    if(st)st.textContent='⚠️ ما في رابط فيديو مباشر — انحفظت الصورة المصغّرة بس بمعرض 📌 صور';
-    return;
+  if(isHlsUrl(x.master||x.hlsBest||x.directUrl)){
+    openRemoteVideoLight(x); if(st)st.textContent='▶️ فُتح مشغل HLS؛ استخدمي زر «حفظ في 📌 فيديو» داخل المشغل'; return;
   }
-  if(st)st.textContent='⏳ جارٍ تنزيل الفيديو وحفظه بمعرض 📌 فيديو...';
-  try{
-    const res=await fetch(x.directUrl,{mode:'cors'});if(!res.ok)throw 0;
-    const blob=await res.blob();
-    const poster=x.thumb?await(async()=>{
-      try{
-        const r=await fetch(x.thumb,{mode:'cors'});if(!r.ok)return'';
-        const b=await r.blob();
-        return await new Promise(resolve=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>resolve('');fr.readAsDataURL(b)});
-      }catch{return''}
-    })():'';
-    await idbAddVideo(blob,poster);
-    if(document.getElementById('savedVideosArea')?.classList.contains('show'))renderSavedVideos();
-    if(st)st.textContent='✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
-  }catch(err){
-    if(st)st.textContent='⚠️ تعذّر تنزيل الفيديو للحفظ (الرابط ممكن يكون منتهي الصلاحية) — جربي ▶ لفتح المنشور بدل هيك';
-  }
+  if(st)st.textContent='⏳ جارٍ تنزيل الفيديو وحفظه...';
+  try{const blob=await fetchVideoBlob(x.videoMp4||x.directUrl);await idbAddVideo(blob,'');if(document.getElementById('savedVideosArea')?.classList.contains('show'))renderSavedVideos();if(st)st.textContent='✅ انحفظ الفيديو — بتلاقيه بمعرض 📌 فيديو';}
+  catch(err){if(st)st.textContent='⚠️ الرابط رجع ملفًا صغيرًا/غير صالح؛ افتحيه من زر ▶ بدل حفظه كـMP4.';}
 }
 
 /* تنزيل مباشر لجهاز المستخدم (وليس حفظ داخل تطبيق RADAR فقط). يجرّب fetch->blob؛ إذا فشل (رابط منتهي/CORS) بدل ما نفتح الرابط الخام (رح يعطي 403 غالبًا مع فيديو تويتر) نفتح رابط المنشور الأصلي إذا متوفر. */
-async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
+async function hxDownloadToDevice(src,ext,label,fallbackPostUrl,x){
+  if(isHlsUrl(src)){
+    if(x) openRemoteVideoLight(x); else if(fallbackPostUrl) window.open(fallbackPostUrl,'_blank','noopener');
+    return {ok:false,openedHls:true};
+  }
   try{
-    const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-    const blob=await res.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');
-    a.href=u;a.download=`radar-${label||'media'}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
-    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
-    return {ok:true};
+    const blob=await fetchVideoBlob(src),u=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=u; a.download=`radar-${label||'media'}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);return {ok:true};
   }catch(e){
-    // فشل fetch غالبًا بسبب قيود CORS من سيرفر الفيديو (رافض طلبات من موقع تاني غير x.com) —
-    // هاد قيد أمان من طرف السيرفر، ما فيه حل برمجي له. البديل: نفتح رابط الفيديو المباشر نفسه
-    // بتبويب جديد (فتح رابط عادي مش خاضع لنفس قيد fetch)، وهيك مشغّل الفيديو الأصلي بالمتصفح
-    // بيفتح وفيه زر تحميل/مشاركة حقيقي. هاد بس بيشتغل مع رابط mp4 صريح — روابط m3u8 (قائمة تشغيل
-    // HLS متعددة الأجزاء) ما بتفتح كفيديو مباشر بالتنقل العادي، فبهاي الحالة نرجع لفتح رابط المنشور.
-    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'');
-    if(isDirectMp4){window.open(src,'_blank','noopener');return {ok:false,openedDirect:true}}
-    if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
+    if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true};}
     return {ok:false,openedPost:false};
   }
 }
 async function hxDownloadById(id){
   const x=HX.find(y=>y.id===id);if(!x)return;
-  const isImg=x.type==='image';
-  const src=isImg?(x.directUrl||x.thumb||x.url):(x.directUrl||'');
-  if(!src){alert('ما في رابط تنزيل مباشر لهاد العنصر (اضغطي ▶ لفتحه بدل هيك).');return}
-  const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl);
-  if(!r.ok&&!r.openedPost&&!r.openedDirect)alert('⚠️ تعذّر التنزيل ولا يوجد رابط بديل لفتحه.');
+  const isImg=x.type==='image'; const src=isImg?(x.directUrl||x.thumb||x.url):(x.videoMp4||x.directUrl||x.hlsBest||x.master||'');
+  if(!src){alert('لا يوجد رابط تنزيل مباشر لهذا العنصر؛ افتحيه بزر ▶.');return}
+  const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl||x.url,x);
+  if(r.openedHls){const st=document.getElementById('htmlImportStatus');if(st)st.textContent='▶️ هذا فيديو HLS؛ فُتح المشغل، استخدمي زر «حفظ في 📌 فيديو» داخله.';}
+  else if(!r.ok&&!r.openedPost)alert('⚠️ تعذّر التنزيل؛ الرابط منتهي أو غير صالح.');
 }
 async function hxDownloadAll(){
-  const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
+  const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):(x.videoMp4||(!isHlsUrl(x.directUrl)&&x.directUrl)));
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
   if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت (تأكدي من الإنترنت وحاولي تحديث الصفحة).');return}
   if(!confirm(`تجميع ${items.length} عنصر بملف ZIP واحد وتنزيله؟`))return;
@@ -3231,7 +3301,7 @@ async function hxDownloadAll(){
     while(queue.length){
       const i=queue.shift();
       const x=items[i],isImg=x.type==='image';
-      const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
+      const src=isImg?(x.directUrl||x.thumb||x.url):(x.videoMp4||x.directUrl);
       try{
         const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
         const blob=await res.blob();
@@ -3262,7 +3332,7 @@ function applyOfficialJsonData(d,filename){
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
   HX=[];
-  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.hlsBest||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
+  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.hlsBest||v.master||'',videoMp4:v.videoMp4||'',hlsBest:v.hlsBest||'',master:v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3399,7 +3469,7 @@ async function deleteSavedFile(id){
 }
 function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const text=x.target.result;const d=JSON.parse(text);applyOfficialJsonData(d,f.name);idbAddSourceFile(f.name,'json',text,d.platform||'x').then(()=>{refreshSavedFilesIfVisible()}).catch(err=>{console.error('radar: failed to save json source file',err);st.textContent+=` ⚠️ (تعذّر حفظ نسخة الملف: ${err?.message||err})`});}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function loadXWidget(cb){if(window.twttr?.widgets)return cb();let sc=document.getElementById('xWidgets');if(!sc){sc=document.createElement('script');sc.id='xWidgets';sc.src='https://platform.x.com/widgets.js';sc.async=true;document.head.appendChild(sc)}let n=0;const t=setInterval(()=>{if(window.twttr?.widgets){clearInterval(t);cb()}else if(++n>40)clearInterval(t)},250)}
-const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);const isXPost=x?.postUrl&&/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i.test(x.postUrl);if(!isXPost)return officialOldOpen(id);hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>X Embed الرسمي</b><button onclick="hxClose()">×</button></div><div id="xMount" style="min-height:340px;overflow:auto"><div class="hint">⏳ تحميل المنشور الرسمي...</div></div><div class="hx-actions"><a href="${esc(x.postUrl)}" target="_blank">فتح المنشور ↗</a></div><div id="xMsg" class="hint">يعتمد على رابط المنشور الرسمي</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);loadXWidget(()=>{const m=x.postUrl.match(/\/status\/(\d+)/),mount=d.querySelector('#xMount'),msg=d.querySelector('#xMsg');if(!m)return msg.textContent='⚠️ رابط المنشور ناقص';mount.innerHTML='';twttr.widgets.createTweet(m[1],mount,{theme:document.body.classList.contains('light-theme')?'light':'dark',align:'center',conversation:'none',dnt:true}).then(el=>msg.textContent=el?'✅ تم تحميل X Embed الرسمي':'⚠️ لم يسمح X بعرض المنشور').catch(er=>msg.textContent='⚠️ '+er.message)})};
+const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);if(x?.type==='video')return officialOldOpen(id);const isXPost=x?.postUrl&&/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i.test(x.postUrl);if(!isXPost)return officialOldOpen(id);hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>X Embed الرسمي</b><button onclick="hxClose()">×</button></div><div id="xMount" style="min-height:340px;overflow:auto"><div class="hint">⏳ تحميل المنشور الرسمي...</div></div><div class="hx-actions"><a href="${esc(x.postUrl)}" target="_blank">فتح المنشور ↗</a></div><div id="xMsg" class="hint">يعتمد على رابط المنشور الرسمي</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);loadXWidget(()=>{const m=x.postUrl.match(/\/status\/(\d+)/),mount=d.querySelector('#xMount'),msg=d.querySelector('#xMsg');if(!m)return msg.textContent='⚠️ رابط المنشور ناقص';mount.innerHTML='';twttr.widgets.createTweet(m[1],mount,{theme:document.body.classList.contains('light-theme')?'light':'dark',align:'center',conversation:'none',dnt:true}).then(el=>msg.textContent=el?'✅ تم تحميل X Embed الرسمي':'⚠️ لم يسمح X بعرض المنشور').catch(er=>msg.textContent='⚠️ '+er.message)})};
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
