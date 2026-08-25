@@ -3199,6 +3199,13 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
     return {ok:true};
   }catch(e){
+    // فشل fetch غالبًا بسبب قيود CORS من سيرفر الفيديو (رافض طلبات من موقع تاني غير x.com) —
+    // هاد قيد أمان من طرف السيرفر، ما فيه حل برمجي له. البديل: نفتح رابط الفيديو المباشر نفسه
+    // بتبويب جديد (فتح رابط عادي مش خاضع لنفس قيد fetch)، وهيك مشغّل الفيديو الأصلي بالمتصفح
+    // بيفتح وفيه زر تحميل/مشاركة حقيقي. هاد بس بيشتغل مع رابط mp4 صريح — روابط m3u8 (قائمة تشغيل
+    // HLS متعددة الأجزاء) ما بتفتح كفيديو مباشر بالتنقل العادي، فبهاي الحالة نرجع لفتح رابط المنشور.
+    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'');
+    if(isDirectMp4){window.open(src,'_blank','noopener');return {ok:false,openedDirect:true}}
     if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
     return {ok:false,openedPost:false};
   }
@@ -3209,7 +3216,7 @@ async function hxDownloadById(id){
   const src=isImg?(x.directUrl||x.thumb||x.url):(x.directUrl||'');
   if(!src){alert('ما في رابط تنزيل مباشر لهاد العنصر (اضغطي ▶ لفتحه بدل هيك).');return}
   const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl);
-  if(!r.ok&&!r.openedPost)alert('⚠️ تعذّر التنزيل ولا يوجد رابط منشور بديل لفتحه.');
+  if(!r.ok&&!r.openedPost&&!r.openedDirect)alert('⚠️ تعذّر التنزيل ولا يوجد رابط بديل لفتحه.');
 }
 async function hxDownloadAll(){
   const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
