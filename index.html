@@ -3355,16 +3355,17 @@ async function renderSavedFiles(){
       const kb=Math.round((x.content?.length||0)/1024);
       const d=new Date(x.ts).toLocaleString('ar');
       const title=x.displayName||x.name;
-      return `<div class="result-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="overflow:hidden">
-          <div style="font-size:13px">${x.kind==='json'?'{ } JSON':'📄 HTML'} · ${esc(title)}</div>
-          <div style="font-size:11px;color:#8fa0bb">${kb} كيلوبايت · ${d}</div>
+      return `<div class="result-card" style="display:block;padding:12px;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span style="flex:none;color:#8feaff;font-size:13px">${x.kind==='json'?'{ } JSON':'📄 HTML'}</span>
+          <div title="${esc(title)}" style="min-width:0;flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;text-align:right;unicode-bidi:plaintext">${esc(title)}</div>
         </div>
-        <div style="display:flex;gap:6px;flex:none">
-          <div class="toggle" style="padding:6px 10px;cursor:pointer" onclick="reopenSavedFile(${x.id})">فتح</div>
-          ${x.kind==='json'?`<div class="toggle" style="padding:6px 10px;cursor:pointer;border-color:#6ce9c888;color:#8ff5db" onclick="reopenSavedFile(${x.id});setTimeout(()=>document.getElementById('radarConvertPanel')?.scrollIntoView({behavior:'smooth',block:'center'}),280)">⚡ تحويل</div>`:''}
-          <div class="toggle" style="padding:6px 10px;cursor:pointer;border-color:#45d9ff88;color:#8feaff" onclick="renameSavedFile(${x.id})">إعادة تسمية</div>
-          <div class="toggle" style="padding:6px 10px;cursor:pointer;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
+        <div style="font-size:11px;color:#8fa0bb;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kb} كيلوبايت · ${d}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+          <div class="toggle" style="padding:6px 10px;cursor:pointer;white-space:nowrap" onclick="reopenSavedFile(${x.id})">فتح</div>
+          ${x.kind==='json'?`<div class="toggle" style="padding:6px 10px;cursor:pointer;white-space:nowrap;border-color:#6ce9c888;color:#8ff5db" onclick="reopenSavedFile(${x.id});setTimeout(()=>document.getElementById('radarConvertPanel')?.scrollIntoView({behavior:'smooth',block:'center'}),280)">⚡ تحويل</div>`:''}
+          <div class="toggle" style="padding:6px 10px;cursor:pointer;white-space:nowrap;border-color:#45d9ff88;color:#8feaff" onclick="renameSavedFile(${x.id})">تسمية</div>
+          <div class="toggle" style="padding:6px 10px;cursor:pointer;white-space:nowrap;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
         </div>
       </div>`;
     }).join('');
