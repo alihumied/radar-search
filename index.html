@@ -3156,6 +3156,11 @@ if(!window.__radarIconDismissBound){window.__radarIconDismissBound=true;document
 let _remoteVideoItem = null;
 let _remoteHls = null;
 function isHlsUrl(src){ return /\.m3u8(?:[?#]|$)/i.test(String(src||'')); }
+function radarVideoSource(x){
+  if(!x)return '';
+  // بعض ملفات X تضع videoMp4 كملف init صغير جدًا؛ عند وجود HLS نستخدمه أولًا.
+  return String(x.master||x.hlsBest||x.videoMp4||x.directUrl||'');
+}
 function isSmallOrInvalidVideoBlob(blob){
   return !blob || blob.size < 4096 || !/^video\//i.test(String(blob.type||''));
 }
@@ -3176,7 +3181,7 @@ function closeRemoteVideo(){
 function openRemoteVideoLight(x){
   closeRemoteVideo();
   _remoteVideoItem=x;
-  const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+  const src=radarVideoSource(x);
   if(!src){if(x.postUrl)window.open(x.postUrl,'_blank','noopener');return;}
   const d=document.createElement('div'); d.id='remoteVideoModal'; d.className='hx-embed';
   d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()" style="width:min(96vw,680px);">
@@ -3254,7 +3259,7 @@ async function downloadRemoteVideoToDevice(){
   if(!Number.isFinite(v.duration)||v.duration<=0||v.readyState<2){st.textContent='⚠️ لم تجهز مدة الفيديو بعد (0:00)، شغّلي الفيديو وانتظري ظهور المدة ثم اضغطي تنزيل.';return;}
   if(btn){btn.disabled=true;btn.textContent='⏳ تجهيز التنزيل...';}
   try{
-    const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+    const src=radarVideoSource(x);
     let blob,ext;
     if(isHlsUrl(src)){blob=await recordRemoteHlsToBlob(v,st);ext='webm';}
     else{blob=await fetchVideoBlob(src);ext='mp4';}
@@ -3273,7 +3278,7 @@ async function saveRemoteVideoToGallery(){
   if(btn)btn.disabled=true;
   try{
     let blob;
-    const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+    const src=radarVideoSource(x);
     if(isHlsUrl(src)) blob=await recordRemoteHlsToBlob(v,st); else blob=await fetchVideoBlob(src);
     if(isSmallOrInvalidVideoBlob(blob))throw new Error('الملف الناتج غير صالح');
     await idbAddVideo(blob,'');
@@ -3304,7 +3309,7 @@ async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById(
     await saveLinkToStorage(src,x.url||src); renderSavedLinksIfVisible();
     if(st)st.textContent='✅ حُفظت في 📌 صور'; return;
   }
-  if(!x.directUrl&&!x.hlsBest&&!x.master){
+  if(!x.videoMp4&&!x.directUrl&&!x.hlsBest&&!x.master){
     if(x.thumb){await saveLinkToStorage(x.thumb,x.url||x.thumb);renderSavedLinksIfVisible();if(st)st.textContent='⚠️ لا يوجد رابط فيديو — حُفظت الصورة المصغرة فقط في 📌 صور';}
     else if(st)st.textContent='⚠️ لا يوجد رابط فيديو مباشر لهذا العنصر';
     return;
@@ -3334,7 +3339,7 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl,x){
 }
 async function hxDownloadById(id){
   const x=HX.find(y=>y.id===id);if(!x)return;
-  const isImg=x.type==='image'; const src=isImg?(x.directUrl||x.thumb||x.url):(x.videoMp4||x.directUrl||x.hlsBest||x.master||'');
+  const isImg=x.type==='image'; const src=isImg?(x.directUrl||x.thumb||x.url):radarVideoSource(x);
   if(!src){alert('لا يوجد رابط تنزيل مباشر لهذا العنصر؛ افتحيه بزر ▶.');return}
   const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl||x.url,x);
   if(r.openedHls){const st=document.getElementById('htmlImportStatus');if(st)st.textContent='▶️ هذا فيديو HLS؛ فُتح المشغل، استخدمي زر «حفظ في 📌 فيديو» داخله.';}
