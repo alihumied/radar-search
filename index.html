@@ -3182,13 +3182,18 @@ function openRemoteVideoLight(x){
   d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()" style="width:min(96vw,680px);">
     <div class="hx-head"><b>تشغيل الفيديو</b><button onclick="closeRemoteVideo()">×</button></div>
     <video id="remoteVideoEl" controls playsinline crossorigin="anonymous" style="width:100%;max-height:70vh;border-radius:12px;background:#000"></video>
-    <div class="hx-actions"><button id="remoteSaveBtn" onclick="saveRemoteVideoToGallery()">💾 حفظ في 📌 فيديو</button><button id="remoteDownloadBtn" onclick="downloadRemoteVideoToDevice()">⬇ تنزيل الفيديو للجهاز</button><a href="${esc(x.postUrl||x.url||'')}" target="_blank" rel="noopener">فتح المنشور الأصلي ↗</a></div>
+    <div class="hx-actions"><button id="remoteSaveBtn" disabled onclick="saveRemoteVideoToGallery()">💾 حفظ في 📌 فيديو</button><button id="remoteDownloadBtn" disabled onclick="downloadRemoteVideoToDevice()">⬇ تنزيل الفيديو للجهاز</button><a href="${esc(x.postUrl||x.url||'')}" target="_blank" rel="noopener">فتح المنشور الأصلي ↗</a></div>
     <div id="remoteVideoStatus" class="hint">${isHlsUrl(src)?'⏳ جارٍ تشغيل HLS...':'⏳ جارٍ تحميل الفيديو...'}</div>
   </div>`;
   d.onclick=e=>{if(e.target===d)closeRemoteVideo()}; document.body.appendChild(d);
   document.documentElement.style.overflow='hidden'; document.body.style.overflow='hidden';
-  const v=d.querySelector('#remoteVideoEl'), st=d.querySelector('#remoteVideoStatus');
-  v.addEventListener('error',()=>{st.textContent='⚠️ تعذّر تشغيل الرابط؛ افتحي المنشور الأصلي أو أعيدي استخراج JSON.'});
+  const v=d.querySelector('#remoteVideoEl'), st=d.querySelector('#remoteVideoStatus'), saveBtn=d.querySelector('#remoteSaveBtn'), downloadBtn=d.querySelector('#remoteDownloadBtn');
+  const videoReady=()=>Number.isFinite(v.duration)&&v.duration>0&&v.readyState>=2;
+  const setVideoReady=(ok)=>{if(saveBtn)saveBtn.disabled=!ok;if(downloadBtn)downloadBtn.disabled=!ok;};
+  setVideoReady(false);
+  const markReady=()=>{if(videoReady()){setVideoReady(true);st.textContent='✅ جاهز للتشغيل — زر التنزيل متاح الآن بصيغة WebM';}};
+  v.addEventListener('loadedmetadata',markReady); v.addEventListener('loadeddata',markReady); v.addEventListener('canplay',markReady);
+  v.addEventListener('error',()=>{setVideoReady(false);st.textContent='⚠️ تعذّر تشغيل الرابط؛ جرّبي رابط HLS البديل أو افتحي المنشور الأصلي.'});
   if(isHlsUrl(src)){
     let hlsAttempt=0;
     const attachHls=(url)=>{
@@ -3196,14 +3201,15 @@ function openRemoteVideoLight(x){
       if(nativeType){
         st.textContent='⏳ جارٍ التشغيل الأصلي في Chrome...';
         v.src=url;
-        v.addEventListener('loadedmetadata',()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';},{once:true});
+        v.addEventListener('loadedmetadata',markReady,{once:true});
         v.addEventListener('error',()=>{
           if(window.Hls && Hls.isSupported() && !_remoteHls){
-            st.textContent='⏳ أجرب مشغل HLS البديل...';
+            const fallbackUrl=x.hlsBest||url;
+            st.textContent='⏳ أجرب مسار HLS البديل...';
             _remoteHls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90});
-            _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{if(data?.fatal)st.innerHTML='⚠️ تعذّر تشغيل HLS. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';});
-            _remoteHls.loadSource(url);_remoteHls.attachMedia(v);
-            _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';v.play().catch(()=>{})});
+            _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{if(data?.fatal){setVideoReady(false);st.innerHTML='⚠️ تعذّر تشغيل HLS. <a href="'+esc(fallbackUrl)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';}});
+            _remoteHls.loadSource(fallbackUrl);_remoteHls.attachMedia(v);
+            _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='⏳ تم تحميل قائمة HLS، انتظري ظهور مدة الفيديو...';v.play().catch(()=>{})});
           }
         },{once:true});
         v.play().catch(()=>{}); return;
@@ -3218,7 +3224,7 @@ function openRemoteVideoLight(x){
           st.innerHTML='⚠️ تعذّر تشغيل HLS داخل الصفحة. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
         });
         _remoteHls.loadSource(url);_remoteHls.attachMedia(v);
-        _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';v.play().catch(()=>{})});
+        _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='⏳ تم تحميل قائمة HLS، انتظري ظهور مدة الفيديو...';v.play().catch(()=>{})});
       }else st.innerHTML='⚠️ هذا المتصفح لا يدعم HLS. <a href="'+esc(src)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
     };
     attachHls(src);
@@ -3244,6 +3250,7 @@ async function recordRemoteHlsToBlob(v, status){
 async function downloadRemoteVideoToDevice(){
   const x=_remoteVideoItem, v=document.getElementById('remoteVideoEl'), st=document.getElementById('remoteVideoStatus'), btn=document.getElementById('remoteDownloadBtn');
   if(!x||!v||!st)return;
+  if(!Number.isFinite(v.duration)||v.duration<=0||v.readyState<2){st.textContent='⚠️ لم تجهز مدة الفيديو بعد (0:00)، شغّلي الفيديو وانتظري ظهور المدة ثم اضغطي تنزيل.';return;}
   if(btn){btn.disabled=true;btn.textContent='⏳ تجهيز التنزيل...';}
   try{
     const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
@@ -3261,6 +3268,7 @@ async function downloadRemoteVideoToDevice(){
 async function saveRemoteVideoToGallery(){
   const x=_remoteVideoItem, v=document.getElementById('remoteVideoEl'), st=document.getElementById('remoteVideoStatus'), btn=document.getElementById('remoteSaveBtn');
   if(!x||!v||!st)return;
+  if(!Number.isFinite(v.duration)||v.duration<=0||v.readyState<2){st.textContent='⚠️ لم تجهز مدة الفيديو بعد (0:00)، شغّلي الفيديو وانتظري ظهور المدة ثم اضغطي حفظ.';return;}
   if(btn)btn.disabled=true;
   try{
     let blob;
