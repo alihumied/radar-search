@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RADAR // محرك البحث العميق // HLS FIX 2</title>
+<title>RADAR // محرك البحث العميق // HLS FIX 3</title>
 <meta name="radar-build" content="hls-fix-2-2026-08-25">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#040609">
@@ -3182,7 +3182,7 @@ function openRemoteVideoLight(x){
   d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()" style="width:min(96vw,680px);">
     <div class="hx-head"><b>تشغيل الفيديو</b><button onclick="closeRemoteVideo()">×</button></div>
     <video id="remoteVideoEl" controls playsinline crossorigin="anonymous" style="width:100%;max-height:70vh;border-radius:12px;background:#000"></video>
-    <div class="hx-actions"><button id="remoteSaveBtn" onclick="saveRemoteVideoToGallery()">💾 حفظ في 📌 فيديو</button><a href="${esc(x.postUrl||x.url||'')}" target="_blank" rel="noopener">فتح المنشور الأصلي ↗</a></div>
+    <div class="hx-actions"><button id="remoteSaveBtn" onclick="saveRemoteVideoToGallery()">💾 حفظ في 📌 فيديو</button><button id="remoteDownloadBtn" onclick="downloadRemoteVideoToDevice()">⬇ تنزيل الفيديو للجهاز</button><a href="${esc(x.postUrl||x.url||'')}" target="_blank" rel="noopener">فتح المنشور الأصلي ↗</a></div>
     <div id="remoteVideoStatus" class="hint">${isHlsUrl(src)?'⏳ جارٍ تشغيل HLS...':'⏳ جارٍ تحميل الفيديو...'}</div>
   </div>`;
   d.onclick=e=>{if(e.target===d)closeRemoteVideo()}; document.body.appendChild(d);
@@ -3227,6 +3227,23 @@ async function recordRemoteHlsToBlob(v, status){
     v.addEventListener('ended',done,{once:true});
     rec.start(1000); status.textContent='⏳ جارٍ حفظ HLS كفيديو WebM؛ اتركي الصفحة مفتوحة حتى النهاية...';
   });
+}
+async function downloadRemoteVideoToDevice(){
+  const x=_remoteVideoItem, v=document.getElementById('remoteVideoEl'), st=document.getElementById('remoteVideoStatus'), btn=document.getElementById('remoteDownloadBtn');
+  if(!x||!v||!st)return;
+  if(btn){btn.disabled=true;btn.textContent='⏳ تجهيز التنزيل...';}
+  try{
+    const src=x.videoMp4||x.master||x.hlsBest||x.directUrl||'';
+    let blob,ext;
+    if(isHlsUrl(src)){blob=await recordRemoteHlsToBlob(v,st);ext='webm';}
+    else{blob=await fetchVideoBlob(src);ext='mp4';}
+    if(isSmallOrInvalidVideoBlob(blob))throw new Error('الملف الناتج غير صالح');
+    const u=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=u;a.download=`radar-${x.id||'video'}-${Date.now()}.${ext}`;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),60000);
+    st.textContent=`✅ بدأ تنزيل الفيديو بصيغة ${ext.toUpperCase()} — انتظري اكتمال التسجيل إذا كان HLS`;
+  }catch(e){st.textContent='⚠️ تعذّر إنشاء ملف التنزيل: '+(e?.message||e)+' — جرّبي تشغيل الفيديو أولًا ثم أعيدي المحاولة';}
+  finally{if(btn){btn.disabled=false;btn.textContent='⬇ تنزيل الفيديو للجهاز';}}
 }
 async function saveRemoteVideoToGallery(){
   const x=_remoteVideoItem, v=document.getElementById('remoteVideoEl'), st=document.getElementById('remoteVideoStatus'), btn=document.getElementById('remoteSaveBtn');
