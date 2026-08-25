@@ -155,6 +155,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .saved-search-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.suggest-loading{padding:11px 16px;color:var(--muted);font-size:12px}
 
 .hx-toolbar{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg-0)}.hx-platform{color:var(--cyan);font-size:12px;font-weight:700;margin-bottom:10px;word-break:break-word}.hx-types{display:flex;gap:7px;flex-wrap:wrap}.hx-type{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:8px 12px;font-family:Tajawal}.hx-type.active{border-color:var(--cyan);background:rgba(63,212,255,.12)}.hx-type b{color:var(--cyan);font:10px 'JetBrains Mono'}.hx-search{display:grid;grid-template-columns:2fr 1.2fr 1fr auto;gap:8px;margin-top:10px}.hx-grid{display:grid;grid-template-columns:repeat(auto-fill,1.5cm);gap:16px;padding:10px;direction:rtl}.hx-comment{display:grid;grid-template-columns:38px 1fr;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:11px;margin-bottom:8px}.hx-comment img{width:36px;height:36px;border-radius:50%;object-fit:cover}.hx-comment>img{cursor:zoom-in;touch-action:pan-y;-webkit-touch-callout:none}.hx-name{color:var(--cyan);font-size:12px;font-weight:700;text-decoration:none;display:inline-block}.hx-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.hx-reaction{width:18px;height:18px;object-fit:contain;display:inline-block}.hx-date{color:var(--muted);font-size:10px}.hx-text{font-size:13px;line-height:1.7}.hx-embed{position:fixed;inset:0;z-index:10080;background:#020408ed;display:flex;align-items:center;justify-content:center;padding:14px}.hx-box{width:min(96vw,580px);max-height:94vh;padding:11px;border:1px solid var(--line);border-radius:18px;background:var(--bg-1);display:flex;flex-direction:column;gap:9px}.hx-head{display:flex;justify-content:space-between;align-items:center}.hx-head button{width:36px;height:36px;border-radius:50%}.hx-embed iframe{width:100%;height:68vh;border:0;border-radius:12px;background:#000}.hx-actions{display:flex;gap:8px}.hx-actions>*{flex:1;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg-0);color:var(--text);text-align:center;text-decoration:none}@media(max-width:700px){.hx-search{grid-template-columns:1fr 1fr}.hx-search #hxText{grid-column:1/-1}.hx-embed iframe{height:65vh}}
+  .radar-convert-panel{display:none;margin:12px 0;padding:14px;border:1px solid #2e6bff88;border-radius:14px;background:linear-gradient(135deg,#12264a,#0c1524)}.radar-convert-panel.show{display:block}.radar-convert-panel select{width:100%;margin:10px 0;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px;font-family:Tajawal}.radar-convert-actions{display:flex;gap:8px;flex-wrap:wrap}.radar-convert-actions button{flex:1;min-width:130px;border:1px solid #46d5ff77;border-radius:11px;background:#164e85;color:#e9f8ff;padding:10px;font-family:Tajawal;font-weight:700;cursor:pointer}.radar-convert-actions button:last-child{background:#123124;border-color:#54d99b77;color:#baffde}.radar-convert-overlay{position:fixed;inset:0;z-index:10100;background:#020408e8;display:flex;align-items:center;justify-content:center;padding:10px}.radar-convert-frame{width:min(98vw,850px);height:min(94vh,850px);border:1px solid #2e6bff88;border-radius:18px;background:#071013;overflow:hidden;position:relative}.radar-convert-frame iframe{width:100%;height:100%;border:0}.radar-convert-close{position:absolute;top:10px;left:10px;z-index:2;width:38px;height:38px;border-radius:50%;border:1px solid #ffffff66;background:#08101dcc;color:#fff;font-size:22px;cursor:pointer}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -263,6 +264,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
         </div>
       </div>
       <div id="htmlImportResultsList" style="margin-top:12px;"></div>
+      <div id="radarConvertPanel" class="radar-convert-panel"></div>
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button id="hxMore" class="toggle" style="display:none;flex:1;justify-content:center" onclick="hxMore()">عرض المزيد</button>
         <button class="toggle" style="flex:1;justify-content:center;border-color:#2eb87288;color:#8affb0" onclick="hxDownloadAll()">⬇ تنزيل الكل للجهاز</button>
@@ -1332,7 +1334,7 @@ async function runImageSearch(){
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
 const SAVED_LINKS_KEY = 'radar_saved_images'; // legacy localStorage key (للترحيل فقط)
-const IDB_NAME = 'radar_db', IDB_VERSION = 7, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light', IDB_FILE_STORE = 'saved_source_files';
+const IDB_NAME = 'radar_db', IDB_VERSION = 8, IDB_STORE = 'saved_images', IDB_VIDEO_STORE = 'saved_videos_light', IDB_FILE_STORE = 'saved_source_files', IDB_CONVERT_STORE = 'saved_conversion_sessions';
 let _idbPromise = null;
 function idbOpen(){
   if(_idbPromise) return _idbPromise;
@@ -1360,6 +1362,10 @@ function idbOpen(){
       if(!db.objectStoreNames.contains(IDB_FILE_STORE)){
         const fstore = db.createObjectStore(IDB_FILE_STORE, {keyPath:'id', autoIncrement:true});
         fstore.createIndex('ts', 'ts', {unique:false});
+      }
+      if(!db.objectStoreNames.contains(IDB_CONVERT_STORE)){
+        const cstore = db.createObjectStore(IDB_CONVERT_STORE, {keyPath:'key'});
+        cstore.createIndex('updatedAt', 'updatedAt', {unique:false});
       }
     };
     req.onsuccess = e => finish(resolve, e.target.result);
@@ -1396,6 +1402,13 @@ async function idbDeleteSourceFile(id){
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+async function idbGetConversionSession(key){
+  try{const db=await idbOpen();return await new Promise((resolve,reject)=>{const tx=db.transaction(IDB_CONVERT_STORE,'readonly');const req=tx.objectStore(IDB_CONVERT_STORE).get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error)})}catch(e){return null}
+}
+async function idbPutConversionSession(session){
+  const db=await idbOpen();
+  return await new Promise((resolve,reject)=>{const tx=db.transaction(IDB_CONVERT_STORE,'readwrite');tx.objectStore(IDB_CONVERT_STORE).put(session);tx.oncomplete=()=>resolve(session);tx.onerror=()=>reject(tx.error)});
 }
 async function idbGetAllVideos(){
   try{
@@ -3262,7 +3275,7 @@ function applyOfficialJsonData(d,filename){
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
   HX=[];
-  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.videoMp4||v.hlsBest||v.master||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
+  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.hlsBest||v.master||v.videoMp4||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3289,6 +3302,7 @@ function applyOfficialJsonData(d,filename){
   const memberCount=HX.filter(z=>z.type==='member').length;
   const commentCount=HX.filter(z=>z.type==='comment').length;
   if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
+  radarPrepareConversionSession(d,filename).catch(err=>console.warn('radar: conversion session was not saved',err));
 }
 async function toggleSavedFilesView(){
   const area=document.getElementById('savedFilesArea');
@@ -3331,6 +3345,7 @@ async function renderSavedFiles(){
         </div>
         <div style="display:flex;gap:6px;flex:none">
           <div class="toggle" style="padding:6px 10px;cursor:pointer" onclick="reopenSavedFile(${x.id})">فتح</div>
+          ${x.kind==='json'?`<div class="toggle" style="padding:6px 10px;cursor:pointer;border-color:#6ce9c888;color:#8ff5db" onclick="reopenSavedFile(${x.id});setTimeout(()=>document.getElementById('radarConvertPanel')?.scrollIntoView({behavior:'smooth',block:'center'}),280)">⚡ تحويل</div>`:''}
           <div class="toggle" style="padding:6px 10px;cursor:pointer;border-color:#45d9ff88;color:#8feaff" onclick="renameSavedFile(${x.id})">إعادة تسمية</div>
           <div class="toggle" style="padding:6px 10px;cursor:pointer;color:#ff8a8a;border-color:#ff8a8a55" onclick="deleteSavedFile(${x.id})">حذف</div>
         </div>
@@ -3400,6 +3415,42 @@ async function deleteSavedFile(id){
 function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const text=x.target.result;const d=JSON.parse(text);applyOfficialJsonData(d,f.name);idbAddSourceFile(f.name,'json',text,d.platform||'x').then(()=>{refreshSavedFilesIfVisible()}).catch(err=>{console.error('radar: failed to save json source file',err);st.textContent+=` ⚠️ (تعذّر حفظ نسخة الملف: ${err?.message||err})`});}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function loadXWidget(cb){if(window.twttr?.widgets)return cb();let sc=document.getElementById('xWidgets');if(!sc){sc=document.createElement('script');sc.id='xWidgets';sc.src='https://platform.x.com/widgets.js';sc.async=true;document.head.appendChild(sc)}let n=0;const t=setInterval(()=>{if(window.twttr?.widgets){clearInterval(t);cb()}else if(++n>40)clearInterval(t)},250)}
 const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);const isXPost=x?.postUrl&&/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i.test(x.postUrl);if(!isXPost)return officialOldOpen(id);hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>X Embed الرسمي</b><button onclick="hxClose()">×</button></div><div id="xMount" style="min-height:340px;overflow:auto"><div class="hint">⏳ تحميل المنشور الرسمي...</div></div><div class="hx-actions"><a href="${esc(x.postUrl)}" target="_blank">فتح المنشور ↗</a></div><div id="xMsg" class="hint">يعتمد على رابط المنشور الرسمي</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);loadXWidget(()=>{const m=x.postUrl.match(/\/status\/(\d+)/),mount=d.querySelector('#xMount'),msg=d.querySelector('#xMsg');if(!m)return msg.textContent='⚠️ رابط المنشور ناقص';mount.innerHTML='';twttr.widgets.createTweet(m[1],mount,{theme:document.body.classList.contains('light-theme')?'light':'dark',align:'center',conversation:'none',dnt:true}).then(el=>msg.textContent=el?'✅ تم تحميل X Embed الرسمي':'⚠️ لم يسمح X بعرض المنشور').catch(er=>msg.textContent='⚠️ '+er.message)})};
+/* ====== RADAR saved conversion bridge ====== */
+const RADAR_CONVERTER_URL='https://radar-hls-44zfandh.manus.space/';
+let radarConversionSession=null;
+function radarConversionKey(data,filename){return `radar-convert:${data.platform||'x'}:${String(filename||'session').trim().toLowerCase()}`}
+function radarGetConvertibleVideos(data){return (data.videos||[]).map((v,i)=>{const hls=v.hlsBest||v.master||'';const width=Number(v.width||v.widthPx||0)||null,height=Number(v.height||v.heightPx||0)||null;return{id:String(v.id||i+1),label:`فيديو ${i+1}${width&&height?` · ${width}×${height}`:''}`,sourceUrl:hls,poster:v.poster||'',postUrl:v.postUrl||'',quality:width&&height?`${width}×${height}`:'أعلى جودة من HLS'}}).filter(v=>/^https:\/\/video\.twimg\.com\//i.test(v.sourceUrl))}
+async function radarPrepareConversionSession(data,filename){
+  const videos=radarGetConvertibleVideos(data),panel=document.getElementById('radarConvertPanel');
+  if(!videos.length){radarConversionSession=null;if(panel){panel.classList.remove('show');panel.innerHTML=''}return}
+  const key=radarConversionKey(data,filename),old=await idbGetConversionSession(key);
+  radarConversionSession={key,filename,platform:data.platform||'x',videos,selectedId:videos.some(v=>v.id===old?.selectedId)?old.selectedId:videos[0].id,updatedAt:Date.now(),lastOutput:old?.lastOutput||null};
+  await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();
+}
+function radarSelectedConversionVideo(){return radarConversionSession?.videos.find(v=>v.id===radarConversionSession.selectedId)||radarConversionSession?.videos[0]||null}
+async function radarChooseConversionVideo(id){if(!radarConversionSession)return;radarConversionSession.selectedId=id;radarConversionSession.updatedAt=Date.now();await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel()}
+function radarRenderConversionPanel(){
+  const panel=document.getElementById('radarConvertPanel'),session=radarConversionSession;if(!panel)return;
+  if(!session?.videos?.length){panel.classList.remove('show');panel.innerHTML='';return}
+  const selected=radarSelectedConversionVideo();
+  const runInfo=session.message?`<div class="hint" style="margin:8px 0;color:${session.status==='failed'?'#ff9b9b':'#a8d8ff'}">${esc(session.message)}${Number.isFinite(session.progress)?` · ${session.progress}%`:''}</div>`:'';
+  const savedOutput=session.lastOutput?.downloadUrl?`<a href="${esc(new URL(session.lastOutput.downloadUrl,RADAR_CONVERTER_URL).href)}" target="_blank" rel="noopener" class="toggle" style="margin-top:10px;display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4 المحفوظ · ${esc(session.lastOutput.quality||'جاهز')}</a>`:'';
+  panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select><div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>${runInfo}${savedOutput}`;
+}
+function radarOpenConverter(){
+  const video=radarSelectedConversionVideo();if(!video)return alert('اختاري فيديو أولًا.');
+  const src=`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
+  const overlay=document.createElement('div');overlay.className='radar-convert-overlay';overlay.innerHTML=`<div class="radar-convert-frame"><button class="radar-convert-close" onclick="this.closest('.radar-convert-overlay').remove()">×</button><iframe src="${src}" allow="clipboard-write; fullscreen"></iframe></div>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
+}
+window.addEventListener('message',async event=>{
+  if(event.origin!==new URL(RADAR_CONVERTER_URL).origin)return;
+  const data=event.data||{};if(!['radar-converter-progress','radar-converter-result'].includes(data.type)||!data.radarSession)return;
+  const saved=await idbGetConversionSession(data.radarSession);if(!saved)return;
+  saved.status=data.status||saved.status;saved.progress=Number(data.progress)||0;saved.message=data.message||saved.message;saved.updatedAt=Date.now();
+  if(data.type==='radar-converter-result'&&data.output)saved.lastOutput=data.output;
+  await idbPutConversionSession(saved);
+  if(radarConversionSession?.key===saved.key){radarConversionSession=saved;radarRenderConversionPanel()}
+});
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
