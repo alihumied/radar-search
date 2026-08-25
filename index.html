@@ -3189,13 +3189,25 @@ function openRemoteVideoLight(x){
   const v=d.querySelector('#remoteVideoEl'), st=d.querySelector('#remoteVideoStatus');
   v.addEventListener('error',()=>{st.textContent='⚠️ تعذّر تشغيل الرابط؛ افتحي المنشور الأصلي أو أعيدي استخراج JSON.'});
   if(isHlsUrl(src)){
-    if(window.Hls && Hls.isSupported()){
-      _remoteHls=new Hls({enableWorker:true, lowLatencyMode:false});
-      _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{if(data?.fatal)st.textContent='⚠️ رفض الخادم تشغيل HLS؛ حدّثي ملف JSON ثم جربي من جديد.'});
-      _remoteHls.loadSource(src); _remoteHls.attachMedia(v);
-      _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — يمكن حفظه في 📌 فيديو بصيغة WebM'; v.play().catch(()=>{})});
-    }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=src; v.play().catch(()=>{})}
-    else st.textContent='⚠️ هذا المتصفح لا يدعم HLS؛ افتحي الرابط الأصلي في Chrome.';
+    let hlsAttempt=0;
+    const attachHls=(url)=>{
+      if(window.Hls && Hls.isSupported()){
+        if(_remoteHls){try{_remoteHls.destroy()}catch(e){}}
+        _remoteHls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90});
+        _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{
+          if(!data?.fatal)return;
+          const fallback=x.hlsBest||x.directUrl||'';
+          if(hlsAttempt===0 && isHlsUrl(fallback) && fallback!==url){
+            hlsAttempt++; st.textContent='⏳ تعذّر master؛ أجرب رابط HLS البديل...'; attachHls(fallback); return;
+          }
+          st.textContent='⚠️ تعذّر تشغيل HLS في هذا المتصفح/الشبكة؛ افتحي المنشور الأصلي أو أعيدي الاستخراج.';
+        });
+        _remoteHls.loadSource(url); _remoteHls.attachMedia(v);
+        _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — يمكن حفظه في 📌 فيديو بصيغة WebM'; v.play().catch(()=>{})});
+      }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=url; v.play().catch(()=>{})}
+      else st.textContent='⚠️ هذا المتصفح لا يدعم HLS؛ افتحي الرابط الأصلي في Chrome.';
+    };
+    attachHls(src);
   }else{v.src=src; v.play().catch(()=>{});}
 }
 async function recordRemoteHlsToBlob(v, status){
