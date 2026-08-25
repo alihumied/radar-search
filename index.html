@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RADAR // محرك البحث العميق // HLS FIX 3</title>
-<meta name="radar-build" content="hls-fix-2-2026-08-25">
+<title>RADAR // محرك البحث العميق // HLS FIX 4</title>
+<meta name="radar-build" content="hls-fix-4-2026-08-25">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#040609">
 <link rel="icon" href="icon-192.png">
@@ -3192,21 +3192,34 @@ function openRemoteVideoLight(x){
   if(isHlsUrl(src)){
     let hlsAttempt=0;
     const attachHls=(url)=>{
+      const nativeType=v.canPlayType('application/vnd.apple.mpegurl')||v.canPlayType('application/x-mpegURL');
+      if(nativeType){
+        st.textContent='⏳ جارٍ التشغيل الأصلي في Chrome...';
+        v.src=url;
+        v.addEventListener('loadedmetadata',()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';},{once:true});
+        v.addEventListener('error',()=>{
+          if(window.Hls && Hls.isSupported() && !_remoteHls){
+            st.textContent='⏳ أجرب مشغل HLS البديل...';
+            _remoteHls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90});
+            _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{if(data?.fatal)st.innerHTML='⚠️ تعذّر تشغيل HLS. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';});
+            _remoteHls.loadSource(url);_remoteHls.attachMedia(v);
+            _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';v.play().catch(()=>{})});
+          }
+        },{once:true});
+        v.play().catch(()=>{}); return;
+      }
       if(window.Hls && Hls.isSupported()){
         if(_remoteHls){try{_remoteHls.destroy()}catch(e){}}
         _remoteHls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90});
         _remoteHls.on(Hls.Events.ERROR,(ev,data)=>{
           if(!data?.fatal)return;
           const fallback=x.hlsBest||x.directUrl||'';
-          if(hlsAttempt===0 && isHlsUrl(fallback) && fallback!==url){
-            hlsAttempt++; st.textContent='⏳ تعذّر master؛ أجرب رابط HLS البديل...'; attachHls(fallback); return;
-          }
-          st.innerHTML='⚠️ تعذّر تشغيل HLS داخل الصفحة. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a> أو افتحي المنشور الأصلي.';
+          if(hlsAttempt===0 && isHlsUrl(fallback) && fallback!==url){hlsAttempt++;st.textContent='⏳ تعذّر master؛ أجرب رابط HLS البديل...';attachHls(fallback);return;}
+          st.innerHTML='⚠️ تعذّر تشغيل HLS داخل الصفحة. <a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
         });
-        _remoteHls.loadSource(url); _remoteHls.attachMedia(v);
-        _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — يمكن حفظه في 📌 فيديو بصيغة WebM'; v.play().catch(()=>{})});
-      }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=url; v.play().catch(()=>{})}
-      else st.innerHTML='⚠️ هذا المتصفح لا يدعم HLS. <a href="'+esc(src)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
+        _remoteHls.loadSource(url);_remoteHls.attachMedia(v);
+        _remoteHls.on(Hls.Events.MANIFEST_PARSED,()=>{st.textContent='✅ جاهز للتشغيل — استخدمي زر «تنزيل الفيديو للجهاز» للحفظ';v.play().catch(()=>{})});
+      }else st.innerHTML='⚠️ هذا المتصفح لا يدعم HLS. <a href="'+esc(src)+'" target="_blank" rel="noopener" style="color:#8feaff;text-decoration:underline">افتحي رابط الفيديو المباشر</a>.';
     };
     attachHls(src);
   }else{v.src=src; v.play().catch(()=>{});}
