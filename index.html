@@ -3292,7 +3292,7 @@ function applyOfficialJsonData(d,filename){
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
   HX=[];
-  (d.videos||[]).forEach(v=>{const hls=v.hlsBest||v.master||'';HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':(v.videoMp4||''),hlsUrl:hls,thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform})});
+  (d.videos||[]).forEach(v=>{const hls=v.hlsBest||v.master||'';if(!/^https:\/\/video\.twimg\.com\/.+\.m3u8(?:[?#]|$)/i.test(hls))return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
