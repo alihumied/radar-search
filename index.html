@@ -3152,6 +3152,23 @@ function hxPostTextHtml(x){
   return html;
 }
 function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='post'){list.innerHTML=shown.map(x=>`<article class="result-card" style="display:flex;align-items:flex-start;gap:12px;text-align:right;direction:rtl;">${x.thumb?`<img src="${esc(x.thumb)}" style="width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;cursor:pointer;" onclick="openInlineSavedFocus('${esc(x.directUrl||x.thumb)}')" onerror="this.style.display='none'">`:''}<div style="min-width:0;flex:1;"><div style="font-size:14px;color:#45d9ff;font-weight:700;margin-bottom:4px;">${esc(x.author||'منشور محفوظ')}</div><div style="font-size:15px;line-height:1.9;white-space:normal;overflow-wrap:anywhere;">${hxPostTextHtml(x)||'(بدون نص)'}</div>${x.date?`<div style="font-size:11px;color:#8fa0bb;margin-top:8px;">${esc(x.date)}</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" class="toggle" style="display:inline-flex;margin-top:10px;padding:6px 10px;color:#8feaff;border-color:#45d9ff88;text-decoration:none;">↗ فتح المنشور الأصلي</a>`:''}</div></article>`).join('')||'<div class="hint">لا توجد منشورات محفوظة.</div>';return}if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}${x.reaction?`<img class="hx-reaction" src="${esc(x.reaction)}" alt="">`:''}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${hxPostTextHtml(x)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}if(HXtype==='reactor'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<div style="position:relative;width:36px;height:36px"><img src="${esc(x.thumb)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">${x.reaction?`<img src="${esc(x.reaction)}" style="position:absolute;bottom:-3px;left:-3px;width:16px;height:16px;border-radius:50%;background:#0b1526;border:1px solid #0b1526">`:''}</div>`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}</div><div class="hx-date">${x.text?esc(x.text):''}</div></div></div>`).join('')||'<div class="hint">لا يوجد متفاعلين محفوظين.</div>';return}if(HXtype==='member'){list.innerHTML=shown.map(x=>{const uidMatch=(x.url||'').match(/facebook\.com\/(\d+)\/?$/i);const uid=uidMatch?uidMatch[1]:'';const safeName=esc(jsAttrStr(x.author||''));const safeVal=esc(jsAttrStr(x.url||uid||''));return `<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover">`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}<div class="hx-date">${x.text?esc(x.text):''}</div>${x.url?`<div class="hint" style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;direction:ltr;text-align:left;">${esc(x.url.replace(/^https?:\/\//i,''))} <button onclick="copyMetaChipValue(this,'${safeVal}');hxSearchThisPerson('${safeName}')" title="نسخ الرابط + بحث محلي بنفس الملف" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">📋</button><button onclick="hxSearchThisPerson('${safeName}')" title="بحث محلي عن هاد الشخص بباقي الملف (تعليقات/منشورات/متفاعلين)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🔎</button><button onclick="hxDeepSearch('${safeVal}')" title="بحث عميق بالمحرك الرئيسي (تحديد هوية + رابط حقيقي + اسم مستخرج)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🌐</button></div>`:''}</div></div>`}).join('')||'<div class="hint">لا يوجد أعضاء محفوظين.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.directUrl||x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
+const radarBaseHxRender=hxRender;
+function radarOutputForHxVideo(hxId){return radarConversionSession?.outputs?.[String(hxId||'').replace(/^v:/,'')]||null}
+function radarStateForHxVideo(hxId){return radarConversionSession?.videoStates?.[String(hxId||'').replace(/^v:/,'')]||null}
+function radarDecorateVideoTiles(){
+  if(HXtype!=='video'||!radarConversionSession)return;
+  const videos=hxFiltered().slice(0,HXpage*HXSIZE);
+  document.querySelectorAll('#htmlImportResultsList .hx-grid .saved-image-tile').forEach((tile,index)=>{
+    const video=videos[index];if(!video?.hlsUrl||!/^https:\/\/video\.twimg\.com\//i.test(video.hlsUrl))return;
+    tile.querySelectorAll('.radar-video-convert-action').forEach(node=>node.remove());
+    const safeId=esc(video.id),output=radarOutputForHxVideo(video.id),state=radarStateForHxVideo(video.id),selected=radarConversionSession.selectedId===String(video.id).replace(/^v:/,''),download=output?.downloadUrl?esc(new URL(output.downloadUrl,RADAR_CONVERTER_URL).href):'';
+    const tone=state?.status==='failed'?'#f07474':output?'#4bdd98':selected?'#ffcf4a':'';
+    tile.style.boxShadow=tone?`0 0 0 2px ${tone},0 0 16px ${tone}66`:'';
+    const badge=state?.status==='failed'?'تعذّر':output?'MP4 جاهز':state?.status==='processing'||state?.status==='inspecting'?`${Math.max(1,Number(state.progress)||0)}%`:selected?'محدد':'';
+    tile.insertAdjacentHTML('beforeend',`${badge?`<span class="radar-video-convert-action" style="position:absolute;top:4px;right:4px;left:4px;z-index:6;padding:2px 4px;border-radius:7px;background:${state?.status==='failed'?'#701f2be8':output?'#0c5f42e8':selected?'#4c3600e8':'#163a52e8'};color:#fff;font-size:9px;line-height:1.25;text-align:center;pointer-events:none">${badge}</span>`:''}<button class="saved-corner-btn always-on radar-video-convert-action" title="تحويل هذا الفيديو إلى MP4" aria-label="تحويل هذا الفيديو إلى MP4" style="bottom:-9px;right:-9px;width:27px;height:27px;transform:scale(1);background:linear-gradient(135deg,#ffcf4a,#b46c00);color:#241600;font-size:18px" onclick="event.stopPropagation();radarConvertHxVideo('${safeId}')">⚡</button>${download?`<a class="saved-corner-btn always-on radar-video-convert-action" title="تنزيل MP4 المحفوظ" aria-label="تنزيل MP4 المحفوظ" href="${download}" target="_blank" rel="noopener" style="bottom:-8px;left:-8px;width:24px;height:24px;transform:scale(1);background:linear-gradient(135deg,#2eb872,#136b3e);text-decoration:none;color:white">⬇</a>`:''}`);
+  });
+}
+hxRender=function(){radarBaseHxRender();radarDecorateVideoTiles()};
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
   HX=[];HXtype='image';HXpage=1;
@@ -3275,7 +3292,7 @@ function applyOfficialJsonData(d,filename){
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
   HX=[];
-  (d.videos||[]).forEach(v=>HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:v.hlsBest||v.master||v.videoMp4||'',thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform}));
+  (d.videos||[]).forEach(v=>{const hls=v.hlsBest||v.master||'';HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':(v.videoMp4||''),hlsUrl:hls,thumb:v.poster||'',text:'فيديو '+label,author:label,date:v.firstSeen||'',platform})});
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3302,7 +3319,7 @@ function applyOfficialJsonData(d,filename){
   const memberCount=HX.filter(z=>z.type==='member').length;
   const commentCount=HX.filter(z=>z.type==='comment').length;
   if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
-  radarPrepareConversionSession(d,filename).catch(err=>console.warn('radar: conversion session was not saved',err));
+  radarPrepareConversionSession(d,filename).then(()=>hxRender()).catch(err=>console.warn('radar: conversion session was not saved',err));
 }
 async function toggleSavedFilesView(){
   const area=document.getElementById('savedFilesArea');
@@ -3424,21 +3441,25 @@ async function radarPrepareConversionSession(data,filename){
   const videos=radarGetConvertibleVideos(data),panel=document.getElementById('radarConvertPanel');
   if(!videos.length){radarConversionSession=null;if(panel){panel.classList.remove('show');panel.innerHTML=''}return}
   const key=radarConversionKey(data,filename),old=await idbGetConversionSession(key);
-  radarConversionSession={key,filename,platform:data.platform||'x',videos,selectedId:videos.some(v=>v.id===old?.selectedId)?old.selectedId:videos[0].id,updatedAt:Date.now(),lastOutput:old?.lastOutput||null};
+  const outputs={...(old?.outputs||{})};if(old?.lastOutput&&old?.selectedId&&!outputs[old.selectedId])outputs[old.selectedId]=old.lastOutput;
+  radarConversionSession={key,filename,platform:data.platform||'x',videos,selectedId:videos.some(v=>v.id===old?.selectedId)?old.selectedId:videos[0].id,activeVideoId:old?.activeVideoId||null,updatedAt:Date.now(),lastOutput:old?.lastOutput||null,outputs,videoStates:{...(old?.videoStates||{})}};
   await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();
 }
 function radarSelectedConversionVideo(){return radarConversionSession?.videos.find(v=>v.id===radarConversionSession.selectedId)||radarConversionSession?.videos[0]||null}
-async function radarChooseConversionVideo(id){if(!radarConversionSession)return;radarConversionSession.selectedId=id;radarConversionSession.updatedAt=Date.now();await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel()}
+async function radarChooseConversionVideo(id){if(!radarConversionSession)return;radarConversionSession.selectedId=id;radarConversionSession.updatedAt=Date.now();await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender()}
+async function radarConvertHxVideo(hxId){const id=String(hxId||'').replace(/^v:/,'');if(!radarConversionSession?.videos.some(video=>video.id===id))return alert('هذا الفيديو لا يملك رابط HLS صالح للتحويل.');await radarChooseConversionVideo(id);document.getElementById('radarConvertPanel')?.scrollIntoView({behavior:'smooth',block:'center'});radarOpenConverter()}
 function radarRenderConversionPanel(){
   const panel=document.getElementById('radarConvertPanel'),session=radarConversionSession;if(!panel)return;
   if(!session?.videos?.length){panel.classList.remove('show');panel.innerHTML='';return}
   const selected=radarSelectedConversionVideo();
   const runInfo=session.message?`<div class="hint" style="margin:8px 0;color:${session.status==='failed'?'#ff9b9b':'#a8d8ff'}">${esc(session.message)}${Number.isFinite(session.progress)?` · ${session.progress}%`:''}</div>`:'';
-  const savedOutput=session.lastOutput?.downloadUrl?`<a href="${esc(new URL(session.lastOutput.downloadUrl,RADAR_CONVERTER_URL).href)}" target="_blank" rel="noopener" class="toggle" style="margin-top:10px;display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4 المحفوظ · ${esc(session.lastOutput.quality||'جاهز')}</a>`:'';
+  const selectedOutput=session.outputs?.[selected?.id]||session.lastOutput;
+  const savedOutput=selectedOutput?.downloadUrl?`<a href="${esc(new URL(selectedOutput.downloadUrl,RADAR_CONVERTER_URL).href)}" target="_blank" rel="noopener" class="toggle" style="margin-top:10px;display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4 المحفوظ · ${esc(selectedOutput.quality||'جاهز')}</a>`:'';
   panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select><div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>${runInfo}${savedOutput}`;
 }
 function radarOpenConverter(){
   const video=radarSelectedConversionVideo();if(!video)return alert('اختاري فيديو أولًا.');
+  radarConversionSession.activeVideoId=video.id;radarConversionSession.videoStates={...(radarConversionSession.videoStates||{}),[video.id]:{status:'preparing',progress:0,message:'فتح محول MP4'}};radarConversionSession.updatedAt=Date.now();idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender();
   const src=`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
   const overlay=document.createElement('div');overlay.className='radar-convert-overlay';overlay.innerHTML=`<div class="radar-convert-frame"><button class="radar-convert-close" onclick="this.closest('.radar-convert-overlay').remove()">×</button><iframe src="${src}" allow="clipboard-write; fullscreen"></iframe></div>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
 }
@@ -3446,10 +3467,11 @@ window.addEventListener('message',async event=>{
   if(event.origin!==new URL(RADAR_CONVERTER_URL).origin)return;
   const data=event.data||{};if(!['radar-converter-progress','radar-converter-result'].includes(data.type)||!data.radarSession)return;
   const saved=await idbGetConversionSession(data.radarSession);if(!saved)return;
-  saved.status=data.status||saved.status;saved.progress=Number(data.progress)||0;saved.message=data.message||saved.message;saved.updatedAt=Date.now();
-  if(data.type==='radar-converter-result'&&data.output)saved.lastOutput=data.output;
+  const videoId=saved.activeVideoId||saved.selectedId;
+  saved.status=data.status||saved.status;saved.progress=Number(data.progress)||0;saved.message=data.message||saved.message;saved.updatedAt=Date.now();saved.videoStates={...(saved.videoStates||{}),[videoId]:{status:saved.status,progress:saved.progress,message:saved.message}};
+  if(data.type==='radar-converter-result'&&data.output){saved.lastOutput=data.output;saved.outputs={...(saved.outputs||{}),[videoId]:data.output};saved.videoStates[videoId]={status:'completed',progress:100,message:'MP4 جاهز للتنزيل'};}
   await idbPutConversionSession(saved);
-  if(radarConversionSession?.key===saved.key){radarConversionSession=saved;radarRenderConversionPanel()}
+  if(radarConversionSession?.key===saved.key){radarConversionSession=saved;radarRenderConversionPanel();hxRender()}
 });
 </script>
 
