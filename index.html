@@ -200,6 +200,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <input type="file" id="deviceImageInput" accept="image/*" style="display:none;" onchange="handleDeviceImageUpload(event)">
     <input type="file" id="videoUploadInput" accept="video/*" style="display:none;" onchange="handleVideoUpload(event)">
     <div class="results" id="savedVideosArea">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:12px;flex-wrap:wrap;">
+        <button class="toggle" style="cursor:pointer;border-color:#54d99b88;color:#baffde;" onclick="document.getElementById('videoUploadInput').click()">📤 إضافة ملف MP4 من الجهاز</button>
+        <span class="hint" style="margin:0;">اختاري ملفًا نُزّل سابقًا؛ لا يقرأ RADAR مجلد التنزيلات تلقائيًا.</span>
+      </div>
       <div class="saved-images-grid" id="savedVideosList" style="margin-top:12px;"></div>
     </div>
     <div class="results" id="savedLinksArea">
@@ -1430,6 +1434,22 @@ async function idbAddVideo(blob, poster){
     tx.onerror = () => reject(tx.error);
   });
 }
+async function idbAddRemoteVideo(remoteUrl, meta={}){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_VIDEO_STORE);
+    const all = store.getAll();
+    all.onsuccess = () => {
+      const existing = all.result.find(x=>x.conversionKey&&x.conversionKey===meta.conversionKey);
+      const record = {remoteUrl,poster:meta.poster||'',title:meta.title||'MP4 محفوظ من RADAR',quality:meta.quality||'',sourceUrl:meta.sourceUrl||'',conversionKey:meta.conversionKey||'',ts:Date.now()};
+      if(existing) store.put({...existing,...record,id:existing.id});
+      else store.add(record);
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
 async function idbDeleteVideo(id){
   const db = await idbOpen();
   return new Promise((resolve, reject)=>{
@@ -1515,20 +1535,58 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور ذات الرابط المنتهي تبقى محفوظة ولا تُحذف تلقائيًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
+}
+const RADAR_ZIP_MAX_ARCHIVES=5;
+const RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE=50;
+const RADAR_ZIP_CONCURRENCY=4;
+const radarZipPause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName}){
+  if(!items.length)return {cancelled:false,ok:0,failed:0,archives:0};
+  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return {cancelled:true,ok:0,failed:0,archives:0}}
+  const totalBatches=Math.min(RADAR_ZIP_MAX_ARCHIVES,Math.ceil(items.length/RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE));
+  const batchSize=Math.ceil(items.length/totalBatches);
+  const batchNote=totalBatches>1?` على ${totalBatches} ملفات ZIP متوازنة (نحو ${batchSize} عنصرًا في الملف)`:' في ملف ZIP واحد';
+  if(!confirm(`تجميع ${items.length} ${label}${batchNote}؟\nقد يطلب المتصفح السماح بتنزيل عدة ملفات.`))return {cancelled:true,ok:0,failed:0,archives:0};
+  let ok=0,failed=0,done=0,archives=0;
+  for(let batch=0;batch<totalBatches;batch++){
+    const offset=batch*batchSize;
+    const group=items.slice(offset,offset+batchSize);
+    const zip=new JSZip(),queue=group.map((_,i)=>i);
+    let batchOk=0;
+    async function worker(){
+      while(queue.length){
+        const localIndex=queue.shift(),item=group[localIndex],absoluteIndex=offset+localIndex;
+        try{
+          const src=getUrl(item);if(!src)throw 0;
+          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+          const blob=await res.blob();
+          zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
+          ok++;batchOk++;
+        }catch(e){failed++}
+        done++;
+        if(statusEl)statusEl.textContent=`⏳ ${label}: الملف ${batch+1}/${totalBatches} · تجهيز ${done} من ${items.length}...`;
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(RADAR_ZIP_CONCURRENCY,group.length)},()=>worker()));
+    if(!batchOk)continue;
+    if(statusEl)statusEl.textContent=`⏳ ${label}: إنشاء الملف ${batch+1}/${totalBatches} (${batchOk} عنصرًا)...`;
+    const content=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const url=URL.createObjectURL(content),a=document.createElement('a');
+    a.href=url;a.download=`${archivePrefix}-part-${String(batch+1).padStart(2,'0')}-of-${String(totalBatches).padStart(2,'0')}.zip`;
+    document.body.appendChild(a);a.click();a.remove();archives++;
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    // مهلة قصيرة تخفف ضغط الذاكرة وتمنح Quetta فرصة لتسجيل تنزيل كل دفعة.
+    if(batch<totalBatches-1)await radarZipPause(700);
+  }
+  return {cancelled:false,ok,failed,archives};
 }
 async function downloadSavedImagesZip(){
   const items=await idbGetAllImages();
   if(!items.length){alert('ما في صور محفوظة بعد لتجميعها.');return}
-  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return}
-  if(!confirm(`تجميع ${items.length} صورة محفوظة في ملف ZIP واحد وتنزيله؟`))return;
   const btn=document.getElementById('savedImagesZipBtn'),status=document.getElementById('imageSearchStatus');
   if(btn){btn.disabled=true;btn.style.opacity='.65'}
-  if(status)status.textContent=`⏳ تجهيز 0 من ${items.length} صورة للملف المضغوط...`;
-  const zip=new JSZip();
-  let ok=0,failed=0,done=0;
-  const queue=items.map((_,i)=>i),CONCURRENCY=8;
   const extFromBlob=(blob,src)=>{
     const mime=String(blob?.type||'').toLowerCase();
     if(mime.includes('png'))return'png';
@@ -1541,30 +1599,11 @@ async function downloadSavedImagesZip(){
     const m=String(src||'').match(/\.(jpe?g|png|webp|gif|svg|avif|bmp)(?:[?#]|$)/i);
     return m?m[1].toLowerCase().replace('jpeg','jpg'):'jpg';
   };
-  async function worker(){
-    while(queue.length){
-      const i=queue.shift(),item=items[i],src=item?.imageUrl;
-      try{
-        if(!src)throw 0;
-        const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-        const blob=await res.blob();
-        zip.file(`radar-saved-${String(i+1).padStart(3,'0')}.${extFromBlob(blob,src)}`,blob,{compression:'STORE'});
-        ok++;
-      }catch(e){failed++}
-      done++;
-      if(status)status.textContent=`⏳ تجهيز ${done} من ${items.length} صورة للملف المضغوط...`;
-    }
-  }
   try{
-    await Promise.all(Array.from({length:Math.min(CONCURRENCY,items.length)},()=>worker()));
-    if(!ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور المحفوظة مباشرة عبر CORS.';return}
-    if(status)status.textContent=`⏳ جارٍ إنشاء ملف ZIP من ${ok} صورة...`;
-    const content=await zip.generateAsync({type:'blob',compression:'STORE'});
-    const url=URL.createObjectURL(content),a=document.createElement('a');
-    a.href=url;a.download=`radar-saved-images-${Date.now()}.zip`;
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),30000);
-    if(status)status.textContent=`✅ تم تنزيل ZIP فيه ${ok} صورة${failed?` · تعذّر ${failed} بسبب رابط منتهي أو CORS`:''}`;
+    const result=await radarDownloadBatchedZips(items,{statusEl:status,label:'صور محفوظة',archivePrefix:`radar-saved-images-${Date.now()}`,getUrl:item=>item?.imageUrl,getEntryName:(item,index,blob)=>`radar-saved-${String(index+1).padStart(4,'0')}.${extFromBlob(blob,item?.imageUrl)}`});
+    if(result.cancelled)return;
+    if(!result.ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور مباشرة عبر CORS أو روابط منتهية.';return}
+    if(status)status.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} صورة${result.failed?` · تعذّر ${result.failed} بسبب رابط منتهي أو CORS`:''}`;
   }catch(e){
     if(status)status.textContent='⚠️ تعذّر إنشاء ملف ZIP.';
   }finally{
@@ -1575,7 +1614,19 @@ async function removeSavedLink(id){
   await idbDeleteImage(id);
   renderSavedLinks();
 }
-function removeBroken(img){ removeSavedLink(Number(img.dataset.id)); }
+function markSavedImageBroken(img){
+  if(!img||img.dataset.broken==='1')return;
+  img.dataset.broken='1';
+  img.removeAttribute('onerror');
+  img.style.visibility='hidden';
+  const tile=img.closest('.saved-image-tile');
+  if(!tile)return;
+  const notice=document.createElement('button');
+  notice.type='button';notice.textContent='⚠️ الرابط غير متاح\n↻ إعادة محاولة';
+  notice.style.cssText='position:absolute;inset:0;border:1px solid #a86b3188;border-radius:9px;background:#2a1d16;color:#ffd19b;font:10px Tajawal;line-height:1.5;cursor:pointer;white-space:pre-line;z-index:2';
+  notice.onclick=(event)=>{event.stopPropagation();img.style.visibility='';img.dataset.broken='';img.onerror=()=>markSavedImageBroken(img);img.src=img.currentSrc||img.src;notice.remove();};
+  tile.appendChild(notice);
+}
 
 
 /* ===================== فيديو — أسلوب خفيف ومعزول: يُبنى فقط وقت الاستخدام ويُحذف بالكامل بعده ===================== */
@@ -1630,8 +1681,9 @@ async function saveVideoDirectly(blob){
 }
 function openVideoModal(blobSource, isSaved){
   closeVideoModal();
-  _currentVideoBlob = blobSource;
-  const objUrl = URL.createObjectURL(blobSource);
+  const isRemote = typeof blobSource === 'string';
+  _currentVideoBlob = isRemote ? null : blobSource;
+  const objUrl = isRemote ? blobSource : URL.createObjectURL(blobSource);
   const modal = document.createElement('div');
   modal.id = 'lightVideoModal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:10060;background:#000000ee;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:12px;';
@@ -1649,7 +1701,7 @@ function openVideoModal(blobSource, isSaved){
     </div>
     <div class="hint" id="lightVideoStatus"></div>`;
   document.body.appendChild(modal);
-  modal._objUrl = objUrl;
+  modal._objUrl = isRemote ? '' : objUrl;
   const videoEl = modal.querySelector('#lightVideoEl');
   videoEl.src = objUrl;
   videoEl.onerror = () => { const s=document.getElementById('lightVideoStatus'); if(s) s.textContent = '⚠️ تعذّر فتح هالفيديو (صيغة غير مدعومة أو الملف تالف)'; };
@@ -1747,6 +1799,7 @@ async function renderSavedVideos(){
     <div class="saved-image-tile">
       <img class="saved-image-thumb" src="${x.poster ? esc(x.poster) : ''}" style="${x.poster ? '' : 'display:flex;align-items:center;justify-content:center;background:#111a26;font-size:24px;'}" decoding="async" loading="lazy" onclick="openSavedVideoLight(${x.id})">
       <div class="saved-corner-btn" style="top:-7px; left:50%; transform:translateX(-50%); width:22px; background:#00000099; opacity:1; visibility:visible; pointer-events:auto;" onclick="event.stopPropagation();openSavedVideoLight(${x.id})">▶</div>
+      ${x.remoteUrl?'<div style="position:absolute;right:3px;left:3px;bottom:3px;padding:2px 3px;border-radius:6px;background:#0b5d43e8;color:#d8ffec;font-size:8px;text-align:center;pointer-events:none">MP4 · RADAR</div>':''}
       <button class="saved-corner-btn saved-image-delete" style="opacity:1;visibility:visible;pointer-events:auto;" onclick="event.stopPropagation();removeSavedVideoLight(${x.id})" title="حذف">×</button>
     </div>`).join('');
 }
@@ -1754,7 +1807,7 @@ async function openSavedVideoLight(id){
   const all = await idbGetAllVideos();
   const rec = all.find(x=>x.id===id);
   if(!rec) return;
-  openVideoModal(rec.blob, true);
+  openVideoModal(rec.remoteUrl||rec.blob, true);
 }
 async function removeSavedVideoLight(id){
   await idbDeleteVideo(id);
@@ -3251,53 +3304,11 @@ async function hxDownloadById(id){
 async function hxDownloadAll(){
   const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
-  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت (تأكدي من الإنترنت وحاولي تحديث الصفحة).');return}
-  // تقسيم لدفعات صغيرة بدل محاولة تحميل كل شي بذاكرة واحدة مرة وحدة — العدد الكبير (مئات العناصر)
-  // كان بيضغط ذاكرة المتصفح بالموبايل ويوقّفه بصمت بدون أي رسالة خطأ واضحة.
-  const BATCH_SIZE=150;
-  const batchCount=Math.ceil(items.length/BATCH_SIZE);
-  const batchMsg=batchCount>1?` (رح ينزّل على ${batchCount} ملفات ZIP منفصلة، كل وحدة لحالها، عشان ما يعلّق المتصفح)`:'';
-  if(!confirm(`تجميع ${items.length} عنصر${batchMsg}؟`))return;
   const st=document.getElementById('htmlImportStatus');
-  const CONCURRENCY=8; // جلب عدة عناصر بنفس الوقت بدل واحد تلو الآخر — هاد كان السبب الأساسي للبطء
-  let totalOk=0,totalFailed=0;
-  for(let b=0;b<batchCount;b++){
-    const batchItems=items.slice(b*BATCH_SIZE,(b+1)*BATCH_SIZE);
-    const zip=new JSZip();
-    let ok=0,failed=0,done=0;
-    async function worker(queue){
-      while(queue.length){
-        const i=queue.shift();
-        const x=batchItems[i],isImg=x.type==='image';
-        const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
-        try{
-          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-          const blob=await res.blob();
-          const ext=isImg?'jpg':'mp4';
-          zip.file(`radar-${HXplatform}-${String(b*BATCH_SIZE+i+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob,{compression:'STORE'});
-          ok++;
-        }catch(e){ failed++ }
-        done++;
-        st.textContent=`⏳ دفعة ${b+1}/${batchCount} — تجهيز ${done} من ${batchItems.length}...`;
-      }
-    }
-    const queue=batchItems.map((_,i)=>i);
-    await Promise.all(Array.from({length:Math.min(CONCURRENCY,batchItems.length)},()=>worker(queue)));
-    totalOk+=ok;totalFailed+=failed;
-    if(ok){
-      st.textContent=`⏳ دفعة ${b+1}/${batchCount} — جارٍ الضغط (${ok} عنصر)...`;
-      const content=await zip.generateAsync({type:'blob',compression:'STORE'});
-      const url=URL.createObjectURL(content);
-      const a=document.createElement('a');
-      a.href=url;a.download=`radar-${HXplatform}-${Date.now()}-part${String(b+1).padStart(2,'0')}of${String(batchCount).padStart(2,'0')}.zip`;
-      document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),30000);
-      // فاصل بسيط بين كل تنزيل والتالي عشان نعطي المتصفح فرصة يخلّص التنزيل الحالي قبل ما يبلّش التالي
-      if(b<batchCount-1)await new Promise(r=>setTimeout(r,1200));
-    }
-  }
-  if(!totalOk){ st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي فتح كل عنصر لحاله بزر ▶.'; return }
-  st.textContent=`✅ تم تنزيل ${batchCount} ملف ZIP فيهم ${totalOk} عنصر إجمالًا${totalFailed?` · تعذّر ${totalFailed} (روابط مرفوضة/منتهية الصلاحية — افتحيهم لحالهم بزر ▶)`:''}`;
+  const result=await radarDownloadBatchedZips(items,{statusEl:st,label:'وسائط الاستيراد',archivePrefix:`radar-${HXplatform}-${Date.now()}`,getUrl:x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl,getEntryName:(x,index)=>`radar-${HXplatform}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='image'?'jpg':'mp4'}`});
+  if(result.cancelled)return;
+  if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي العناصر المفردة.';return}
+  st.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} عنصر${result.failed?` · تعذّر ${result.failed} (روابط مرفوضة/منتهية الصلاحية)`:''}`;
 }
 
 
@@ -3305,8 +3316,13 @@ function applyOfficialJsonData(d,filename){
   const st=document.getElementById('htmlImportStatus');
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
+  const sourceVideos=(d.videos||[]);
+  const posterOnlyVideos=sourceVideos.filter(v=>{
+    const hasPlayableSource=Boolean(v.hlsBest||v.master||v.videoMp4||v.audioMp4);
+    return Boolean(v.poster)&&!hasPlayableSource;
+  }).length;
   HX=[];
-  (d.videos||[]).forEach(v=>{const hls=v.hlsBest||v.master||'';if(!/^https:\/\/video\.twimg\.com\/.+\.m3u8(?:[?#]|$)/i.test(hls))return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
+  sourceVideos.forEach(v=>{const hls=v.hlsBest||v.master||'';if(!/^https:\/\/video\.twimg\.com\/.+\.m3u8(?:[?#]|$)/i.test(hls))return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3332,7 +3348,7 @@ function applyOfficialJsonData(d,filename){
   const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;
   const memberCount=HX.filter(z=>z.type==='member').length;
   const commentCount=HX.filter(z=>z.type==='comment').length;
-  if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
+  if(st)st.textContent=`✅ فيديو HLS ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${posterOnlyVideos?` · ${posterOnlyVideos} معاينة فيديو فقط (لا مصدر MP4/HLS للتحويل)`:''}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
   radarPrepareConversionSession(d,filename).then(()=>hxRender()).catch(err=>console.warn('radar: conversion session was not saved',err));
 }
 async function toggleSavedFilesView(){
@@ -3463,13 +3479,27 @@ async function radarPrepareConversionSession(data,filename){
 function radarSelectedConversionVideo(){return radarConversionSession?.videos.find(v=>v.id===radarConversionSession.selectedId)||radarConversionSession?.videos[0]||null}
 async function radarChooseConversionVideo(id){if(!radarConversionSession)return;radarConversionSession.selectedId=id;radarConversionSession.updatedAt=Date.now();await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender()}
 async function radarConvertHxVideo(hxId){const id=String(hxId||'').replace(/^v:/,'');if(!radarConversionSession?.videos.some(video=>video.id===id))return alert('هذا الفيديو لا يملك رابط HLS صالح للتحويل.');await radarChooseConversionVideo(id);document.getElementById('radarConvertPanel')?.scrollIntoView({behavior:'smooth',block:'center'});radarOpenConverter()}
+function radarOutputUrl(output){try{return output?.downloadUrl?new URL(output.downloadUrl,RADAR_CONVERTER_URL).href:''}catch(e){return''}}
+async function radarSaveOutputToVideos(){
+  const session=radarConversionSession,video=radarSelectedConversionVideo();
+  const output=session?.outputs?.[video?.id]||session?.lastOutput;
+  const remoteUrl=radarOutputUrl(output);
+  if(!session||!video||!remoteUrl){alert('⚠️ لا توجد نتيجة MP4 مكتملة لهذا الفيديو بعد.');return}
+  try{
+    await idbAddRemoteVideo(remoteUrl,{conversionKey:`${session.key}:${video.id}`,poster:video.poster,title:`${video.label} · MP4`,quality:output?.quality||video.quality,sourceUrl:video.postUrl||video.sourceUrl});
+    if(navigator.vibrate)navigator.vibrate(30);
+    if(document.getElementById('savedVideosArea')?.classList.contains('show'))await renderSavedVideos();
+    alert('✅ حُفظ رابط MP4 في «📌 فيديو» داخل RADAR.');
+  }catch(err){alert(`⚠️ تعذّر حفظ الفيديو: ${err?.message||err}`)}
+}
 function radarRenderConversionPanel(){
   const panel=document.getElementById('radarConvertPanel'),session=radarConversionSession;if(!panel)return;
   if(!session?.videos?.length){panel.classList.remove('show');panel.innerHTML='';return}
   const selected=radarSelectedConversionVideo();
   const runInfo=session.message?`<div class="hint" style="margin:8px 0;color:${session.status==='failed'?'#ff9b9b':'#a8d8ff'}">${esc(session.message)}${Number.isFinite(session.progress)?` · ${session.progress}%`:''}</div>`:'';
   const selectedOutput=session.outputs?.[selected?.id]||session.lastOutput;
-  const savedOutput=selectedOutput?.downloadUrl?`<a href="${esc(new URL(selectedOutput.downloadUrl,RADAR_CONVERTER_URL).href)}" target="_blank" rel="noopener" class="toggle" style="margin-top:10px;display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4 المحفوظ · ${esc(selectedOutput.quality||'جاهز')}</a>`:'';
+  const outputUrl=radarOutputUrl(selectedOutput);
+  const savedOutput=outputUrl?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><a href="${esc(outputUrl)}" target="_blank" rel="noopener" class="toggle" style="display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4</a><button class="toggle" style="cursor:pointer;border-color:#ffd76988;color:#ffe6a2;background:#d8a62a22" onclick="radarSaveOutputToVideos()">📌 حفظ في فيديو</button></div><div class="hint" style="margin-top:5px">${esc(selectedOutput.quality||'MP4 جاهز')} · الحفظ يبقيه داخل قائمة فيديوهات RADAR</div>`:'';
   panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select><div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>${runInfo}${savedOutput}`;
 }
 function radarOpenConverter(){
