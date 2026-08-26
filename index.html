@@ -3252,38 +3252,52 @@ async function hxDownloadAll(){
   const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
   if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت (تأكدي من الإنترنت وحاولي تحديث الصفحة).');return}
-  if(!confirm(`تجميع ${items.length} عنصر بملف ZIP واحد وتنزيله؟`))return;
+  // تقسيم لدفعات صغيرة بدل محاولة تحميل كل شي بذاكرة واحدة مرة وحدة — العدد الكبير (مئات العناصر)
+  // كان بيضغط ذاكرة المتصفح بالموبايل ويوقّفه بصمت بدون أي رسالة خطأ واضحة.
+  const BATCH_SIZE=150;
+  const batchCount=Math.ceil(items.length/BATCH_SIZE);
+  const batchMsg=batchCount>1?` (رح ينزّل على ${batchCount} ملفات ZIP منفصلة، كل وحدة لحالها، عشان ما يعلّق المتصفح)`:'';
+  if(!confirm(`تجميع ${items.length} عنصر${batchMsg}؟`))return;
   const st=document.getElementById('htmlImportStatus');
-  const zip=new JSZip();
-  let ok=0,failed=0,done=0;
   const CONCURRENCY=8; // جلب عدة عناصر بنفس الوقت بدل واحد تلو الآخر — هاد كان السبب الأساسي للبطء
-  async function worker(queue){
-    while(queue.length){
-      const i=queue.shift();
-      const x=items[i],isImg=x.type==='image';
-      const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
-      try{
-        const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-        const blob=await res.blob();
-        const ext=isImg?'jpg':'mp4';
-        zip.file(`radar-${HXplatform}-${String(i+1).padStart(3,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob,{compression:'STORE'});
-        ok++;
-      }catch(e){ failed++ }
-      done++;
-      st.textContent=`⏳ تجهيز ${done} من ${items.length} للملف المضغوط...`;
+  let totalOk=0,totalFailed=0;
+  for(let b=0;b<batchCount;b++){
+    const batchItems=items.slice(b*BATCH_SIZE,(b+1)*BATCH_SIZE);
+    const zip=new JSZip();
+    let ok=0,failed=0,done=0;
+    async function worker(queue){
+      while(queue.length){
+        const i=queue.shift();
+        const x=batchItems[i],isImg=x.type==='image';
+        const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
+        try{
+          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+          const blob=await res.blob();
+          const ext=isImg?'jpg':'mp4';
+          zip.file(`radar-${HXplatform}-${String(b*BATCH_SIZE+i+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob,{compression:'STORE'});
+          ok++;
+        }catch(e){ failed++ }
+        done++;
+        st.textContent=`⏳ دفعة ${b+1}/${batchCount} — تجهيز ${done} من ${batchItems.length}...`;
+      }
+    }
+    const queue=batchItems.map((_,i)=>i);
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,batchItems.length)},()=>worker(queue)));
+    totalOk+=ok;totalFailed+=failed;
+    if(ok){
+      st.textContent=`⏳ دفعة ${b+1}/${batchCount} — جارٍ الضغط (${ok} عنصر)...`;
+      const content=await zip.generateAsync({type:'blob',compression:'STORE'});
+      const url=URL.createObjectURL(content);
+      const a=document.createElement('a');
+      a.href=url;a.download=`radar-${HXplatform}-${Date.now()}-part${String(b+1).padStart(2,'0')}of${String(batchCount).padStart(2,'0')}.zip`;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      // فاصل بسيط بين كل تنزيل والتالي عشان نعطي المتصفح فرصة يخلّص التنزيل الحالي قبل ما يبلّش التالي
+      if(b<batchCount-1)await new Promise(r=>setTimeout(r,1200));
     }
   }
-  const queue=items.map((_,i)=>i);
-  await Promise.all(Array.from({length:Math.min(CONCURRENCY,items.length)},()=>worker(queue)));
-  if(!ok){ st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي فتح كل عنصر لحاله بزر ▶.'; return }
-  st.textContent=`⏳ جارٍ تجميع ${ok} عنصر بملف واحد...`;
-  const content=await zip.generateAsync({type:'blob',compression:'STORE'});
-  const url=URL.createObjectURL(content);
-  const a=document.createElement('a');
-  a.href=url;a.download=`radar-${HXplatform}-${Date.now()}.zip`;
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),30000);
-  st.textContent=`✅ تم تنزيل ملف ZIP فيه ${ok} عنصر${failed?` · تعذّر ${failed} (روابط مرفوضة/منتهية الصلاحية — افتحيهم لحالهم بزر ▶)`:''}`;
+  if(!totalOk){ st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي فتح كل عنصر لحاله بزر ▶.'; return }
+  st.textContent=`✅ تم تنزيل ${batchCount} ملف ZIP فيهم ${totalOk} عنصر إجمالًا${totalFailed?` · تعذّر ${totalFailed} (روابط مرفوضة/منتهية الصلاحية — افتحيهم لحالهم بزر ▶)`:''}`;
 }
 
 
