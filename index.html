@@ -1455,19 +1455,36 @@ async function idbDeleteVideo(id){
     tx.onerror = () => reject(tx.error);
   });
 }
+async function urlToBlobIfPossible(url){
+  // لو الرابط أصلًا data: URI (من ملف مرفوع محليًا أو سكرين شوت) منحوّله Blob مباشرة بدون شبكة.
+  // لو رابط بعيد (تويتر/فيسبوك...) منحاول نجيب البايتات الفعلية وقت الحفظ نفسه — هاد أهم توقيت
+  // ممكن لأن الرابط لسا حي وقتها. لو فشل (CORS أو الرابط مات فعلاً بهاي اللحظة)، بنرجع null
+  // ونخزن الرابط النصي بس كخطة بديلة (نفس السلوك القديم).
+  try{
+    if(url.startsWith('data:')){const r=await fetch(url);return await r.blob()}
+    const res=await fetch(url,{mode:'cors'});
+    if(!res.ok)throw 0;
+    return await res.blob();
+  }catch(e){ return null; }
+}
 async function idbGetAllImages(){
   try{
     const db = await idbOpen();
-    return await new Promise((resolve, reject)=>{
+    const rows=await new Promise((resolve, reject)=>{
       const tx = db.transaction(IDB_STORE, 'readonly');
       const req = tx.objectStore(IDB_STORE).getAll();
       req.onsuccess = () => resolve(req.result.sort((a,b)=>(b.ts||0)-(a.ts||0)));
       req.onerror = () => reject(req.error);
     });
+    // للسجلات المحفوظة فعليًا كـBlob (محفوظة دايمًا بغض النظر عن حياة الرابط الأصلي)، ننشئ رابط
+    // عرض مؤقت (object URL) صالح للعرض المباشر بـ<img src>. السجلات القديمة (رابط نص بس، من قبل
+    // هالتحديث) بتضل تعتمد على x.imageUrl متل ما كانت.
+    return rows.map(x=>({...x, displayUrl: x.blob?URL.createObjectURL(x.blob):x.imageUrl}));
   }catch(e){ return []; }
 }
 async function idbAddImage(imageUrl, sourceUrl){
   const db = await idbOpen();
+  const blob = await urlToBlobIfPossible(imageUrl);
   return new Promise((resolve, reject)=>{
     const tx = db.transaction(IDB_STORE, 'readwrite');
     const store = tx.objectStore(IDB_STORE);
@@ -1475,7 +1492,9 @@ async function idbAddImage(imageUrl, sourceUrl){
     getAllReq.onsuccess = () => {
       const dup = getAllReq.result.find(x => x.imageUrl === imageUrl);
       if(dup) store.delete(dup.id);
-      store.add({imageUrl, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
+      // لو نجح تحميل الـBlob، منخزّنه هو (الصورة محفوظة جوا الجهاز فعليًا، تضل موجودة حتى لو
+      // الرابط الأصلي مات لاحقًا). لو فشل، منخزّن الرابط النصي بس (السلوك القديم كخطة بديلة).
+      store.add({imageUrl: blob?null:imageUrl, blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -1531,14 +1550,14 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور ذات الرابط المنتهي تبقى محفوظة ولا تُحذف تلقائيًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
 }
 const RADAR_ZIP_MAX_ARCHIVES=5;
 const RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE=50;
 const RADAR_ZIP_CONCURRENCY=4;
 const radarZipPause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName}){
+async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName,getBlob}){
   if(!items.length)return {cancelled:false,ok:0,failed:0,archives:0};
   if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return {cancelled:true,ok:0,failed:0,archives:0}}
   const totalBatches=Math.min(RADAR_ZIP_MAX_ARCHIVES,Math.ceil(items.length/RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE));
@@ -1555,9 +1574,14 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
       while(queue.length){
         const localIndex=queue.shift(),item=group[localIndex],absoluteIndex=offset+localIndex;
         try{
-          const src=getUrl(item);if(!src)throw 0;
-          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-          const blob=await res.blob();
+          // لو العنصر محفوظ أصلًا كـBlob جوا الجهاز (صور معرض "📌 صور" الجديدة)، نستخدمه مباشرة
+          // بدون أي طلب شبكة — أسرع وأضمن، ومش محتاج CORS أصلًا لأنه مو طلب خارجي.
+          const localBlob=getBlob?getBlob(item):null;
+          const blob=localBlob||await (async()=>{
+            const src=getUrl(item);if(!src)throw 0;
+            const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+            return await res.blob();
+          })();
           zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
           ok++;batchOk++;
         }catch(e){failed++}
@@ -1596,7 +1620,7 @@ async function downloadSavedImagesZip(){
     return m?m[1].toLowerCase().replace('jpeg','jpg'):'jpg';
   };
   try{
-    const result=await radarDownloadBatchedZips(items,{statusEl:status,label:'صور محفوظة',archivePrefix:`radar-saved-images-${Date.now()}`,getUrl:item=>item?.imageUrl,getEntryName:(item,index,blob)=>`radar-saved-${String(index+1).padStart(4,'0')}.${extFromBlob(blob,item?.imageUrl)}`});
+    const result=await radarDownloadBatchedZips(items,{statusEl:status,label:'صور محفوظة',archivePrefix:`radar-saved-images-${Date.now()}`,getUrl:item=>item?.imageUrl,getBlob:item=>item?.blob||null,getEntryName:(item,index,blob)=>`radar-saved-${String(index+1).padStart(4,'0')}.${extFromBlob(blob,item?.imageUrl)}`});
     if(result.cancelled)return;
     if(!result.ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور مباشرة عبر CORS أو روابط منتهية.';return}
     if(status)status.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} صورة${result.failed?` · تعذّر ${result.failed} بسبب رابط منتهي أو CORS`:''}`;
