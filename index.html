@@ -1518,55 +1518,17 @@ async function renderSavedLinks(){
   l.innerHTML = `<div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.imageUrl)}" draggable="false" decoding="async" loading="lazy" onerror="removeBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.imageUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
 }
-const RADAR_ZIP_MAX_ARCHIVES=5;
-const RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE=50;
-const RADAR_ZIP_CONCURRENCY=4;
-const radarZipPause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName}){
-  if(!items.length)return {cancelled:false,ok:0,failed:0,archives:0};
-  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return {cancelled:true,ok:0,failed:0,archives:0}}
-  const totalBatches=Math.min(RADAR_ZIP_MAX_ARCHIVES,Math.ceil(items.length/RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE));
-  const batchSize=Math.ceil(items.length/totalBatches);
-  const batchNote=totalBatches>1?` على ${totalBatches} ملفات ZIP متوازنة (نحو ${batchSize} عنصرًا في الملف)`:' في ملف ZIP واحد';
-  if(!confirm(`تجميع ${items.length} ${label}${batchNote}؟\nقد يطلب المتصفح السماح بتنزيل عدة ملفات.`))return {cancelled:true,ok:0,failed:0,archives:0};
-  let ok=0,failed=0,done=0,archives=0;
-  for(let batch=0;batch<totalBatches;batch++){
-    const offset=batch*batchSize;
-    const group=items.slice(offset,offset+batchSize);
-    const zip=new JSZip(),queue=group.map((_,i)=>i);
-    let batchOk=0;
-    async function worker(){
-      while(queue.length){
-        const localIndex=queue.shift(),item=group[localIndex],absoluteIndex=offset+localIndex;
-        try{
-          const src=getUrl(item);if(!src)throw 0;
-          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-          const blob=await res.blob();
-          zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
-          ok++;batchOk++;
-        }catch(e){failed++}
-        done++;
-        if(statusEl)statusEl.textContent=`⏳ ${label}: الملف ${batch+1}/${totalBatches} · تجهيز ${done} من ${items.length}...`;
-      }
-    }
-    await Promise.all(Array.from({length:Math.min(RADAR_ZIP_CONCURRENCY,group.length)},()=>worker()));
-    if(!batchOk)continue;
-    if(statusEl)statusEl.textContent=`⏳ ${label}: إنشاء الملف ${batch+1}/${totalBatches} (${batchOk} عنصرًا)...`;
-    const content=await zip.generateAsync({type:'blob',compression:'STORE'});
-    const url=URL.createObjectURL(content),a=document.createElement('a');
-    a.href=url;a.download=`${archivePrefix}-part-${String(batch+1).padStart(2,'0')}-of-${String(totalBatches).padStart(2,'0')}.zip`;
-    document.body.appendChild(a);a.click();a.remove();archives++;
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
-    // مهلة قصيرة تخفف ضغط الذاكرة وتمنح Quetta فرصة لتسجيل تنزيل كل دفعة.
-    if(batch<totalBatches-1)await radarZipPause(700);
-  }
-  return {cancelled:false,ok,failed,archives};
-}
 async function downloadSavedImagesZip(){
   const items=await idbGetAllImages();
   if(!items.length){alert('ما في صور محفوظة بعد لتجميعها.');return}
+  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return}
+  if(!confirm(`تجميع ${items.length} صورة محفوظة في ملف ZIP واحد وتنزيله؟`))return;
   const btn=document.getElementById('savedImagesZipBtn'),status=document.getElementById('imageSearchStatus');
   if(btn){btn.disabled=true;btn.style.opacity='.65'}
+  if(status)status.textContent=`⏳ تجهيز 0 من ${items.length} صورة للملف المضغوط...`;
+  const zip=new JSZip();
+  let ok=0,failed=0,done=0;
+  const queue=items.map((_,i)=>i),CONCURRENCY=8;
   const extFromBlob=(blob,src)=>{
     const mime=String(blob?.type||'').toLowerCase();
     if(mime.includes('png'))return'png';
@@ -1579,11 +1541,30 @@ async function downloadSavedImagesZip(){
     const m=String(src||'').match(/\.(jpe?g|png|webp|gif|svg|avif|bmp)(?:[?#]|$)/i);
     return m?m[1].toLowerCase().replace('jpeg','jpg'):'jpg';
   };
+  async function worker(){
+    while(queue.length){
+      const i=queue.shift(),item=items[i],src=item?.imageUrl;
+      try{
+        if(!src)throw 0;
+        const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+        const blob=await res.blob();
+        zip.file(`radar-saved-${String(i+1).padStart(3,'0')}.${extFromBlob(blob,src)}`,blob,{compression:'STORE'});
+        ok++;
+      }catch(e){failed++}
+      done++;
+      if(status)status.textContent=`⏳ تجهيز ${done} من ${items.length} صورة للملف المضغوط...`;
+    }
+  }
   try{
-    const result=await radarDownloadBatchedZips(items,{statusEl:status,label:'صور محفوظة',archivePrefix:`radar-saved-images-${Date.now()}`,getUrl:item=>item?.imageUrl,getEntryName:(item,index,blob)=>`radar-saved-${String(index+1).padStart(4,'0')}.${extFromBlob(blob,item?.imageUrl)}`});
-    if(result.cancelled)return;
-    if(!result.ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور مباشرة عبر CORS أو روابط منتهية.';return}
-    if(status)status.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} صورة${result.failed?` · تعذّر ${result.failed} بسبب رابط منتهي أو CORS`:''}`;
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,items.length)},()=>worker()));
+    if(!ok){if(status)status.textContent='⚠️ تعذّر قراءة الصور المحفوظة مباشرة عبر CORS.';return}
+    if(status)status.textContent=`⏳ جارٍ إنشاء ملف ZIP من ${ok} صورة...`;
+    const content=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const url=URL.createObjectURL(content),a=document.createElement('a');
+    a.href=url;a.download=`radar-saved-images-${Date.now()}.zip`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    if(status)status.textContent=`✅ تم تنزيل ZIP فيه ${ok} صورة${failed?` · تعذّر ${failed} بسبب رابط منتهي أو CORS`:''}`;
   }catch(e){
     if(status)status.textContent='⚠️ تعذّر إنشاء ملف ZIP.';
   }finally{
@@ -3270,11 +3251,53 @@ async function hxDownloadById(id){
 async function hxDownloadAll(){
   const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
+  if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت (تأكدي من الإنترنت وحاولي تحديث الصفحة).');return}
+  // تقسيم لدفعات صغيرة بدل محاولة تحميل كل شي بذاكرة واحدة مرة وحدة — العدد الكبير (مئات العناصر)
+  // كان بيضغط ذاكرة المتصفح بالموبايل ويوقّفه بصمت بدون أي رسالة خطأ واضحة.
+  const BATCH_SIZE=150;
+  const batchCount=Math.ceil(items.length/BATCH_SIZE);
+  const batchMsg=batchCount>1?` (رح ينزّل على ${batchCount} ملفات ZIP منفصلة، كل وحدة لحالها، عشان ما يعلّق المتصفح)`:'';
+  if(!confirm(`تجميع ${items.length} عنصر${batchMsg}؟`))return;
   const st=document.getElementById('htmlImportStatus');
-  const result=await radarDownloadBatchedZips(items,{statusEl:st,label:'وسائط الاستيراد',archivePrefix:`radar-${HXplatform}-${Date.now()}`,getUrl:x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl,getEntryName:(x,index)=>`radar-${HXplatform}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='image'?'jpg':'mp4'}`});
-  if(result.cancelled)return;
-  if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي العناصر المفردة.';return}
-  st.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} عنصر${result.failed?` · تعذّر ${result.failed} (روابط مرفوضة/منتهية الصلاحية)`:''}`;
+  const CONCURRENCY=8; // جلب عدة عناصر بنفس الوقت بدل واحد تلو الآخر — هاد كان السبب الأساسي للبطء
+  let totalOk=0,totalFailed=0;
+  for(let b=0;b<batchCount;b++){
+    const batchItems=items.slice(b*BATCH_SIZE,(b+1)*BATCH_SIZE);
+    const zip=new JSZip();
+    let ok=0,failed=0,done=0;
+    async function worker(queue){
+      while(queue.length){
+        const i=queue.shift();
+        const x=batchItems[i],isImg=x.type==='image';
+        const src=isImg?(x.directUrl||x.thumb||x.url):x.directUrl;
+        try{
+          const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+          const blob=await res.blob();
+          const ext=isImg?'jpg':'mp4';
+          zip.file(`radar-${HXplatform}-${String(b*BATCH_SIZE+i+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${ext}`,blob,{compression:'STORE'});
+          ok++;
+        }catch(e){ failed++ }
+        done++;
+        st.textContent=`⏳ دفعة ${b+1}/${batchCount} — تجهيز ${done} من ${batchItems.length}...`;
+      }
+    }
+    const queue=batchItems.map((_,i)=>i);
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,batchItems.length)},()=>worker(queue)));
+    totalOk+=ok;totalFailed+=failed;
+    if(ok){
+      st.textContent=`⏳ دفعة ${b+1}/${batchCount} — جارٍ الضغط (${ok} عنصر)...`;
+      const content=await zip.generateAsync({type:'blob',compression:'STORE'});
+      const url=URL.createObjectURL(content);
+      const a=document.createElement('a');
+      a.href=url;a.download=`radar-${HXplatform}-${Date.now()}-part${String(b+1).padStart(2,'0')}of${String(batchCount).padStart(2,'0')}.zip`;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      // فاصل بسيط بين كل تنزيل والتالي عشان نعطي المتصفح فرصة يخلّص التنزيل الحالي قبل ما يبلّش التالي
+      if(b<batchCount-1)await new Promise(r=>setTimeout(r,1200));
+    }
+  }
+  if(!totalOk){ st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي فتح كل عنصر لحاله بزر ▶.'; return }
+  st.textContent=`✅ تم تنزيل ${batchCount} ملف ZIP فيهم ${totalOk} عنصر إجمالًا${totalFailed?` · تعذّر ${totalFailed} (روابط مرفوضة/منتهية الصلاحية — افتحيهم لحالهم بزر ▶)`:''}`;
 }
 
 
@@ -3282,13 +3305,8 @@ function applyOfficialJsonData(d,filename){
   const st=document.getElementById('htmlImportStatus');
   const platform=d.platform||'x';
   const label=HXL[platform]||platform;
-  const sourceVideos=(d.videos||[]);
-  const posterOnlyVideos=sourceVideos.filter(v=>{
-    const hasPlayableSource=Boolean(v.hlsBest||v.master||v.videoMp4||v.audioMp4);
-    return Boolean(v.poster)&&!hasPlayableSource;
-  }).length;
   HX=[];
-  sourceVideos.forEach(v=>{const hls=v.hlsBest||v.master||'';if(!/^https:\/\/video\.twimg\.com\/.+\.m3u8(?:[?#]|$)/i.test(hls))return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
+  (d.videos||[]).forEach(v=>{const hls=v.hlsBest||v.master||'';if(!/^https:\/\/video\.twimg\.com\/.+\.m3u8(?:[?#]|$)/i.test(hls))return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:im.url,thumb:im.url,text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3314,7 +3332,7 @@ function applyOfficialJsonData(d,filename){
   const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;
   const memberCount=HX.filter(z=>z.type==='member').length;
   const commentCount=HX.filter(z=>z.type==='comment').length;
-  if(st)st.textContent=`✅ فيديو HLS ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${posterOnlyVideos?` · ${posterOnlyVideos} معاينة فيديو فقط (لا مصدر MP4/HLS للتحويل)`:''}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
+  if(st)st.textContent=`✅ فيديو ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
   radarPrepareConversionSession(d,filename).then(()=>hxRender()).catch(err=>console.warn('radar: conversion session was not saved',err));
 }
 async function toggleSavedFilesView(){
