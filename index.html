@@ -1651,11 +1651,12 @@ function markSavedImageBroken(img){
 
 /* ===================== فيديو RADAR المحفوظ ===================== */
 let _currentVideoBlob = null;
-function handleVideoUpload(event){
+async function handleVideoUpload(event){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if(!file) return;
   if(!file.type.startsWith('video/')){ alert('لازم تختار ملف فيديو'); return; }
+  if(file.type==='video/webm'||/\.webm$/i.test(file.name||'')){await saveVideoDirectly(file);await radarStartWebmConversion(file);return}
   saveVideoDirectly(file);
 }
 function generateVideoPoster(blob){
@@ -3520,21 +3521,35 @@ function radarRenderConversionPanel(){
   const selectedOutput=session.outputs?.[selected?.id]||session.lastOutput;
   const outputUrl=radarOutputUrl(selectedOutput);
   const savedOutput=outputUrl?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><a href="${esc(outputUrl)}" target="_blank" rel="noopener" class="toggle" style="display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4</a><button class="toggle" style="cursor:pointer;border-color:#ffd76988;color:#ffe6a2;background:#d8a62a22" onclick="radarSaveOutputToVideos()">📌 حفظ في فيديو</button></div><div class="hint" style="margin-top:5px">${esc(selectedOutput.quality||'MP4 جاهز')} · الحفظ يبقيه داخل قائمة فيديوهات RADAR</div>`:'';
-  panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select><div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>${runInfo}${savedOutput}`;
+  const localWebm=selected?.sourceUrl==='radar-local-webm';
+  const actions=localWebm?`<div class="radar-convert-actions"><button onclick="radarOpenConverter()">🎬 تحويل WebM إلى MP4 داخل RADAR</button><button onclick="toggleSavedVideosView()">📌 عرض فيديوهات RADAR</button></div>`:`<div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>`;
+  panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">${localWebm?'ملف Quetta محفوظ في RADAR. افتحي المحول ثم اضغطي تحويل WebM إلى MP4.':'اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.'}</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select>${actions}${runInfo}${savedOutput}`;
+}
+let radarPendingWebmFile=null;
+async function radarStartWebmConversion(file){
+  if(!file)return;
+  const key=`radar-webm-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+  radarPendingWebmFile=file;
+  radarConversionSession={key,filename:file.name||'quetta-recording.webm',platform:'tiktok',videos:[{id:'quetta-webm',label:'تسجيل Quetta WebM',quality:'WebM → MP4 متوافق',poster:'',postUrl:'',sourceUrl:'radar-local-webm'}],selectedId:'quetta-webm',activeVideoId:'quetta-webm',updatedAt:Date.now(),lastOutput:null,outputs:{},videoStates:{'quetta-webm':{status:'preparing',progress:0,message:'ملف WebM جاهز للتحويل'}}};
+  await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();radarOpenConverter();
 }
 function radarOpenConverter(){
   const video=radarSelectedConversionVideo();if(!video)return alert('اختاري فيديو أولًا.');
   radarConversionSession.activeVideoId=video.id;radarConversionSession.videoStates={...(radarConversionSession.videoStates||{}),[video.id]:{status:'preparing',progress:0,message:'فتح محول MP4'}};radarConversionSession.updatedAt=Date.now();idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender();
-  const src=`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
+  const localWebm=video.sourceUrl==='radar-local-webm';
+  if(localWebm&&!radarPendingWebmFile){alert('⚠️ أعيدي اختيار ملف WebM من أيقونة 🎬 لأن المتصفح لا يحتفظ بالملف بعد إغلاقه.');return}
+  const src=localWebm?`${RADAR_CONVERTER_URL}?mode=webm&radarSession=${encodeURIComponent(radarConversionSession.key)}`:`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
   const overlay=document.createElement('div');overlay.className='radar-convert-overlay';overlay.innerHTML=`<div class="radar-convert-frame"><button class="radar-convert-close" onclick="this.closest('.radar-convert-overlay').remove()">×</button><iframe src="${src}" allow="clipboard-write; fullscreen"></iframe></div>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
 }
 window.addEventListener('message',async event=>{
   if(event.origin!==new URL(RADAR_CONVERTER_URL).origin)return;
-  const data=event.data||{};if(!['radar-converter-progress','radar-converter-result'].includes(data.type)||!data.radarSession)return;
+  const data=event.data||{};
+  if(data.type==='radar-webm-ready'&&data.radarSession===radarConversionSession?.key&&radarPendingWebmFile){event.source?.postMessage({type:'radar-webm-file',file:radarPendingWebmFile},event.origin);return}
+  if(!['radar-converter-progress','radar-converter-result'].includes(data.type)||!data.radarSession)return;
   const saved=await idbGetConversionSession(data.radarSession);if(!saved)return;
   const videoId=saved.activeVideoId||saved.selectedId;
   saved.status=data.status||saved.status;saved.progress=Number(data.progress)||0;saved.message=data.message||saved.message;saved.updatedAt=Date.now();saved.videoStates={...(saved.videoStates||{}),[videoId]:{status:saved.status,progress:saved.progress,message:saved.message}};
-  if(data.type==='radar-converter-result'&&data.output){saved.lastOutput=data.output;saved.outputs={...(saved.outputs||{}),[videoId]:data.output};saved.videoStates[videoId]={status:'completed',progress:100,message:'MP4 جاهز للتنزيل'};}
+  if(data.type==='radar-converter-result'&&data.output){saved.lastOutput=data.output;saved.outputs={...(saved.outputs||{}),[videoId]:data.output};saved.videoStates[videoId]={status:'completed',progress:100,message:'MP4 جاهز ومحفوظ في فيديو'};const outputVideo=saved.videos?.find(v=>v.id===videoId);if(outputVideo?.sourceUrl==='radar-local-webm'){const remoteUrl=radarOutputUrl(data.output);if(remoteUrl)await idbAddRemoteVideo(remoteUrl,{conversionKey:`${saved.key}:${videoId}`,poster:outputVideo.poster,title:'Quetta WebM · MP4',quality:data.output.quality||'H.264/AAC',sourceUrl:'quetta-webm-local'});}}
   await idbPutConversionSession(saved);
   if(radarConversionSession?.key===saved.key){radarConversionSession=saved;radarRenderConversionPanel();hxRender()}
 });
