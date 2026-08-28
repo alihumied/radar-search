@@ -3001,7 +3001,7 @@ handleSharedLink();
 
 
 /* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
-let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=32,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
+let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=10,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
 // أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
 // المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
 // المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
@@ -3391,10 +3391,12 @@ async function hxDownloadById(id){
   if(!r.ok&&!r.openedPost&&!r.openedDirect)alert('⚠️ تعذّر التنزيل ولا يوجد رابط بديل لفتحه.');
 }
 async function hxDownloadAll(){
-  const items=hxFiltered().filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
+  // تحميل بس العناصر المعروضة حاليًا عالشاشة (مو كل نتائج الفلتر) — لأن تحميل المئات كلهم دفعة
+  // وحدة كان بيصير بطيء جدًا. لو بدك أكتر، مرّري لتحت (بيزيد العرض تلقائيًا) وبعدين اضغطي تحميل من جديد.
+  const items=hxFiltered().slice(0,HXpage*HXSIZE).filter(x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl);
   if(!items.length)return alert('ما في عناصر قابلة للتنزيل المباشر بالفلتر الحالي (الفيديوهات بدون رابط مباشر تفتح بزر ▶).');
   const st=document.getElementById('htmlImportStatus');
-  const result=await radarDownloadBatchedZips(items,{statusEl:st,label:'وسائط الاستيراد',archivePrefix:`radar-${HXplatform}-${Date.now()}`,getUrl:x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl,getEntryName:(x,index)=>`radar-${HXplatform}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='image'?'jpg':'mp4'}`});
+  const result=await radarDownloadBatchedZips(items,{statusEl:st,label:'وسائط الاستيراد (المعروضة حاليًا)',archivePrefix:`radar-${HXplatform}-${Date.now()}`,getUrl:x=>x.type==='image'?(x.directUrl||x.thumb||x.url):x.directUrl,getEntryName:(x,index)=>`radar-${HXplatform}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='image'?'jpg':'mp4'}`});
   if(result.cancelled)return;
   if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر (كل الروابط رفضت القراءة المباشرة عبر CORS). جربي العناصر المفردة.';return}
   st.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} عنصر${result.failed?` · تعذّر ${result.failed} (روابط مرفوضة/منتهية الصلاحية)`:''}`;
