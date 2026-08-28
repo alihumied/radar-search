@@ -165,7 +165,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     #savedImagesList .saved-image-thumb{width:100%!important;height:100%!important;}
     #savedImagesList .saved-corner-btn{z-index:12!important;}
     #htmlImportResultsList .hx-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important;justify-content:stretch!important;overflow:visible!important;padding:14px!important;}
-    #htmlImportResultsList .hx-grid .saved-image-tile{width:100%!important;height:auto!important;aspect-ratio:3/4;padding:7px!important;overflow:visible!important;content-visibility:visible!important;contain-intrinsic-size:auto!important;}
+    #htmlImportResultsList .hx-grid .saved-image-tile{width:100%!important;height:auto!important;aspect-ratio:3/4;padding:7px!important;overflow:visible!important;content-visibility:auto!important;contain-intrinsic-size:auto 84px!important;}
     #htmlImportResultsList .hx-grid .saved-image-thumb{width:100%!important;height:100%!important;}
     #htmlImportResultsList .hx-grid .saved-corner-btn{z-index:12!important;}
   }
@@ -2996,7 +2996,7 @@ handleSharedLink();
 
 
 /* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
-let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=80,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
+let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=32,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
 // أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
 // المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
 // المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
@@ -3257,6 +3257,25 @@ function hxPostTextHtml(x){
 }
 function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='post'){list.innerHTML=shown.map(x=>`<article class="result-card" style="display:flex;align-items:flex-start;gap:12px;text-align:right;direction:rtl;">${x.thumb?`<img src="${esc(x.thumb)}" style="width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;cursor:pointer;" onclick="openInlineSavedFocus('${esc(x.directUrl||x.thumb)}')" onerror="this.style.display='none'">`:''}<div style="min-width:0;flex:1;"><div style="font-size:14px;color:#45d9ff;font-weight:700;margin-bottom:4px;">${esc(x.author||'منشور محفوظ')}</div><div style="font-size:15px;line-height:1.9;white-space:normal;overflow-wrap:anywhere;">${hxPostTextHtml(x)||'(بدون نص)'}</div>${x.date?`<div style="font-size:11px;color:#8fa0bb;margin-top:8px;">${esc(x.date)}</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" class="toggle" style="display:inline-flex;margin-top:10px;padding:6px 10px;color:#8feaff;border-color:#45d9ff88;text-decoration:none;">↗ فتح المنشور الأصلي</a>`:''}</div></article>`).join('')||'<div class="hint">لا توجد منشورات محفوظة.</div>';return}if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}${x.reaction?`<img class="hx-reaction" src="${esc(x.reaction)}" alt="">`:''}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${hxPostTextHtml(x)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}if(HXtype==='reactor'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<div style="position:relative;width:36px;height:36px"><img src="${esc(x.thumb)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">${x.reaction?`<img src="${esc(x.reaction)}" style="position:absolute;bottom:-3px;left:-3px;width:16px;height:16px;border-radius:50%;background:#0b1526;border:1px solid #0b1526">`:''}</div>`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}</div><div class="hx-date">${x.text?esc(x.text):''}</div></div></div>`).join('')||'<div class="hint">لا يوجد متفاعلين محفوظين.</div>';return}if(HXtype==='member'){list.innerHTML=shown.map(x=>{const uidMatch=(x.url||'').match(/facebook\.com\/(\d+)\/?$/i);const uid=uidMatch?uidMatch[1]:'';const safeName=esc(jsAttrStr(x.author||''));const safeVal=esc(jsAttrStr(x.url||uid||''));return `<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover">`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}<div class="hx-date">${x.text?esc(x.text):''}</div>${x.url?`<div class="hint" style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;direction:ltr;text-align:left;">${esc(x.url.replace(/^https?:\/\//i,''))} <button onclick="copyMetaChipValue(this,'${safeVal}');hxSearchThisPerson('${safeName}')" title="نسخ الرابط + بحث محلي بنفس الملف" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">📋</button><button onclick="hxSearchThisPerson('${safeName}')" title="بحث محلي عن هاد الشخص بباقي الملف (تعليقات/منشورات/متفاعلين)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🔎</button><button onclick="hxDeepSearch('${safeVal}')" title="بحث عميق بالمحرك الرئيسي (تحديد هوية + رابط حقيقي + اسم مستخرج)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🌐</button></div>`:''}</div></div>`}).join('')||'<div class="hint">لا يوجد أعضاء محفوظين.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';list.innerHTML=`<div class="hx-grid">${shown.map(x=>{const canDownload=x.type==='image'?!!(x.directUrl||x.thumb||x.url):!!x.directUrl;return `<div class="saved-image-tile"><img class="saved-image-thumb" src="${esc(x.thumb||'')}" loading="lazy" decoding="async" onclick="hxSelect(event,this,'${esc(x.id)}')" onerror="this.style.background='#111a26'"><div class="saved-corner-btn" style="top:-7px;left:50%;background:#000b">${icon}</div>${x.thumb?`<button class="saved-corner-btn" style="top:-7px;left:-7px;background:#16233a" onclick="event.stopPropagation();openImageZoomPage('${esc(x.directUrl||x.thumb)}')">🔍</button>`:''}${x.url?`<button class="saved-corner-btn saved-image-source" onclick="event.stopPropagation();hxOpen('${esc(x.id)}')">▶</button>`:''}${x.thumb?`<button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();hxSave('${esc(x.id)}')">💾</button>`:''}${canDownload?`<button class="saved-corner-btn" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" onclick="event.stopPropagation();hxDownloadById('${esc(x.id)}')">⬇</button>`:''}</div>`}).join('')}</div>`}
 const radarBaseHxRender=hxRender;
+let radarHxAutoMoreObserver=null,radarHxAutoMoreQueued=false;
+function radarBindHxProgressiveLoad(){
+  radarHxAutoMoreObserver?.disconnect();
+  const all=hxFiltered();
+  if(!['image','video','reel','story'].includes(HXtype)||HXpage*HXSIZE>=all.length)return;
+  const grid=document.querySelector('#htmlImportResultsList .hx-grid');
+  if(!grid||!('IntersectionObserver' in window))return;
+  const sentinel=document.createElement('div');
+  sentinel.setAttribute('aria-hidden','true');
+  sentinel.style.cssText='grid-column:1/-1;height:1px;pointer-events:none';
+  grid.appendChild(sentinel);
+  radarHxAutoMoreObserver=new IntersectionObserver(entries=>{
+    if(!entries.some(entry=>entry.isIntersecting)||radarHxAutoMoreQueued)return;
+    radarHxAutoMoreQueued=true;
+    radarHxAutoMoreObserver?.disconnect();
+    setTimeout(()=>{radarHxAutoMoreQueued=false;HXpage++;hxRender()},0);
+  },{root:null,rootMargin:'800px 0px'});
+  radarHxAutoMoreObserver.observe(sentinel);
+}
 function radarOutputForHxVideo(hxId){return radarConversionSession?.outputs?.[String(hxId||'').replace(/^v:/,'')]||null}
 function radarStateForHxVideo(hxId){return radarConversionSession?.videoStates?.[String(hxId||'').replace(/^v:/,'')]||null}
 function radarDecorateVideoTiles(){
@@ -3272,7 +3291,7 @@ function radarDecorateVideoTiles(){
     tile.insertAdjacentHTML('beforeend',`${badge?`<span class="radar-video-convert-action" style="position:absolute;top:4px;right:4px;left:4px;z-index:6;padding:2px 4px;border-radius:7px;background:${state?.status==='failed'?'#701f2be8':output?'#0c5f42e8':selected?'#4c3600e8':'#163a52e8'};color:#fff;font-size:9px;line-height:1.25;text-align:center;pointer-events:none">${badge}</span>`:''}<button class="saved-corner-btn always-on radar-video-convert-action" title="تحويل هذا الفيديو إلى MP4" aria-label="تحويل هذا الفيديو إلى MP4" style="bottom:-9px;right:-9px;width:27px;height:27px;transform:scale(1);background:linear-gradient(135deg,#ffcf4a,#b46c00);color:#241600;font-size:18px" onclick="event.stopPropagation();radarConvertHxVideo('${safeId}')">⚡</button>${download?`<a class="saved-corner-btn always-on radar-video-convert-action" title="تنزيل MP4 المحفوظ" aria-label="تنزيل MP4 المحفوظ" href="${download}" target="_blank" rel="noopener" style="bottom:-8px;left:-8px;width:24px;height:24px;transform:scale(1);background:linear-gradient(135deg,#2eb872,#136b3e);text-decoration:none;color:white">⬇</a>`:''}`);
   });
 }
-hxRender=function(){radarBaseHxRender();radarDecorateVideoTiles()};
+hxRender=function(){radarBaseHxRender();radarDecorateVideoTiles();radarBindHxProgressiveLoad()};
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
   HX=[];HXtype='image';HXpage=1;
