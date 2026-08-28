@@ -3001,7 +3001,7 @@ handleSharedLink();
 
 
 /* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
-let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=10,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
+let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=40,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
 // أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
 // المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
 // المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
@@ -3310,7 +3310,7 @@ function radarDecorateVideoTiles(){
     tile.insertAdjacentHTML('beforeend',`${badge?`<span class="radar-video-convert-action" style="position:absolute;top:4px;right:4px;left:4px;z-index:6;padding:2px 4px;border-radius:7px;background:${state?.status==='failed'?'#701f2be8':output?'#0c5f42e8':selected?'#4c3600e8':'#163a52e8'};color:#fff;font-size:9px;line-height:1.25;text-align:center;pointer-events:none">${badge}</span>`:''}<button class="saved-corner-btn always-on radar-video-convert-action" title="تحويل هذا الفيديو إلى MP4" aria-label="تحويل هذا الفيديو إلى MP4" style="bottom:-9px;right:-9px;width:27px;height:27px;transform:scale(1);background:linear-gradient(135deg,#ffcf4a,#b46c00);color:#241600;font-size:18px" onclick="event.stopPropagation();radarConvertHxVideo('${safeId}')">⚡</button>${download?`<a class="saved-corner-btn always-on radar-video-convert-action" title="تنزيل MP4 المحفوظ" aria-label="تنزيل MP4 المحفوظ" href="${download}" target="_blank" rel="noopener" style="bottom:-8px;left:-8px;width:24px;height:24px;transform:scale(1);background:linear-gradient(135deg,#2eb872,#136b3e);text-decoration:none;color:white">⬇</a>`:''}`);
   });
 }
-hxRender=function(){radarBaseHxRender();radarDecorateVideoTiles();radarBindHxProgressiveLoad()};
+hxRender=function(){radarBaseHxRender();radarDecorateVideoTiles()};
 function hxMore(){HXpage++;hxRender()}
 function hxCloseImport(){
   HX=[];HXtype='image';HXpage=1;
