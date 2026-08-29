@@ -211,7 +211,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
       <div class="toggle" onclick="toggleSavedVideosView()" style="cursor:pointer;"><span style="font-size:16px;">📌</span><span>فيديو</span></div>
     </div>
     <input type="file" id="deviceImageInput" accept="image/*" style="display:none;" onchange="handleDeviceImageUpload(event)">
-    <input type="file" id="videoUploadInput" accept="video/*" style="display:none;" onchange="handleVideoUpload(event)">
+    <input type="file" id="videoUploadInput" accept="video/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm,.mkv,.3gp,.3gpp" style="display:none;" onchange="handleVideoUpload(event)">
     <div class="results" id="savedVideosArea">
       <div class="saved-images-grid" id="savedVideosList" style="margin-top:12px;"></div>
     </div>
@@ -1437,11 +1437,40 @@ async function idbGetAllVideos(){
 async function idbAddVideo(blob, poster){
   const db = await idbOpen();
   return new Promise((resolve, reject)=>{
+    let settled = false;
     const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
-    tx.objectStore(IDB_VIDEO_STORE).add({blob, poster: poster || '', ts: Date.now()});
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    const rec = {blob, poster: poster || '', ts: Date.now(), name: blob.name || '', type: blob.type || 'video/mp4', size: blob.size || 0};
+    const req = tx.objectStore(IDB_VIDEO_STORE).add(rec);
+    const timer = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      try{ tx.abort(); }catch(e){}
+      reject(new Error('حفظ الفيديو أخذ وقت طويل — الملف كبير أو مساحة المتصفح ممتلئة'));
+    }, 20000);
+    const done = (fn, val) => { if(settled) return; settled = true; clearTimeout(timer); fn(val); };
+    tx.oncomplete = () => done(resolve, req.result);
+    tx.onerror = () => done(reject, tx.error || req.error || new Error('فشل حفظ الفيديو'));
+    tx.onabort = () => done(reject, tx.error || new Error('تم إلغاء الحفظ'));
   });
+}
+async function idbUpdateVideoPoster(id, poster){
+  if(id==null || !poster) return;
+  try{
+    const db = await idbOpen();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_VIDEO_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_VIDEO_STORE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const rec = req.result;
+        if(!rec) return;
+        rec.poster = poster;
+        store.put(rec);
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }catch(e){}
 }
 async function idbAddRemoteVideo(remoteUrl, meta={}){
   const db = await idbOpen();
@@ -1674,53 +1703,112 @@ function markSavedImageBroken(img){
 
 /* ===================== فيديو RADAR المحفوظ ===================== */
 let _currentVideoBlob = null;
+function radarIsVideoFile(file){
+  if(!file) return false;
+  const mime = file.type || '';
+  if(mime.startsWith('video/')) return true;
+  return /\.(mp4|m4v|mov|webm|mkv|3gp|3gpp|avi|ogv)$/i.test(file.name || '');
+}
 async function handleVideoUpload(event){
   const file = event.target.files && event.target.files[0];
   event.target.value = '';
   if(!file) return;
-  if(!file.type.startsWith('video/')){ alert('لازم تختار ملف فيديو'); return; }
-  if(file.type==='video/webm'||/\.webm$/i.test(file.name||'')){await saveVideoDirectly(file);await radarStartWebmConversion(file);return}
-  saveVideoDirectly(file);
+  const status = document.getElementById('imageSearchStatus');
+  if(!radarIsVideoFile(file)){
+    if(status) status.textContent = '⚠️ لازم تختار ملف فيديو (mp4 / mov / webm)';
+    return;
+  }
+  if(!file.size){
+    if(status) status.textContent = '⚠️ ملف الفيديو فاضي أو ما اكتمل نزوله من المعرض';
+    return;
+  }
+  await saveVideoDirectly(file);
+  if((file.type||'')==='video/webm' || /\.webm$/i.test(file.name||'')){
+    try{ await radarStartWebmConversion(file); }catch(e){}
+  }
 }
 function generateVideoPoster(blob){
   return new Promise((resolve)=>{
-    const url = URL.createObjectURL(blob);
-    const v = document.createElement('video');
-    v.muted = true; v.playsInline = true; v.preload = 'metadata'; v.src = url;
     let done = false;
-    const finish = (result)=>{ if(done) return; done = true; URL.revokeObjectURL(url); resolve(result); };
-    const timeout = setTimeout(()=> finish(''), 4000);
-    v.addEventListener('loadeddata', ()=>{
-      try{ v.currentTime = Math.min(0.3, (v.duration||1)/4); }
-      catch(e){ clearTimeout(timeout); finish(''); }
-    });
-    v.addEventListener('seeked', ()=>{
-      try{
-        const canvas = document.createElement('canvas');
-        const maxDim = 240;
-        const ratio = Math.min(1, maxDim / Math.max(v.videoWidth||1, v.videoHeight||1));
-        canvas.width = Math.max(1, Math.round(v.videoWidth*ratio));
-        canvas.height = Math.max(1, Math.round(v.videoHeight*ratio));
-        canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
-        clearTimeout(timeout);
-        finish(canvas.toDataURL('image/jpeg', 0.6));
-      }catch(e){ clearTimeout(timeout); finish(''); }
-    });
-    v.addEventListener('error', ()=>{ clearTimeout(timeout); finish(''); });
+    let url = '';
+    const v = document.createElement('video');
+    const finish = (result)=>{
+      if(done) return;
+      done = true;
+      clearTimeout(timeout);
+      try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
+      try{ v.remove(); }catch(e){}
+      if(url) URL.revokeObjectURL(url);
+      resolve(result || '');
+    };
+    const timeout = setTimeout(()=> finish(''), 2500);
+    try{
+      url = URL.createObjectURL(blob);
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline','');
+      v.setAttribute('webkit-playsinline','');
+      v.preload = 'metadata';
+      v.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
+      document.body.appendChild(v);
+      const capture = ()=>{
+        try{
+          if(!v.videoWidth){ finish(''); return; }
+          const canvas = document.createElement('canvas');
+          const maxDim = 240;
+          const ratio = Math.min(1, maxDim / Math.max(v.videoWidth, v.videoHeight));
+          canvas.width = Math.max(1, Math.round(v.videoWidth * ratio));
+          canvas.height = Math.max(1, Math.round(v.videoHeight * ratio));
+          canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL('image/jpeg', 0.6));
+        }catch(e){ finish(''); }
+      };
+      v.addEventListener('loadedmetadata', ()=>{
+        try{ v.currentTime = Math.min(0.25, Math.max(0.01, (v.duration || 1) * 0.05)); }
+        catch(e){ capture(); }
+      });
+      v.addEventListener('seeked', capture);
+      v.addEventListener('error', ()=> finish(''));
+      v.src = url;
+    }catch(e){ finish(''); }
   });
 }
 async function saveVideoDirectly(blob){
   const status = document.getElementById('imageSearchStatus');
-  if(status) status.textContent = '⏳ جارٍ تجهيز الفيديو...';
-  const poster = await generateVideoPoster(blob);
+  const mb = (blob.size || 0) / 1048576;
+  const sizeTxt = mb >= 10 ? mb.toFixed(0) : mb.toFixed(1);
+  if(status) status.textContent = `⏳ جارٍ حفظ الفيديو (${sizeTxt} MB)...`;
+  const MAX_MB = 120;
+  if(mb > MAX_MB){
+    if(status) status.textContent = `⚠️ الملف ${sizeTxt} MB أكبر من حد الحفظ داخل التطبيق — فتحناه للمشاهدة بدون حفظ`;
+    openVideoModal(blob, false);
+    return;
+  }
   try{
-    await idbAddVideo(blob, poster);
+    const id = await idbAddVideo(blob, '');
     if(navigator.vibrate) navigator.vibrate(30);
     if(status) status.textContent = '✅ انحفظ الفيديو — بتلاقيه بمعرض "📌 فيديو"';
-    if(document.getElementById('savedVideosArea').classList.contains('show')) renderSavedVideos();
-    setTimeout(()=>{ if(status && status.textContent.includes('انحفظ')) status.textContent=''; }, 2200);
+    generateVideoPoster(blob).then(async poster=>{
+      if(poster && id != null) await idbUpdateVideoPoster(id, poster);
+      const area = document.getElementById('savedVideosArea');
+      if(area && area.classList.contains('show')) renderSavedVideos();
+    }).catch(()=>{});
+    try{
+      await renderSavedVideos();
+      const area = document.getElementById('savedVideosArea');
+      if(area){
+        closeOtherGalleries('savedVideosArea');
+        area.classList.add('show');
+      }
+    }catch(e){}
+    setTimeout(()=>{ if(status && status.textContent.includes('انحفظ')) status.textContent=''; }, 2800);
   }catch(err){
-    if(status) status.textContent = `⚠️ تعذّر حفظ الفيديو: ${err?.message || err}`;
+    const msg = String(err?.name || '') === 'QuotaExceededError' || /quota/i.test(String(err?.message||''))
+      ? '⚠️ مساحة المتصفح ممتلئة — احذفي فيديوهات قديمة من معرض فيديو وجربي مرة ثانية'
+      : `⚠️ تعذّر حفظ الفيديو: ${err?.message || err}`;
+    if(status) status.textContent = msg + ' — فتحناه للمشاهدة';
+    try{ openVideoModal(blob, false); }catch(e){}
   }
 }
 function openVideoModal(blobSource, isSaved){
