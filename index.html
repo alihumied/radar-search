@@ -3605,13 +3605,17 @@ async function radarEditorApplyModel(){
       if(!blob) throw new Error('تعذر قراءة الصورة');
       publicUrl=await radarEditorHostImage(blob);
     }
-    const models=[chosen,'kontext','nanobanana','seedream','flux'].filter((m,i,a)=>a.indexOf(m)===i);
+    const editPrompt='Edit this exact photograph. Keep the same person, face, body, pose, camera angle and background. Apply only this change: '+prompt+'. Do not replace the subject with food, objects, landscapes, or a different scene.';
+    const models=(chosen==='flux')
+      ? ['kontext','nanobanana','seedream']
+      : [chosen,'kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i && m!=='flux');
     let out=null, used='';
     for(const model of models){
-      set('⏳ تشغيل '+model+' بدون قيود من طرف RADAR...');
-      const api='https://image.pollinations.ai/prompt/'+encodeURIComponent(prompt)
+      set('⏳ تعديل الصورة الحالية عبر '+model+'...');
+      const api='https://image.pollinations.ai/prompt/'+encodeURIComponent(editPrompt)
         +'?nologo=true&enhance=false&safe=false&private=true&model='+encodeURIComponent(model)
         +'&image='+encodeURIComponent(publicUrl)
+        +'&width=1024&height=1024'
         +'&seed='+(Date.now()%999999);
       try{
         const res=await fetch(api,{referrerPolicy:'no-referrer'});
@@ -4497,7 +4501,7 @@ window.addEventListener('message',async event=>{
         <option value="kontext">Kontext — تعديل الصورة الحالية</option>
         <option value="nanobanana">NanoBanana</option>
         <option value="seedream">Seedream</option>
-        <option value="flux">Flux — توليد جديد</option>
+        <option value="flux">Flux — لا تستخدمه لتعديل صورة موجودة</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
