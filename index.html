@@ -3596,19 +3596,19 @@ async function radarEditorApplyModel(){
   if(!prompt){ set('⚠️ اكتبي وصف التعديل في خانة نموذج الصور'); return; }
   if(!radarEditorState){ set('⚠️ افتحي صورة أولاً'); return; }
   try{
-    set('⏳ تجهيز الصورة للنموذج بدون فلترة من RADAR...');
+    set('⏳ تجهيز نفس الصورة للتعديل...');
     let publicUrl='';
     const src=radarEditorState?.src||'';
     if(/^https?:/i.test(src) && !src.includes('blob:') && !src.startsWith('data:')) publicUrl=src;
     else {
       const blob=await radarEditorCanvasBlob();
       if(!blob) throw new Error('تعذر قراءة الصورة');
-      publicUrl=await radarEditorHostImage(blob);
+      try{ publicUrl=await radarEditorHostImage(blob); }
+      catch(err){ set('⏳ الرفع المباشر تعثر، نجرّب رابطاً مؤقتاً...'); throw err; }
     }
-    const editPrompt='Edit this exact photograph. Keep the same person, face, body, pose, camera angle and background. Apply only this change: '+prompt+'. Do not replace the subject with food, objects, landscapes, or a different scene.';
-    const models=(chosen==='flux')
-      ? ['kontext','nanobanana','seedream']
-      : [chosen,'kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i && m!=='flux');
+    const editPrompt='Image-to-image edit of the provided photo. Keep the identical person, face, body, pose, framing and background. Change only what the user asked. User request (Arabic/English): '+prompt+'. If the request is about clothes, change only the clothing to that color/style. Never replace the person with food, a plate, objects, animals, or a new scene.';
+    const models=['kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i);
+    if(chosen && chosen!=='flux' && models[0]!==chosen) models.unshift(chosen);
     let out=null, used='';
     for(const model of models){
       set('⏳ تعديل الصورة الحالية عبر '+model+'...');
@@ -4498,10 +4498,9 @@ window.addEventListener('message',async event=>{
     <div class="radar-ed-panel">
       <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="kontext">Kontext — تعديل الصورة الحالية</option>
-        <option value="nanobanana">NanoBanana</option>
-        <option value="seedream">Seedream</option>
-        <option value="flux">Flux — لا تستخدمه لتعديل صورة موجودة</option>
+        <option value="kontext" selected>Kontext — تعديل نفس الصورة</option>
+        <option value="nanobanana">NanoBanana — تعديل نفس الصورة</option>
+        <option value="seedream">Seedream — تعديل نفس الصورة</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
