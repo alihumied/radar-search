@@ -169,6 +169,23 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     #htmlImportResultsList .hx-grid .saved-image-thumb{width:100%!important;height:100%!important;}
     #htmlImportResultsList .hx-grid .saved-corner-btn{z-index:12!important;}
   }
+
+#radarEditor.radar-editor{display:none!important;position:fixed;inset:0;z-index:20000;background:rgba(4,6,9,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);flex-direction:column}
+#radarEditor.radar-editor.show{display:flex!important}
+.radar-ed-shell{width:min(920px,100%);margin:0 auto;height:100%;display:flex;flex-direction:column;padding:10px 12px 16px;gap:10px}
+.radar-ed-bar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.radar-ed-bar b{color:var(--cyan);font-size:15px}
+.radar-ed-actions{display:flex;gap:6px;flex-wrap:wrap}
+.radar-ed-actions button{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:8px 12px;font-family:Tajawal;font-size:13px}
+.radar-ed-actions .ok{border-color:#2eb87288;color:#8affb0}
+.radar-ed-preview{flex:1;min-height:180px;border:1px solid var(--line);border-radius:18px;background:#05070c;display:flex;align-items:center;justify-content:center;overflow:auto}
+.radar-ed-preview canvas{max-width:100%;max-height:100%;width:auto;height:auto;border-radius:12px}
+.radar-ed-panel{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#0b1220,#070b12);padding:12px;display:flex;flex-direction:column;gap:8px}
+.radar-ed-panel label{font-size:12px;color:#8ec5ff}
+.radar-ed-panel textarea,.radar-ed-panel select{width:100%;background:#0a1018;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:11px 12px;font-family:Tajawal;font-size:14px}
+.radar-ed-row{display:flex;gap:8px;align-items:center}
+.radar-ed-row .go-btn{flex:0 0 auto}
+#radarEdModelStatus,#radarEdCmdStatus{min-height:18px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -3407,23 +3424,6 @@ body::before{
 .reel-sentences{display:flex;flex-direction:column;gap:0}
 .reel-sentence{display:block;width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--cyan);font-family:'Tajawal',sans-serif;font-size:15px;font-weight:500;line-height:1.8;text-align:right;padding:10px 4px;cursor:pointer}
 .reel-sentence:hover,.reel-hash:hover{color:#fff;filter:brightness(1.15)}
-
-.radar-editor{position:fixed;inset:0;z-index:12000;background:#05070ce8;display:none;flex-direction:column;touch-action:none}
-.radar-editor.show{display:flex}
-.radar-editor-top,.radar-editor-tools{display:flex;gap:8px;flex-wrap:wrap;padding:10px;align-items:center}
-.radar-editor-top{justify-content:space-between;border-bottom:1px solid var(--line);background:#070b12}
-.radar-editor-tools{border-top:1px solid var(--line);background:#070b12}
-.radar-editor-stage{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px}
-.radar-editor-stage canvas{max-width:100%;height:auto;background:#111;border-radius:12px;box-shadow:0 12px 40px #0008;cursor:crosshair}
-.radar-ed-btn{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:12px;padding:8px 10px;font-family:Tajawal;cursor:pointer}
-.radar-ed-btn.active{border-color:var(--cyan);color:#cfefff;background:rgba(63,212,255,.12)}
-.radar-ed-btn.save{border-color:#2eb87288;color:#8affb0}
-.radar-editor input[type=range]{width:90px}
-.radar-editor label{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
-
-.radar-model-box{width:100%;margin-top:8px;padding:12px;border:1px solid #2e6bff66;border-radius:16px;background:linear-gradient(180deg,#0b1630,#07101f);display:flex;flex-direction:column;gap:8px}
-.radar-model-head{color:#8ec5ff;font-weight:700}
-.radar-model-box select,.radar-model-box textarea{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font-family:Tajawal;font-size:14px}
 </style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script>
 
 
@@ -3453,8 +3453,7 @@ function radarEditorEls(){
 }
 function closeRadarEditor(){
   const {root}=radarEditorEls();
-  if(root) root.classList.remove('show');
-  radarEditorState=null;
+  if(root){ root.classList.remove('show'); root.hidden=true; }
   document.documentElement.style.overflow='';
   document.body.style.overflow='';
 }
@@ -3523,10 +3522,11 @@ async function openRadarEditor(src, meta){
   if(saturate) saturate.value=100;
   radarEditorRedraw();
   radarEditorBindCanvas();
+  root.hidden=false;
+  root.classList.add('show');
   document.documentElement.style.overflow='hidden';
   document.body.style.overflow='hidden';
-  root.classList.add('show');
-  closeInlineSavedFocus?.();
+  try{ closeInlineSavedFocus(); }catch(e){}
 }
 function radarEditorRotate(deg){
   if(!radarEditorState) return;
@@ -4474,31 +4474,40 @@ window.addEventListener('message',async event=>{
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusEdit" type="button" class="saved-inline-focus-btn" style="color:#cfe0ff;border-color:#2e6bff88;background:#2e6bff22;cursor:pointer;" onclick="event.stopPropagation();openRadarEditor(document.getElementById('savedInlineFocusImg')?.src||'')">✏️ تعديل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 
-<div class="radar-editor" id="radarEditor">
-  <div class="radar-editor-top" onclick="event.stopPropagation()">
-    <b style="color:var(--cyan)">✏️ أمر تعديل الصورة</b>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="radar-ed-btn save" onclick="radarEditorSave()">💾 حفظ في 📌 صور</button>
-      <button class="radar-ed-btn" onclick="radarEditorDownload()">⬇ تنزيل</button>
-      <button class="radar-ed-btn" onclick="radarEditorReset()">↺ الأصل</button>
-      <button class="radar-ed-btn" onclick="closeRadarEditor()">✕ إغلاق</button>
+
+<div id="radarEditor" class="radar-editor" hidden>
+  <div class="radar-ed-shell">
+    <div class="radar-ed-bar">
+      <b>تعديل الصورة</b>
+      <div class="radar-ed-actions">
+        <button class="ok" type="button" onclick="radarEditorSave()">حفظ</button>
+        <button type="button" onclick="radarEditorDownload()">تنزيل</button>
+        <button type="button" onclick="radarEditorReset()">الأصل</button>
+        <button type="button" onclick="closeRadarEditor()">إغلاق</button>
+      </div>
     </div>
-  </div>
-  <div class="radar-editor-stage"><canvas id="radarEditorCanvas"></canvas></div>
-  <div class="radar-editor-tools" onclick="event.stopPropagation()">
-    <textarea id="radarEdCommand" rows="2" placeholder="أمر مباشر: أبيض وأسود، دورها يمين، زيد السطوع، اقلبيها، اكتب: الاسم..." style="flex:1;min-width:220px;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font-family:Tajawal;font-size:15px"></textarea>
-    <button class="go-btn" style="padding:12px 18px" onclick="radarEditorApplyCommand()">تطبيق الأمر</button>
-    <div id="radarEdCmdStatus" class="hint" style="width:100%;margin:0"></div>
-    <div class="radar-model-box">
-      <div class="radar-model-head">🧠 خانة نموذج الصور — بدون فلترة من RADAR</div>
+    <div class="radar-ed-preview"><canvas id="radarEditorCanvas"></canvas></div>
+    <div class="radar-ed-panel">
+      <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="kontext">Kontext — تعديل الصورة الحالية بالأمر</option>
-        <option value="flux">Flux — توليد صورة جديدة من النص</option>
-        <option value="nanobanana">NanoBanana — تعديل/توليد</option>
+        <option value="kontext">Kontext — تعديل الصورة الحالية</option>
+        <option value="nanobanana">NanoBanana</option>
+        <option value="seedream">Seedream</option>
+        <option value="flux">Flux — توليد جديد</option>
       </select>
-      <textarea id="radarEdModelPrompt" rows="3" placeholder="وصف حر بدون فلترة من RADAR: غيّر الخلفية، الملابس، الإضاءة، الأسلوب..."></textarea>
-      <button class="go-btn" style="padding:12px 18px" onclick="radarEditorApplyModel()">تشغيل النموذج</button>
-      <div id="radarEdModelStatus" class="hint" style="width:100%;margin:0"></div>
+      <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
+      <div class="radar-ed-row">
+        <button class="go-btn" type="button" onclick="radarEditorApplyModel()">تشغيل النموذج</button>
+        <span id="radarEdModelStatus" class="hint"></span>
+      </div>
+    </div>
+    <div class="radar-ed-panel">
+      <label>أمر مباشر سريع</label>
+      <div class="radar-ed-row">
+        <textarea id="radarEdCommand" rows="2" placeholder="أبيض وأسود، دورها يمين، زيد السطوع..."></textarea>
+        <button class="go-btn" type="button" onclick="radarEditorApplyCommand()">تطبيق</button>
+      </div>
+      <div id="radarEdCmdStatus" class="hint"></div>
     </div>
     <input type="hidden" id="radarEdBright" value="100">
     <input type="hidden" id="radarEdContrast" value="100">
