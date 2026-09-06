@@ -1298,24 +1298,64 @@ async function resolveFacebookPublicLink(pageUrl){
   return seed;
 }
 function renderFacebookPreviewCard(resolved){
-  const kind = resolved.kind || 'share';
-  const canVideo = !!(resolved.videoId || ['reel','video'].includes(kind));
-  if(canVideo && (resolved.canonical || resolved.videoId)){
-    const href = facebookCanonicalCandidates(resolved.canonical, resolved.original)[0];
-    const embed = facebookOfficialEmbed(href, kind==='share'?'reel':kind);
-    const alts = facebookCanonicalCandidates(resolved.canonical, resolved.original).slice(0,4);
-    return `
-      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-        <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة — فيسبوك ${kind}${resolved.videoId?` · ${resolved.videoId}`:''}</div>
-        <iframe src="${embed}" width="100%" height="420" style="border:none; border-radius:14px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
-        <div class="hint" style="margin:0; padding:0 4px;">تم فك رابط المشاركة إلى الرابط الأصلي قبل التضمين. إذا ظهرت Video Unavailable فالمحتوى غالبًا مقيد أو محذوف — استخدمي الرابط الأصلي أو الصورة المستخرجة للبحث العكسي.</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">${alts.map((u,i)=>`<a class="toggle" style="text-decoration:none;padding:6px 10px" target="_blank" rel="noopener" href="${esc(u)}">رابط ${i+1}</a>`).join('')}</div>
-      </div>`;
-  }
+  // المستخدم لا يريد iframe فيسبوك الرسمي — المعاينة تُستبدل بالصورة المستخرجة والنص القابل للبحث.
+  return '';
+}
+function cleanReelCaption(text){
+  return String(text||'')
+    .replace(/[\d.,]+\s*[KMBك]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|مشاهدات|تفاعل|إعجاب)/gi,'')
+    .replace(/\bon Reels\b/gi,'')
+    .replace(/\s*[|·•]\s*/g,' | ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .replace(/^(?:\|\s*)+|(?:\s*\|)+$/g,'')
+    .trim();
+}
+function extractReelChips(text){
+  const raw = String(text||'');
+  const chips = [];
+  const add = (t, tag)=>{
+    const s = String(t||'').replace(/\s+/g,' ').trim();
+    if(s.length<2 || s.length>90) return;
+    if(/^https?:/i.test(s)) return;
+    if(/^(views?|reactions?|likes?|comments?|shares?|reels?|original|audio|facebook|on)$/i.test(s)) return;
+    if(chips.some(c=>c.text.toLowerCase()===s.toLowerCase())) return;
+    chips.push({text:s, tag:tag||'وصف'});
+  };
+  (raw.match(/#[\w\u0600-\u06FF]+/g)||[]).forEach(t=>add(t,'هاشتاق'));
+  (raw.match(/@[A-Za-z0-9._]+/g)||[]).forEach(t=>add(t,'حساب'));
+  cleanReelCaption(raw).split('|').map(s=>s.trim()).filter(Boolean).forEach(s=>add(s,'عبارة'));
+  const cleaned = cleanReelCaption(raw);
+  if(cleaned) add(cleaned,'الوصف كامل');
+  return chips.slice(0,14);
+}
+function searchFromReel(text){
+  const q = String(text||'').trim();
+  if(!q) return;
+  SEARCH_TARGET = {meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'};
+  const input = document.getElementById('query');
+  if(!input) return;
+  input.value = q;
+  refreshEffectiveType();
+  updateHashtagHint(fullQueryText());
+  hideSuggestions();
+  const box = input.closest('.core') || input;
+  box.scrollIntoView({behavior:'smooth', block:'center'});
+  input.focus();
+  runSearch();
+}
+function searchHashtag(tag){ searchFromReel(tag); }
+function renderReelSearchHtml(caption){
+  const chips = extractReelChips(caption);
+  if(!chips.length && !String(caption||'').trim()) return '';
+  const full = cleanReelCaption(caption) || String(caption||'').trim();
+  const chipHtml = chips.map(c=>`<button type="button" class="reel-chip" data-reel-q="${esc(c.text)}"><span>${esc(c.text)}</span><b>${esc(c.tag)}</b></button>`).join('');
   return `
-    <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-      <div class="result-title" style="padding:0 4px;">⚠️ لا توجد معاينة رسمية — ${kind==='story'?'ستوري':'مشاركة'} فيسبوك</div>
-      <div class="hint" style="margin:0;">روابط share المختصرة والستوريهات غالبًا خاصة أو منتهية، وفيسبوك ما بيعطي iframe عام إلّا بعد فك الرابط لفيديو/ريلز علني. افتحي الرابط الأصلي داخل فيسبوك وخذي سكرين شوت، والمحفوظات ما بتنمسح.</div>
+    <div class="reel-extract">
+      <div class="hint" style="margin:0 0 6px;">🎬 النص المستخرج من الريلز — اضغطي أي جزء للبحث عنه في المحرك الرئيسي</div>
+      <div class="reel-full" data-reel-q="${esc(full)}">${esc(caption.trim())}</div>
+      <div class="reel-chips">${chipHtml}</div>
+      <button type="button" class="go-btn reel-search-all" data-reel-q="${esc(full)}">ابحث بهذا الوصف في المحرك الرئيسي</button>
     </div>`;
 }
 function isGenericSocialAsset(imageUrl){
@@ -1375,12 +1415,6 @@ async function fetchOgTags(pageUrl){
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
 /* الضغط على هاشتاق مستخرَج من البحث العكسي يبحث عنه مباشرة عبر كل المنصات */
-function searchHashtag(tag){
-  document.getElementById('query').value = tag;
-  refreshEffectiveType();
-  updateHashtagHint(fullQueryText());
-  runSearch();
-}
 
 function openOriginalLinkHtml(url){
   return `
@@ -1426,8 +1460,8 @@ async function runImageSearch(){
     if(facebookResolved.canonical){
       input.value = facebookResolved.canonical;
     }
-    embedHtml = renderFacebookPreviewCard(facebookResolved);
-    cards.innerHTML = embedHtml + openOriginalLinkHtml(facebookResolved.canonical || url);
+    embedHtml = openOriginalLinkHtml(facebookResolved.canonical || url);
+    cards.innerHTML = embedHtml;
     if(facebookResolved.image && !isGenericSocialAsset(facebookResolved.image)){
       imageUrl = facebookResolved.image;
       captionText = facebookResolved.title || facebookResolved.desc || '';
@@ -1537,10 +1571,7 @@ async function runImageSearch(){
     const tagsHtml = extractedTags.length
       ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات (اضغط لبحث مباشر): ${extractedTags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan); cursor:pointer; text-decoration:underline; margin-inline-end:8px;">${t}</span>`).join('')}</div>`
       : '';
-    videoEnginesHtml = `
-      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج (يتضمن أرقام المشاهدات/التفاعل إن وُجدت): <b style="color:var(--cyan);">${captionText.trim()}</b></div>
-      ${tagsHtml}
-    ` + videoEngines.map(eng => `
+    videoEnginesHtml = renderReelSearchHtml(captionText) + videoEngines.map(eng => `
       <div class="result-card">
         <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
           <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
@@ -3362,6 +3393,14 @@ body::before{
   .core{padding:16px}
   .brand h1{font-size:18px}
 }
+
+.reel-extract{margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--bg-0)}
+.reel-extract .reel-full{font-size:14px;line-height:1.8;color:var(--text);cursor:pointer}
+.reel-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.reel-chip{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}
+.reel-chip:hover,.reel-chip:focus{border-color:var(--cyan);color:#cfefff}
+.reel-chip b{font-size:10px;color:var(--cyan);font-family:'JetBrains Mono',monospace;margin-left:6px}
+.reel-search-all{width:100%;justify-content:center;margin-top:8px}
 </style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script></body></html>`;
  const blob=new Blob([html],{type:'text/html'}),blobUrl=URL.createObjectURL(blob),win=window.open(blobUrl,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);if(!win){const status=document.getElementById('imageSearchStatus');if(status)status.textContent='⚠️ اسمح بالنوافذ المنبثقة لفتح صفحة التكبير';}
 }
@@ -3372,6 +3411,16 @@ async function pickBestPublicImage(urls){const unique=[...new Set((urls||[]).fil
 function platformQualityCandidates(imageUrl,pageUrl){const a=[imageUrl];try{const u=new URL(imageUrl);if(/pbs\.twimg\.com$/i.test(u.hostname)){u.searchParams.set('name','orig');a.unshift(u.toString())}if(/img\.youtube\.com$/i.test(u.hostname)){const m=u.pathname.match(/\/vi\/([^/]+)\//);if(m)a.unshift(`https://img.youtube.com/vi/${m[1]}/maxresdefault.jpg`,`https://img.youtube.com/vi/${m[1]}/sddefault.jpg`)}if(/tiktokcdn|tiktokcdn-us|byteoversea/i.test(u.hostname)){a.unshift(imageUrl.replace(/:\d{2,4}:\d{2,4}(?=\.(?:jpe?g|webp))/i,':1080:1920'))}}catch(e){}return a}
 async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPublicImage(platformQualityCandidates(imageUrl,pageUrl))||imageUrl}
 
+
+if(!window.__radarReelSearchBound){
+  window.__radarReelSearchBound = true;
+  document.addEventListener('click', function(e){
+    const el = e.target.closest('[data-reel-q]');
+    if(!el) return;
+    e.preventDefault();
+    searchFromReel(el.getAttribute('data-reel-q'));
+  });
+}
 init();
 
 /* ===================== بيانات المنصات (فيسبوك + قابل للتوسعة لاحقًا) ===================== */
