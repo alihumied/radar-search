@@ -3578,53 +3578,81 @@ async function radarEditorCanvasBlob(type='image/jpeg', quality=0.88){
   return new Promise(resolve=>canvas.toBlob(resolve,type,quality));
 }
 async function radarEditorHostImage(blob){
-  const fd=new FormData();
-  fd.append('file', blob, 'radar-edit.jpg');
-  const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST', body:fd});
-  if(!r.ok) throw new Error('رفع الصورة فشل');
-  const j=await r.json();
-  let url=j?.data?.url||j?.url||'';
-  if(!url) throw new Error('ما رجع رابط للصورة');
-  if(/tmpfiles\.org\/\d+/.test(url) && !/\/dl\//.test(url)) url=url.replace('tmpfiles.org/','tmpfiles.org/dl/');
-  return url;
+  const errors=[];
+  try{
+    const fd=new FormData(); fd.append('file', blob, 'radar.jpg');
+    const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST', body:fd});
+    const j=await r.json().catch(()=>null);
+    let url=j?.data?.url||j?.url||'';
+    if(url){
+      if(/tmpfiles\.org\/\d+/.test(url) && !/\/dl\//.test(url)) url=url.replace('tmpfiles.org/','tmpfiles.org/dl/');
+      return url;
+    }
+    errors.push('tmpfiles '+(r.status||''));
+  }catch(e){ errors.push('tmpfiles'); }
+  try{
+    const fd=new FormData();
+    fd.append('reqtype','fileupload');
+    fd.append('fileToUpload', blob, 'radar.jpg');
+    const r=await fetch('https://catbox.moe/user/api.php',{method:'POST', body:fd});
+    const txt=(await r.text()).trim();
+    if(/^https?:\/\//i.test(txt)) return txt;
+    errors.push('catbox');
+  }catch(e){ errors.push('catbox'); }
+  try{
+    const fd=new FormData();
+    fd.append('reqtype','fileupload');
+    fd.append('time','24h');
+    fd.append('fileToUpload', blob, 'radar.jpg');
+    const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST', body:fd});
+    const txt=(await r.text()).trim();
+    if(/^https?:\/\//i.test(txt)) return txt;
+    errors.push('litterbox');
+  }catch(e){ errors.push('litterbox'); }
+  throw new Error('مواقع رفع الصورة متوقفة حالياً ('+errors.join(' · ')+')');
+}
+async function radarFetchImage(api){
+  try{
+    const res=await fetch(api,{referrerPolicy:'no-referrer'});
+    if(!res.ok) return {ok:false, status:res.status};
+    const blob=await res.blob();
+    if(blob && blob.size>80 && /^image\//.test(blob.type||'image/jpeg')) return {ok:true, blob};
+    return {ok:false, status:'not-image'};
+  }catch(e){
+    return {ok:false, status:'cors'};
+  }
 }
 async function radarEditorApplyModel(){
   const prompt=String(document.getElementById('radarEdModelPrompt')?.value||document.getElementById('radarEdCommand')?.value||'').trim();
-  const chosen=document.getElementById('radarEdModelName')?.value||'kontext';
+  const chosen=document.getElementById('radarEdModelName')?.value||'flux';
   const status=document.getElementById('radarEdModelStatus');
   const set=t=>{ if(status) status.textContent=t; };
   if(!prompt){ set('⚠️ اكتبي وصف التعديل في خانة نموذج الصور'); return; }
   if(!radarEditorState){ set('⚠️ افتحي صورة أولاً'); return; }
   try{
-    set('⏳ تجهيز نفس الصورة للتعديل...');
+    set('⏳ رفع الصورة لمصدر عام...');
     let publicUrl='';
     const src=radarEditorState?.src||'';
     if(/^https?:/i.test(src) && !src.includes('blob:') && !src.startsWith('data:')) publicUrl=src;
     else {
       const blob=await radarEditorCanvasBlob();
       if(!blob) throw new Error('تعذر قراءة الصورة');
-      try{ publicUrl=await radarEditorHostImage(blob); }
-      catch(err){ set('⏳ الرفع المباشر تعثر، نجرّب رابطاً مؤقتاً...'); throw err; }
+      publicUrl=await radarEditorHostImage(blob);
     }
-    const editPrompt='Image-to-image edit of the provided photo. Keep the identical person, face, body, pose, framing and background. Change only what the user asked. User request (Arabic/English): '+prompt+'. If the request is about clothes, change only the clothing to that color/style. Never replace the person with food, a plate, objects, animals, or a new scene.';
-    const models=['kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i);
-    if(chosen && chosen!=='flux' && models[0]!==chosen) models.unshift(chosen);
-    let out=null, used='';
+    const editPrompt='Edit this photo only. Keep the same person and pose. Request: '+prompt;
+    const models=[chosen,'flux','turbo','kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i);
+    let out=null, used='', notes=[];
     for(const model of models){
-      set('⏳ تعديل الصورة الحالية عبر '+model+'...');
+      set('⏳ تجربة '+model+'...');
       const api='https://image.pollinations.ai/prompt/'+encodeURIComponent(editPrompt)
-        +'?nologo=true&enhance=false&safe=false&private=true&model='+encodeURIComponent(model)
+        +'?nologo=true&enhance=false&safe=false&model='+encodeURIComponent(model)
         +'&image='+encodeURIComponent(publicUrl)
-        +'&width=1024&height=1024'
         +'&seed='+(Date.now()%999999);
-      try{
-        const res=await fetch(api,{referrerPolicy:'no-referrer'});
-        if(!res.ok) continue;
-        const blob=await res.blob();
-        if(blob && blob.size>80 && /^image\//.test(blob.type||'image/jpeg')){ out=blob; used=model; break; }
-      }catch(e){}
+      const got=await radarFetchImage(api);
+      if(got.ok){ out=got.blob; used=model; break; }
+      notes.push(model+' '+(got.status||'فشل'));
     }
-    if(!out) throw new Error('كل النماذج فشلت أو المصدر الخارجي رفض الطلب');
+    if(!out) throw new Error('النماذج الآن: '+notes.join(' · ')+'. Kontext/NanoBanana غالباً مقفولة بدون مفتاح. Flux اشتغل سابقاً إذا ما كان في حد طلبات.');
     const url=URL.createObjectURL(out);
     set('✅ تم عبر '+used);
     const img=new Image();
@@ -4498,9 +4526,11 @@ window.addEventListener('message',async event=>{
     <div class="radar-ed-panel">
       <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="kontext" selected>Kontext — تعديل نفس الصورة</option>
-        <option value="nanobanana">NanoBanana — تعديل نفس الصورة</option>
-        <option value="seedream">Seedream — تعديل نفس الصورة</option>
+        <option value="flux" selected>Flux — يعمل بدون مفتاح</option>
+        <option value="turbo">Turbo — سريع</option>
+        <option value="kontext">Kontext — قد يتطلب مفتاح</option>
+        <option value="nanobanana">NanoBanana — قد يتطلب مفتاح</option>
+        <option value="seedream">Seedream — قد يتطلب مفتاح</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
