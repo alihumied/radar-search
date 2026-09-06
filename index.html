@@ -1183,17 +1183,140 @@ function extractFacebookMediaKind(url){
   if(/facebook\.com|fb\.watch/i.test(u)) return 'post';
   return '';
 }
-function isWatchableFacebook(url){
-  const kind = extractFacebookMediaKind(url);
-  return ['reel','video','story','share','post'].includes(kind);
+function extractFacebookVideoId(url){
+  const u = String(url||'');
+  const m = u.match(/\/(?:reel|reels|videos|video)\/(\d{8,})/i)
+    || u.match(/[?&](?:v|video_id|story_fbid|fbid)=(\d{8,})/i)
+    || u.match(/facebook\.com\/watch\/?\?v=(\d{8,})/i);
+  return m ? m[1] : '';
 }
-function facebookOfficialEmbed(url){
-  const kind = extractFacebookMediaKind(url);
+function facebookShareToken(url){
+  const m = String(url||'').match(/facebook\.com\/share\/(?:[rvp]\/)?([^/?#]+)/i);
+  return (m && m[1] || '').replace(/\/$/,'');
+}
+function rememberFacebookShareAlias(shareUrl, canonical){
+  const token = facebookShareToken(shareUrl);
+  if(!token || !canonical) return;
+  try{
+    const saved = JSON.parse(localStorage.getItem('radar_share_aliases')||'{}');
+    saved[token.toLowerCase()] = canonical;
+    localStorage.setItem('radar_share_aliases', JSON.stringify(saved));
+  }catch(e){}
+}
+function isFacebookLoginWall(meta){
+  const title = String(meta?.title||'');
+  const url = String(meta?.url||meta?.canonical||'');
+  return /log in|log into facebook|create an account|تسجيل الدخول/i.test(title)
+    || /^https?:\/\/(?:www\.)?facebook\.com\/?$/i.test(url);
+}
+function facebookCanonicalCandidates(canonical, original){
+  const out = [];
+  const add = u => { if(u && !out.includes(u)) out.push(u); };
+  add(canonical);
+  const id = extractFacebookVideoId(canonical) || extractFacebookVideoId(original);
+  if(id){
+    add(`https://www.facebook.com/reel/${id}/`);
+    add(`https://www.facebook.com/watch/?v=${id}`);
+    add(`https://www.facebook.com/facebook/videos/${id}/`);
+    add(`https://www.facebook.com/video.php?v=${id}`);
+  }
+  add(original);
+  return out.filter(Boolean);
+}
+function facebookOfficialEmbed(url, kind){
+  kind = kind || extractFacebookMediaKind(url);
   const href = encodeURIComponent(url);
-  if(kind === 'photo'){
-    return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=false&width=500`;
+  if(kind === 'photo' || kind === 'post' || kind === 'story' || kind === 'share'){
+    return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true&width=500`;
   }
   return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500`;
+}
+function isWatchableFacebook(url){
+  const kind = extractFacebookMediaKind(url);
+  return ['reel','video'].includes(kind) || !!extractFacebookVideoId(url);
+}
+async function resolveFacebookPublicLink(pageUrl){
+  const original = unwrapFacebookLink(pageUrl);
+  const local = localFacebookShareResolution(original);
+  const seed = {
+    original,
+    canonical: local || '',
+    image: '',
+    title: '',
+    desc: '',
+    videoId: extractFacebookVideoId(local||original),
+    kind: extractFacebookMediaKind(local||original),
+    privateLikely: false
+  };
+  const applyUrl = (u)=>{
+    if(!u || !/facebook\.com|fb\.watch/i.test(u)) return;
+    if(/^https?:\/\/(?:www\.)?facebook\.com\/?$/i.test(u)) return;
+    seed.canonical = u;
+    seed.videoId = extractFacebookVideoId(u) || seed.videoId;
+    const k = extractFacebookMediaKind(u);
+    if(k && k !== 'share') seed.kind = k;
+    if(seed.videoId && (seed.kind==='share' || seed.kind==='post')) seed.kind = /\/reel\//i.test(u) ? 'reel' : 'video';
+  };
+  try{
+    const r = await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(original)}`, 6000);
+    const d = await r.json();
+    const m = d && d.data;
+    if(m){
+      if(m.url) applyUrl(m.url);
+      seed.title = m.title || seed.title;
+      seed.desc = m.description || seed.desc;
+      const img = m.image?.url || '';
+      if(img && !isGenericSocialAsset(img) && !/^data:/i.test(img)) seed.image = img;
+      if(isFacebookLoginWall({title:m.title, url:m.url})) seed.privateLikely = true;
+    }
+  }catch(e){}
+  if(!seed.canonical || seed.privateLikely){
+    const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`];
+    for(const make of proxies){
+      try{
+        const r = await fetchWithTimeout(make(original.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com')), 5000);
+        if(!r.ok) continue;
+        const html = await r.text();
+        if(html.length<200) continue;
+        const doc = new DOMParser().parseFromString(html,'text/html');
+        const ogUrl = doc.querySelector('meta[property="og:url"]')?.content || '';
+        const ogImg = doc.querySelector('meta[property="og:image"],meta[property="og:image:secure_url"]')?.content || '';
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.content || '';
+        applyUrl(ogUrl);
+        if(ogTitle) seed.title = seed.title || ogTitle;
+        if(ogImg && !isGenericSocialAsset(ogImg)) seed.image = seed.image || ogImg;
+        const reelHit = html.match(/facebook\.com\/(?:reel|videos)\/(\d{8,})/i);
+        if(reelHit) applyUrl(`https://www.facebook.com/reel/${reelHit[1]}/`);
+        if(seed.canonical && !isFacebookLoginWall({title:ogTitle,url:ogUrl})) break;
+      }catch(e){}
+    }
+  }
+  if(seed.canonical) rememberFacebookShareAlias(original, seed.canonical);
+  if(!seed.kind) seed.kind = extractFacebookMediaKind(seed.canonical||original);
+  if(!seed.videoId) seed.videoId = extractFacebookVideoId(seed.canonical||original);
+  if(!seed.image && seed.privateLikely) seed.kind = seed.kind==='reel'||seed.kind==='video' ? seed.kind : 'story';
+  return seed;
+}
+function renderFacebookPreviewCard(resolved){
+  const kind = resolved.kind || 'share';
+  const canVideo = !!(resolved.videoId || ['reel','video'].includes(kind));
+  if(canVideo && (resolved.canonical || resolved.videoId)){
+    const href = facebookCanonicalCandidates(resolved.canonical, resolved.original)[0];
+    const embed = facebookOfficialEmbed(href, kind==='share'?'reel':kind);
+    const alts = facebookCanonicalCandidates(resolved.canonical, resolved.original).slice(0,4);
+    return `
+      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة — فيسبوك ${kind}${resolved.videoId?` · ${resolved.videoId}`:''}</div>
+        <iframe src="${embed}" width="100%" height="420" style="border:none; border-radius:14px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
+        <div class="hint" style="margin:0; padding:0 4px;">تم فك رابط المشاركة إلى الرابط الأصلي قبل التضمين. إذا ظهرت Video Unavailable فالمحتوى غالبًا مقيد أو محذوف — استخدمي الرابط الأصلي أو الصورة المستخرجة للبحث العكسي.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${alts.map((u,i)=>`<a class="toggle" style="text-decoration:none;padding:6px 10px" target="_blank" rel="noopener" href="${esc(u)}">رابط ${i+1}</a>`).join('')}</div>
+      </div>`;
+  }
+  return `
+    <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+      <div class="result-title" style="padding:0 4px;">⚠️ لا توجد معاينة رسمية — ${kind==='story'?'ستوري':'مشاركة'} فيسبوك</div>
+      <div class="hint" style="margin:0;">روابط share المختصرة والستوريهات غالبًا خاصة أو منتهية، وفيسبوك ما بيعطي iframe عام إلّا بعد فك الرابط لفيديو/ريلز علني. افتحي الرابط الأصلي داخل فيسبوك وخذي سكرين شوت، والمحفوظات ما بتنمسح.</div>
+    </div>`;
 }
 function isGenericSocialAsset(imageUrl){
   return !imageUrl || /abs\.twimg\.com|static\.[a-z0-9.-]*fbcdn\.net|scontent[^/]*\/static|instagram\.com\/static|tiktok\.com\/obj\/static/i.test(imageUrl) || String(imageUrl).startsWith('data:');
@@ -1241,12 +1364,13 @@ async function fetchOgTags(pageUrl){
   const candidates=[];let title=xDeep?.title||null,desc=xDeep?.desc||null;
   const add=(url,w=0,h=0)=>{if(url&&/^https?:\/\//i.test(url)&&!candidates.some(x=>x.url===url)&&!isGenericSocialAsset(url))candidates.push({url,w:Number(w)||0,h:Number(h)||0})};
   if(xDeep?.image) add(xDeep.image);
-  try{const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=title||m.title;desc=desc||m.description}}catch(e){}
+  let canonicalUrl='';
+  try{const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`,6000),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=title||m.title;desc=desc||m.description;canonicalUrl=m.url||'';}}catch(e){}
   try{const r=await fetchWithTimeout(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=title||d.title}}catch(e){}
   const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`];
   for(const make of proxies){try{const r=await fetchWithTimeout(make(scrapeUrl),4500);if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=title||doc.querySelector('meta[property="og:title"]')?.content;desc=desc||doc.querySelector('meta[property="og:description"]')?.content;if(candidates.length)break}catch(e){}}
   const image=await pickBestPublicImage(candidates.map(x=>x.url));
-  return {image,title,desc,candidates,videoUrl:xDeep?.videoUrl||'',source:xDeep?.source||'og'};
+  return {image,title,desc,candidates,videoUrl:xDeep?.videoUrl||'',source:xDeep?.source||'og',canonicalUrl};
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
@@ -1291,20 +1415,26 @@ async function runImageSearch(){
   let captionText = '';
   let sourceLabel = '';
 
-  // معاينة حيّة: ريلز/فيديو/ستوري فيسبوك + منشور X. ما منسكر المعارض المحفوظة أبدًا.
-  const fbKind = extractFacebookMediaKind(url);
-  const isFbWatchable = isWatchableFacebook(url);
+  // معاينة حيّة بعد فك روابط share المختصرة. المعارض المحفوظة لا تُغلق.
   const xStatusId = extractXStatusId(url);
   let embedHtml = '';
-  if(isFbWatchable){
-    embedHtml = `
-      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-        <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة — فيسبوك ${fbKind||'post'}</div>
-        <iframe src="${facebookOfficialEmbed(url)}" width="100%" height="420" style="border:none; border-radius:14px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
-        <div class="hint" style="margin:0; padding:0 4px;">المعاينة الرسمية تظل ظاهرة، والبحث العكسي يشتغل على الصورة المستخرجة بدون مسح 📌 صور / روابط / فيديو.</div>
-      </div>`;
-    cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+  let facebookResolved = null;
+  if(/facebook\.com|fb\.watch/i.test(url)){
+    status.textContent = 'جارٍ فك رابط فيسبوك إلى الريلز/الفيديو الأصلي...';
     document.getElementById('imageResultsArea').classList.add('show');
+    facebookResolved = await resolveFacebookPublicLink(url);
+    if(facebookResolved.canonical){
+      input.value = facebookResolved.canonical;
+    }
+    embedHtml = renderFacebookPreviewCard(facebookResolved);
+    cards.innerHTML = embedHtml + openOriginalLinkHtml(facebookResolved.canonical || url);
+    if(facebookResolved.image && !isGenericSocialAsset(facebookResolved.image)){
+      imageUrl = facebookResolved.image;
+      captionText = facebookResolved.title || facebookResolved.desc || '';
+      sourceLabel = facebookResolved.canonical ? 'تم فك رابط المشاركة وجلب الصورة ✅' : 'تم جلب الصورة تلقائيًا ✅';
+    }else if(facebookResolved.privateLikely || facebookResolved.kind==='story'){
+      status.innerHTML = '⚠️ الستوري/المشاركة غير عامة أو منتهية. فيسبوك ما بيرجع صورة ولا iframe. افتحي الرابط الأصلي وخذي سكرين شوت — المحفوظات ما انمسحت.';
+    }
   } else if(xStatusId){
     embedHtml = `
       <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
@@ -1350,26 +1480,30 @@ async function runImageSearch(){
       return;
     }
   }
-  // 3) فيسبوك / إنستجرام / X: جلب عميق (FxTwitter/VxTwitter + OG + بروكسي)
-  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
+  // 3) إنستجرام / X، أو فيسبوك إذا فك الرابط ما رجّع صورة بعد
+  else if(/instagram\.com|x\.com|twitter\.com/i.test(url) || (/facebook\.com|fb\.watch/i.test(url) && !imageUrl)){
     status.textContent = xStatusId ? 'جارٍ الجلب العميق من X...' : 'جارٍ محاولة جلب بيانات المنشور...';
     try{
-      const og = await fetchOgTags(url);
+      const og = await fetchOgTags(facebookResolved?.canonical || url);
       if(og.image && !isGenericSocialAsset(og.image)){
         imageUrl = og.image;
-        captionText = og.title || og.desc || '';
+        captionText = og.title || og.desc || captionText;
         sourceLabel = og.source==='x-deep' ? 'تم الجلب العميق من X ✅' : 'تم جلب الصورة والوصف تلقائيًا ✅';
+      }
+      if(og.canonicalUrl && facebookResolved && !facebookResolved.canonical){
+        facebookResolved.canonical = og.canonicalUrl;
+        rememberFacebookShareAlias(url, og.canonicalUrl);
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة عامة للمنشور. المعاينة والرابط الأصلي ظلّوا ظاهرين، والمحفوظات ما انمسحت. افتح الرابط وخذ سكرين شوت إذا المحتوى خاص.';
-      cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+      status.innerHTML = status.innerHTML && status.innerHTML.indexOf('⚠️')===0 ? status.innerHTML : '⚠️ ما قدرنا نجيب صورة عامة للمنشور. المعاينة والرابط الأصلي ظلّوا ظاهرين، والمحفوظات ما انمسحت. افتح الرابط وخذ سكرين شوت إذا المحتوى خاص.';
+      cards.innerHTML = embedHtml + openOriginalLinkHtml(facebookResolved?.canonical || url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
-  // 4) غير ذلك: افترض إنه رابط صورة مباشر
-  else{
+  // 4) غير ذلك: رابط صورة مباشر، إلا إذا كنا بجيب فيسبوك/منصة ونجح أو فشل الجلب أعلاه
+  else if(!facebookResolved && !imageUrl){
     imageUrl = url;
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
   }
@@ -2148,10 +2282,11 @@ function detectProfileScope(rawText){
 // لا توجد أسماء ثابتة؛ الاسم يُستخرج من الصفحة العامة أو نتائج البحث ويُحفظ محليًا بعد التحقق.
 const VERIFIED_PROFILE_NAMES = Object.freeze({});
 const VERIFIED_FACEBOOK_SHARE_MAP = {
-  '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661'
+  '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661',
+  '14mzsfueekf': 'https://www.facebook.com/61594045108402/videos/4289913911321487/'
 };
 function localFacebookShareResolution(url){
-  const token=(String(url||'').match(/facebook\.com\/share\/([^/?#]+)/i)||[])[1]?.toLowerCase()||'';
+  const token=(String(url||'').match(/facebook\.com\/share\/(?:[rvp]\/)?([^/?#]+)/i)||[])[1]?.toLowerCase()||'';
   if(VERIFIED_FACEBOOK_SHARE_MAP[token]) return VERIFIED_FACEBOOK_SHARE_MAP[token];
   try{
     const saved=JSON.parse(localStorage.getItem('radar_share_aliases')||'{}');
