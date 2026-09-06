@@ -1311,23 +1311,29 @@ function cleanReelCaption(text){
     .replace(/^(?:\|\s*)+|(?:\s*\|)+$/g,'')
     .trim();
 }
+function splitReelSentences(text){
+  let s = cleanReelCaption(text);
+  s = s.replace(/#[\w\u0600-\u06FF]+/g,' ').replace(/@[A-Za-z0-9._]+/g,' ');
+  return s
+    .split(/\s*[|·•]+\s*|\s*[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]+\s+/u)
+    .map(x=>x.replace(/\s+/g,' ').trim())
+    .filter(x=>x.length>=2 && !/^https?:/i.test(x));
+}
 function extractReelChips(text){
   const raw = String(text||'');
   const chips = [];
   const add = (t, tag)=>{
     const s = String(t||'').replace(/\s+/g,' ').trim();
-    if(s.length<2 || s.length>90) return;
+    if(s.length<2 || s.length>120) return;
     if(/^https?:/i.test(s)) return;
     if(/^(views?|reactions?|likes?|comments?|shares?|reels?|original|audio|facebook|on)$/i.test(s)) return;
     if(chips.some(c=>c.text.toLowerCase()===s.toLowerCase())) return;
-    chips.push({text:s, tag:tag||'وصف'});
+    chips.push({text:s, tag:tag||'جملة'});
   };
   (raw.match(/#[\w\u0600-\u06FF]+/g)||[]).forEach(t=>add(t,'هاشتاق'));
   (raw.match(/@[A-Za-z0-9._]+/g)||[]).forEach(t=>add(t,'حساب'));
-  cleanReelCaption(raw).split('|').map(s=>s.trim()).filter(Boolean).forEach(s=>add(s,'عبارة'));
-  const cleaned = cleanReelCaption(raw);
-  if(cleaned) add(cleaned,'الوصف كامل');
-  return chips.slice(0,14);
+  splitReelSentences(raw).forEach(s=>add(s,'جملة'));
+  return chips.slice(0,20);
 }
 function searchFromReel(text){
   const q = String(text||'').trim();
@@ -1347,15 +1353,16 @@ function searchFromReel(text){
 function searchHashtag(tag){ searchFromReel(tag); }
 function renderReelSearchHtml(caption){
   const chips = extractReelChips(caption);
-  if(!chips.length && !String(caption||'').trim()) return '';
-  const full = cleanReelCaption(caption) || String(caption||'').trim();
-  const chipHtml = chips.map(c=>`<button type="button" class="reel-chip" data-reel-q="${esc(c.text)}"><span>${esc(c.text)}</span><b>${esc(c.tag)}</b></button>`).join('');
+  if(!chips.length) return '';
+  const hashes = chips.filter(c=>c.tag==='هاشتاق' || c.tag==='حساب');
+  const sentences = chips.filter(c=>c.tag!=='هاشتاق' && c.tag!=='حساب');
+  const hashHtml = hashes.map(c=>`<button type="button" class="reel-hash" data-reel-q="${esc(c.text)}">${esc(c.text)}</button>`).join('');
+  const sentHtml = sentences.map(c=>`<button type="button" class="reel-sentence" data-reel-q="${esc(c.text)}">${esc(c.text)}</button>`).join('');
   return `
     <div class="reel-extract">
-      <div class="hint" style="margin:0 0 6px;">🎬 النص المستخرج من الريلز — اضغطي أي جزء للبحث عنه في المحرك الرئيسي</div>
-      <div class="reel-full" data-reel-q="${esc(full)}">${esc(caption.trim())}</div>
-      <div class="reel-chips">${chipHtml}</div>
-      <button type="button" class="go-btn reel-search-all" data-reel-q="${esc(full)}">ابحث بهذا الوصف في المحرك الرئيسي</button>
+      <div class="hint" style="margin:0 0 8px;">🏷️ هاشتاقات وجمل مستخرجة — اضغطي جملة واحدة للبحث عنها في المحرك الرئيسي</div>
+      ${hashHtml?`<div class="reel-chips">${hashHtml}</div>`:''}
+      <div class="reel-sentences">${sentHtml}</div>
     </div>`;
 }
 function isGenericSocialAsset(imageUrl){
@@ -3394,13 +3401,12 @@ body::before{
   .brand h1{font-size:18px}
 }
 
-.reel-extract{margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--bg-0)}
-.reel-extract .reel-full{font-size:14px;line-height:1.8;color:var(--text);cursor:pointer}
-.reel-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.reel-chip{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer}
-.reel-chip:hover,.reel-chip:focus{border-color:var(--cyan);color:#cfefff}
-.reel-chip b{font-size:10px;color:var(--cyan);font-family:'JetBrains Mono',monospace;margin-left:6px}
-.reel-search-all{width:100%;justify-content:center;margin-top:8px}
+.reel-extract{margin:12px 0 8px;padding:12px 4px;background:transparent}
+.reel-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.reel-hash{border:1px solid rgba(46,107,255,.45);background:rgba(46,107,255,.12);color:var(--cyan);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:700;cursor:pointer}
+.reel-sentences{display:flex;flex-direction:column;gap:0}
+.reel-sentence{display:block;width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--cyan);font-family:'Tajawal',sans-serif;font-size:15px;font-weight:500;line-height:1.8;text-align:right;padding:10px 4px;cursor:pointer}
+.reel-sentence:hover,.reel-hash:hover{color:#fff;filter:brightness(1.15)}
 </style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script></body></html>`;
  const blob=new Blob([html],{type:'text/html'}),blobUrl=URL.createObjectURL(blob),win=window.open(blobUrl,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);if(!win){const status=document.getElementById('imageSearchStatus');if(status)status.textContent='⚠️ اسمح بالنوافذ المنبثقة لفتح صفحة التكبير';}
 }
