@@ -170,8 +170,8 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     #htmlImportResultsList .hx-grid .saved-corner-btn{z-index:12!important;}
   }
 
-#radarEditor.radar-editor{display:none!important;position:fixed;inset:0;z-index:20000;background:rgba(4,6,9,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);flex-direction:column}
-#radarEditor.radar-editor.show{display:flex!important}
+#radarEditor.radar-editor{display:none!important;pointer-events:none;position:fixed;inset:0;z-index:20000;background:rgba(4,6,9,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);flex-direction:column}
+#radarEditor.radar-editor.show{display:flex!important;pointer-events:auto}
 .radar-ed-shell{width:min(920px,100%);margin:0 auto;height:100%;display:flex;flex-direction:column;padding:10px 12px 16px;gap:10px}
 .radar-ed-bar{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .radar-ed-bar b{color:var(--cyan);font-size:15px}
@@ -186,6 +186,14 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .radar-ed-row{display:flex;gap:8px;align-items:center}
 .radar-ed-row .go-btn{flex:0 0 auto}
 #radarEdModelStatus,#radarEdCmdStatus{min-height:18px}
+
+@media (max-width:900px){
+  .radar-ed-shell{padding:8px 8px calc(10px + env(safe-area-inset-bottom));gap:8px}
+  .radar-ed-preview{min-height:120px;max-height:34vh}
+  .radar-ed-bar{flex-wrap:wrap}
+  .radar-ed-actions button{min-height:40px;padding:8px 11px}
+  .radar-ed-panel textarea{font-size:16px}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -3615,10 +3623,6 @@ async function radarEditorApplyModel(){
     if(!out) throw new Error('كل النماذج فشلت أو المصدر الخارجي رفض الطلب');
     const url=URL.createObjectURL(out);
     set('✅ تم عبر '+used);
-    const img=new Image();
-    await new Promise((resolve,reject)=>{ img.onload=resolve; img.onerror=reject; img.src=url; });
-    const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
-    const url=URL.createObjectURL(out);
     const img=new Image();
     await new Promise((resolve,reject)=>{ img.onload=resolve; img.onerror=reject; img.src=url; });
     const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
