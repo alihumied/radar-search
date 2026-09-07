@@ -198,6 +198,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 #radarEditorLive{max-width:100%;max-height:34vh;border-radius:12px;object-fit:contain}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
 <div class="wrap">
@@ -3668,72 +3669,50 @@ async function radarEditorAdoptSrc(src){
   if(canvas) canvas.style.display='block';
   radarEditorRedraw();
 }
+async function radarEditorCanvasDataUrl(){
+  const {canvas}=radarEditorEls();
+  return canvas.toDataURL('image/jpeg',0.86);
+}
+function radarPuterModel(id){
+  if(id==='nanobanana2') return {model:'gemini-3.1-flash-image-preview'};
+  if(id==='grok') return {provider:'xai', model:'grok-imagine-image'};
+  if(id==='gptimage') return {model:'gpt-image-1-mini'};
+  return {model:'gemini-2.5-flash-image'};
+}
 async function radarEditorApplyModel(){
   const prompt=String(document.getElementById('radarEdModelPrompt')?.value||document.getElementById('radarEdCommand')?.value||'').trim();
-  const chosen=document.getElementById('radarEdModelName')?.value||'flux';
+  const chosen=document.getElementById('radarEdModelName')?.value||'nanobanana';
   const status=document.getElementById('radarEdModelStatus');
   const set=t=>{ if(status) status.textContent=t; };
   if(!prompt){ set('⚠️ اكتبي الأمر أولاً'); return; }
-  if(radarEditorState && radarEditorRecolorFromPrompt(prompt)){
-    set('✅ تغيّر اللون على نفس الصورة — اضغطي الأصل للرجوع');
-    return;
-  }
-  if(radarEditorState && chosen!=='generate'){
-    set('⚠️ هذا الأمر يحتاج إعادة تلوين واضح مثل: غير اللباس للأسود. Flux رح يستبدل الصورة كاملة لذلك ما شغّلته.');
-    return;
-  }
+  if(!radarEditorState){ set('⚠️ افتحي صورة أولاً'); return; }
   try{
-    let publicUrl='';
-    const src=radarEditorState?.src||'';
-    if(/^https?:/i.test(src) && !src.includes('blob:') && !src.startsWith('data:')) publicUrl=src;
-    else if(radarEditorState){
-      try{
-        const blob=await radarEditorCanvasBlob();
-        if(blob) publicUrl=await radarEditorHostImage(blob);
-      }catch(e){ publicUrl=''; }
+    set('⏳ تجهيز الصورة للمولد...');
+    const dataUrl=await radarEditorCanvasDataUrl();
+    const b64=String(dataUrl).split(',')[1]||'';
+    if(!b64) throw new Error('تعذر قراءة الصورة');
+    if(typeof puter==='undefined' || !puter.ai || !puter.ai.txt2img){
+      throw new Error('مولد Puter ما تحمّل — تأكدي من الإنترنت ثم حدّثي الصفحة');
     }
-    const models=[chosen,'flux','turbo'].filter((m,i,a)=>a.indexOf(m)===i);
-    let ok=false, used='', lastErr='';
-    for(const model of models){
-      const api=radarModelImageUrl(prompt, model, publicUrl);
-      set('⏳ جارٍ جلب الصورة من '+model+'...');
-      radarEditorShowLive(api);
-      try{
-        const got=await radarFetchImage(api);
-        if(got.ok){
-          const blobUrl=URL.createObjectURL(got.blob);
-          await radarEditorAdoptSrc(blobUrl);
-          used=model; ok=true; break;
-        }
-        lastErr=String(got.status||'');
-        await radarEditorAdoptSrc(api);
-        used=model; ok=true; break;
-      }catch(e){ lastErr=(e&&e.message)||lastErr||'فشل'; }
-    }
-    if(!ok) throw new Error('ما انجلبت صورة ('+lastErr+') — جرّبي Flux بعد نصف دقيقة');
-    set('✅ انجلبت الصورة عبر '+used+' — احفظيها إذا عجبتك');
-    return;
-    let out=null;
-    if(!out) throw new Error('skip');
-    const url=URL.createObjectURL(out);
-    set('✅ تم عبر '+used);
-    const img=new Image();
-    await new Promise((resolve,reject)=>{ img.onload=resolve; img.onerror=reject; img.src=url; });
-    const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
-    if(!radarEditorState){
-      radarEditorState={img, src:url, meta:'model', origW:ow, origH:oh, w:ow, h:oh, rot:0, flipH:false, flipV:false, preset:'', tool:'', strokes:[], drawing:false};
-    } else {
-      radarEditorState.img=img; radarEditorState.src=url;
-      radarEditorState.origW=ow; radarEditorState.origH=oh; radarEditorState.w=ow; radarEditorState.h=oh;
-      radarEditorState.rot=0; radarEditorState.flipH=false; radarEditorState.flipV=false;
-      radarEditorState.preset=''; radarEditorState.strokes=[];
-    }
-    const {bright,contrast,saturate}=radarEditorEls();
-    if(bright) bright.value=100; if(contrast) contrast.value=100; if(saturate) saturate.value=100;
-    radarEditorRedraw();
-    set('✅ النموذج طبّق الأمر على الصورة — احفظيها في 📌 صور إذا عجبتك');
+    const spec=radarPuterModel(chosen);
+    set('⏳ المولد يعدل نفس الصورة حسب الأمر...');
+    const editPrompt='Edit this same photograph. Keep the same person, face, body, pose and background. Apply only this change: '+prompt;
+    const result=await puter.ai.txt2img(editPrompt, Object.assign({}, spec, {
+      input_image: b64,
+      input_image_mime_type: 'image/jpeg',
+      input_images: [dataUrl]
+    }));
+    let src='';
+    if(typeof result==='string') src=result;
+    else if(result && result.src) src=result.src;
+    else if(result && result.getAttribute) src=result.src||result.getAttribute('src')||'';
+    else if(result && result.image_url) src=result.image_url.url||result.image_url;
+    else if(result && result.message && result.message.images && result.message.images[0]) src=result.message.images[0].image_url?.url||'';
+    if(!src) throw new Error('المولد ما رجّع صورة');
+    await radarEditorAdoptSrc(src);
+    set('✅ تم التعديل على نفس الصورة — احفظي أو ارجعي للأصل');
   }catch(e){
-    set('⚠️ '+((e&&e.message)||'فشل تشغيل النموذج'));
+    set('⚠️ '+((e&&e.message)||'فشل المولد'));
   }
 }
 function radarEditorApplyCommand(){
@@ -4644,8 +4623,10 @@ window.addEventListener('message',async event=>{
     <div class="radar-ed-panel">
       <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="flux" selected>تعديل اللون على نفس الصورة</option>
-        <option value="generate">توليد صورة جديدة (يستبدل الصورة)</option>
+        <option value="nanobanana">NanoBanana — تعديل الصورة بالأمر</option>
+        <option value="nanobanana2">NanoBanana 2</option>
+        <option value="grok">Grok Imagine</option>
+        <option value="gptimage">GPT Image</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
