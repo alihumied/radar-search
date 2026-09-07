@@ -3691,11 +3691,16 @@ async function radarEditorApplyModel(){
     const dataUrl=await radarEditorCanvasDataUrl();
     const b64=String(dataUrl).split(',')[1]||'';
     if(!b64) throw new Error('تعذر قراءة الصورة');
+    if(chosen==='kontext-hf'){
+      window.open('https://huggingface.co/spaces/black-forest-labs/FLUX.1-Kontext-Dev','_blank','noopener');
+      set('↩ فتحنا FLUX Kontext على HuggingFace — ارفعي الصورة هناك واكتبي الأمر. هذا مجاني وما يخصم من Grok.');
+      return;
+    }
     if(typeof puter==='undefined' || !puter.ai || !puter.ai.txt2img){
-      throw new Error('مولد Puter ما تحمّل — تأكدي من الإنترنت ثم حدّثي الصفحة');
+      throw new Error('المولد الخارجي ما تحمّل — تأكدي من الإنترنت');
     }
     const spec=radarPuterModel(chosen);
-    set('⏳ المولد يعدل نفس الصورة حسب الأمر...');
+    set('⏳ تعديل الصورة بدون استخدام رصيد Grok...');
     const editPrompt='Edit this same photograph. Keep the same person, face, body, pose and background. Apply only this change: '+prompt;
     const result=await puter.ai.txt2img(editPrompt, Object.assign({}, spec, {
       input_image: b64,
@@ -4623,10 +4628,9 @@ window.addEventListener('message',async event=>{
     <div class="radar-ed-panel">
       <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="nanobanana">NanoBanana — تعديل الصورة بالأمر</option>
-        <option value="nanobanana2">NanoBanana 2</option>
-        <option value="grok">Grok Imagine</option>
-        <option value="gptimage">GPT Image</option>
+        <option value="nanobanana">NanoBanana عبر Puter — مو رصيد Grok</option>
+        <option value="nanobanana2">NanoBanana 2 عبر Puter</option>
+        <option value="kontext-hf">FLUX Kontext على HuggingFace</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
