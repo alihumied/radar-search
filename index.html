@@ -170,35 +170,26 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     #htmlImportResultsList .hx-grid .saved-corner-btn{z-index:12!important;}
   }
 
-#radarEditor.radar-editor{display:none!important;pointer-events:none;position:fixed;inset:0;z-index:20000;background:rgba(4,6,9,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);flex-direction:column}
-#radarEditor.radar-editor.show{display:flex!important;pointer-events:auto}
-.radar-ed-shell{width:min(920px,100%);margin:0 auto;height:100%;display:flex;flex-direction:column;padding:10px 12px 16px;gap:10px}
-.radar-ed-bar{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.radar-ed-bar b{color:var(--cyan);font-size:15px}
-.radar-ed-actions{display:flex;gap:6px;flex-wrap:wrap}
-.radar-ed-actions button{border:1px solid var(--line);background:var(--bg-1);color:var(--text);border-radius:999px;padding:8px 12px;font-family:Tajawal;font-size:13px}
-.radar-ed-actions .ok{border-color:#2eb87288;color:#8affb0}
-.radar-ed-preview{flex:1;min-height:180px;border:1px solid var(--line);border-radius:18px;background:#05070c;display:flex;align-items:center;justify-content:center;overflow:auto}
-.radar-ed-preview canvas{max-width:100%;max-height:100%;width:auto;height:auto;border-radius:12px}
-.radar-ed-panel{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#0b1220,#070b12);padding:12px;display:flex;flex-direction:column;gap:8px}
-.radar-ed-panel label{font-size:12px;color:#8ec5ff}
-.radar-ed-panel textarea,.radar-ed-panel select{width:100%;background:#0a1018;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:11px 12px;font-family:Tajawal;font-size:14px}
-.radar-ed-row{display:flex;gap:8px;align-items:center}
-.radar-ed-row .go-btn{flex:0 0 auto}
-#radarEdModelStatus,#radarEdCmdStatus{min-height:18px}
 
-@media (max-width:900px){
-  .radar-ed-shell{padding:8px 8px calc(10px + env(safe-area-inset-bottom));gap:8px}
-  .radar-ed-preview{min-height:120px;max-height:34vh}
-  .radar-ed-bar{flex-wrap:wrap}
-  .radar-ed-actions button{min-height:40px;padding:8px 11px}
-  .radar-ed-panel textarea{font-size:16px}
-}
 
-#radarEditorLive{max-width:100%;max-height:34vh;border-radius:12px;object-fit:contain}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1888,7 +1879,7 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn" style="bottom:-7px;left:16px;background:linear-gradient(135deg,#2e6bff,#1747c9)" onclick="event.stopPropagation();openRadarEditor('${esc(x.displayUrl)}','saved:${x.id}')" title="تعديل الصورة">✏️</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
 }
 const RADAR_ZIP_MAX_ARCHIVES=5;
@@ -3448,512 +3439,10 @@ async function pickBestPublicImage(urls){const unique=[...new Set((urls||[]).fil
 function platformQualityCandidates(imageUrl,pageUrl){const a=[imageUrl];try{const u=new URL(imageUrl);if(/pbs\.twimg\.com$/i.test(u.hostname)){u.searchParams.set('name','orig');a.unshift(u.toString())}if(/img\.youtube\.com$/i.test(u.hostname)){const m=u.pathname.match(/\/vi\/([^/]+)\//);if(m)a.unshift(`https://img.youtube.com/vi/${m[1]}/maxresdefault.jpg`,`https://img.youtube.com/vi/${m[1]}/sddefault.jpg`)}if(/tiktokcdn|tiktokcdn-us|byteoversea/i.test(u.hostname)){a.unshift(imageUrl.replace(/:\d{2,4}:\d{2,4}(?=\.(?:jpe?g|webp))/i,':1080:1920'))}}catch(e){}return a}
 async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPublicImage(platformQualityCandidates(imageUrl,pageUrl))||imageUrl}
 
-
-
-let radarEditorState=null;
-function radarEditorEls(){
-  return {
-    root:document.getElementById('radarEditor'),
-    canvas:document.getElementById('radarEditorCanvas'),
-    bright:document.getElementById('radarEdBright'),
-    contrast:document.getElementById('radarEdContrast'),
-    saturate:document.getElementById('radarEdSaturate'),
-    color:document.getElementById('radarEdColor'),
-    size:document.getElementById('radarEdSize')
-  };
-}
-function closeRadarEditor(){
-  const {root}=radarEditorEls();
-  if(root){ root.classList.remove('show'); root.hidden=true; }
-  document.documentElement.style.overflow='';
-  document.body.style.overflow='';
-}
-function radarEditorFilterCss(){
-  const {bright,contrast,saturate}=radarEditorEls();
-  const extra=radarEditorState?.preset||'';
-  return `brightness(${(bright?.value||100)/100}) contrast(${(contrast?.value||100)/100}) saturate(${(saturate?.value||100)/100})${extra}`;
-}
-function radarEditorRedraw(){
-  const st=radarEditorState; if(!st) return;
-  const {canvas}=radarEditorEls();
-  const ctx=canvas.getContext('2d');
-  const ow=st.origW, oh=st.origH;
-  const swap=st.rot%180!==0;
-  const w=swap?oh:ow, h=swap?ow:oh;
-  st.w=w; st.h=h;
-  canvas.width=w; canvas.height=h;
-  ctx.save();
-  ctx.filter=radarEditorFilterCss();
-  ctx.translate(w/2,h/2);
-  ctx.rotate(st.rot*Math.PI/180);
-  ctx.scale(st.flipH?-1:1, st.flipV?-1:1);
-  ctx.drawImage(st.img, -ow/2, -oh/2, ow, oh);
-  ctx.restore();
-  ctx.filter='none';
-  st.strokes.forEach(s=>{
-    if(s.type==='path'){
-      ctx.strokeStyle=s.color; ctx.lineWidth=s.size; ctx.lineCap='round'; ctx.lineJoin='round';
-      ctx.beginPath();
-      s.pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-      ctx.stroke();
-    }else if(s.type==='text'){
-      ctx.fillStyle=s.color; ctx.font=`${s.size}px Tajawal,sans-serif`;
-      ctx.fillText(s.text,s.x,s.y);
-    }
-  });
-}
-async function openRadarEditor(src, meta){
-  if(!src){alert('ما في صورة للتعديل');return;}
-  const {root,canvas,bright,contrast,saturate}=radarEditorEls();
-  if(!root||!canvas){alert('محرر الصور غير جاهز');return;}
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.referrerPolicy='no-referrer';
-  await new Promise((resolve,reject)=>{
-    img.onload=resolve;
-    img.onerror=()=>reject(new Error('تعذر تحميل الصورة داخل المحرر (قد يمنع المصدر العرض المباشر)'));
-    img.src=src;
-  }).catch(err=>{alert('⚠️ '+err.message);});
-  if(!img.naturalWidth){
-    try{
-      const r=await fetch(src,{mode:'cors'});
-      const b=await r.blob();
-      img.src=URL.createObjectURL(b);
-      await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;});
-    }catch(e){return;}
-  }
-  const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
-  radarEditorState={
-    img, src, meta:meta||'', origW:ow, origH:oh, w:ow, h:oh,
-    rot:0, flipH:false, flipV:false, preset:'',
-    tool:'', strokes:[], drawing:false, baseData:null
-  };
-  try{
-    const snap=document.createElement('canvas');
-    snap.width=ow; snap.height=oh;
-    snap.getContext('2d').drawImage(img,0,0);
-    radarEditorState.baseData=snap.toDataURL('image/png');
-  }catch(e){ radarEditorState.baseData=src; }
-  if(bright) bright.value=100;
-  if(contrast) contrast.value=100;
-  if(saturate) saturate.value=100;
-  const live=document.getElementById('radarEditorLive');
-  if(live) live.style.display='none';
-  if(canvas) canvas.style.display='block';
-  radarEditorRedraw();
-  radarEditorBindCanvas();
-  root.hidden=false;
-  root.classList.add('show');
-  document.documentElement.style.overflow='hidden';
-  document.body.style.overflow='hidden';
-  try{ closeInlineSavedFocus(); }catch(e){}
-}
-function radarEditorRotate(deg){
-  if(!radarEditorState) return;
-  radarEditorState.rot=((radarEditorState.rot+deg)%360+360)%360;
-  const {w,h}=radarEditorState;
-  if(Math.abs(deg)%180){ radarEditorState.w=h; radarEditorState.h=w; }
-  radarEditorRedraw();
-}
-function radarEditorFlip(axis){
-  if(!radarEditorState) return;
-  if(axis==='h') radarEditorState.flipH=!radarEditorState.flipH;
-  else radarEditorState.flipV=!radarEditorState.flipV;
-  radarEditorRedraw();
-}
-function radarEditorFilter(){ radarEditorRedraw(); }
-function radarEditorPreset(name){
-  if(!radarEditorState) return;
-  if(name==='gray') radarEditorState.preset=' grayscale(1)';
-  else if(name==='invert') radarEditorState.preset=' invert(1)';
-  else radarEditorState.preset='';
-  radarEditorRedraw();
-}
-function radarEditorTool(name){
-  if(!radarEditorState) return;
-  radarEditorState.tool = radarEditorState.tool===name?'':name;
-  document.getElementById('radarEdDrawBtn')?.classList.toggle('active', radarEditorState.tool==='draw');
-  if(name==='text'){
-    const t=prompt('اكتب النص:');
-    if(t){
-      const {color,size}=radarEditorEls();
-      radarEditorState.strokes.push({type:'text', text:t, x:40, y:80, color:color.value, size:Math.max(16, Number(size.value)*4)});
-      radarEditorRedraw();
-    }
-    radarEditorState.tool='';
-  }
-}
-
-
-async function radarEditorCanvasBlob(type='image/jpeg', quality=0.88){
-  const {canvas}=radarEditorEls();
-  return new Promise(resolve=>canvas.toBlob(resolve,type,quality));
-}
-async function radarEditorHostImage(blob){
-  const errors=[];
-  try{
-    const fd=new FormData(); fd.append('file', blob, 'radar.jpg');
-    const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST', body:fd});
-    const j=await r.json().catch(()=>null);
-    let url=j?.data?.url||j?.url||'';
-    if(url){
-      if(/tmpfiles\.org\/\d+/.test(url) && !/\/dl\//.test(url)) url=url.replace('tmpfiles.org/','tmpfiles.org/dl/');
-      return url;
-    }
-    errors.push('tmpfiles '+(r.status||''));
-  }catch(e){ errors.push('tmpfiles'); }
-  try{
-    const fd=new FormData();
-    fd.append('reqtype','fileupload');
-    fd.append('fileToUpload', blob, 'radar.jpg');
-    const r=await fetch('https://catbox.moe/user/api.php',{method:'POST', body:fd});
-    const txt=(await r.text()).trim();
-    if(/^https?:\/\//i.test(txt)) return txt;
-    errors.push('catbox');
-  }catch(e){ errors.push('catbox'); }
-  try{
-    const fd=new FormData();
-    fd.append('reqtype','fileupload');
-    fd.append('time','24h');
-    fd.append('fileToUpload', blob, 'radar.jpg');
-    const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST', body:fd});
-    const txt=(await r.text()).trim();
-    if(/^https?:\/\//i.test(txt)) return txt;
-    errors.push('litterbox');
-  }catch(e){ errors.push('litterbox'); }
-  throw new Error('مواقع رفع الصورة متوقفة حالياً ('+errors.join(' · ')+')');
-}
-async function radarFetchImage(api){
-  try{
-    const res=await fetch(api,{referrerPolicy:'no-referrer'});
-    if(!res.ok) return {ok:false, status:res.status};
-    const blob=await res.blob();
-    if(blob && blob.size>80 && /^image\//.test(blob.type||'image/jpeg')) return {ok:true, blob};
-    return {ok:false, status:'not-image'};
-  }catch(e){
-    return {ok:false, status:'cors'};
-  }
-}
-function radarModelImageUrl(prompt, model, imageUrl){
-  let u='https://image.pollinations.ai/prompt/'+encodeURIComponent(prompt)
-    +'?model='+encodeURIComponent(model||'flux')
-    +'&nologo=true&safe=false&enhance=false&referrer=radar'
-    +'&seed='+(Date.now()%999999);
-  if(imageUrl) u+='&image='+encodeURIComponent(imageUrl);
-  return u;
-}
-function radarEditorShowLive(src){
-  const live=document.getElementById('radarEditorLive');
-  const canvas=document.getElementById('radarEditorCanvas');
-  if(live){ live.src=src; live.style.display='block'; }
-  if(canvas) canvas.style.display='none';
-}
-async function radarEditorAdoptSrc(src){
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.referrerPolicy='no-referrer';
-  await new Promise((resolve,reject)=>{ img.onload=resolve; img.onerror=reject; img.src=src; });
-  const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
-  if(!ow) throw new Error('الصورة رجعت فارغة');
-  if(!radarEditorState){
-    radarEditorState={img, src, meta:'model', origW:ow, origH:oh, w:ow, h:oh, rot:0, flipH:false, flipV:false, preset:'', tool:'', strokes:[], drawing:false};
-  } else {
-    radarEditorState.img=img; radarEditorState.src=src;
-    radarEditorState.origW=ow; radarEditorState.origH=oh; radarEditorState.w=ow; radarEditorState.h=oh;
-    radarEditorState.rot=0; radarEditorState.flipH=false; radarEditorState.flipV=false;
-    radarEditorState.preset=''; radarEditorState.strokes=[];
-  }
-  const live=document.getElementById('radarEditorLive');
-  const canvas=document.getElementById('radarEditorCanvas');
-  if(live) live.style.display='none';
-  if(canvas) canvas.style.display='block';
-  radarEditorRedraw();
-}
-async function radarEditorCanvasDataUrl(){
-  const {canvas}=radarEditorEls();
-  return canvas.toDataURL('image/jpeg',0.86);
-}
-function radarPuterModel(id){
-  if(id==='nanobanana2') return {model:'gemini-3.1-flash-image-preview'};
-  if(id==='grok') return {provider:'xai', model:'grok-imagine-image'};
-  if(id==='gptimage') return {model:'gpt-image-1-mini'};
-  return {model:'gemini-2.5-flash-image'};
-}
-async function radarEditorApplyModel(){
-  const prompt=String(document.getElementById('radarEdModelPrompt')?.value||document.getElementById('radarEdCommand')?.value||'').trim();
-  const chosen=document.getElementById('radarEdModelName')?.value||'nanobanana';
-  const status=document.getElementById('radarEdModelStatus');
-  const set=t=>{ if(status) status.textContent=t; };
-  if(!prompt){ set('⚠️ اكتبي الأمر أولاً'); return; }
-  if(!radarEditorState){ set('⚠️ افتحي صورة أولاً'); return; }
-  try{
-    set('⏳ تجهيز الصورة للمولد...');
-    const dataUrl=await radarEditorCanvasDataUrl();
-    const b64=String(dataUrl).split(',')[1]||'';
-    if(!b64) throw new Error('تعذر قراءة الصورة');
-    if(chosen==='kontext-hf'){
-      window.open('https://huggingface.co/spaces/black-forest-labs/FLUX.1-Kontext-Dev','_blank','noopener');
-      set('↩ فتحنا FLUX Kontext على HuggingFace — ارفعي الصورة هناك واكتبي الأمر. هذا مجاني وما يخصم من Grok.');
-      return;
-    }
-    if(typeof puter==='undefined' || !puter.ai || !puter.ai.txt2img){
-      throw new Error('المولد الخارجي ما تحمّل — تأكدي من الإنترنت');
-    }
-    const spec=radarPuterModel(chosen);
-    set('⏳ تعديل الصورة بدون استخدام رصيد Grok...');
-    const editPrompt='Edit this same photograph. Keep the same person, face, body, pose and background. Apply only this change: '+prompt;
-    const result=await puter.ai.txt2img(editPrompt, Object.assign({}, spec, {
-      input_image: b64,
-      input_image_mime_type: 'image/jpeg',
-      input_images: [dataUrl]
-    }));
-    let src='';
-    if(typeof result==='string') src=result;
-    else if(result && result.src) src=result.src;
-    else if(result && result.getAttribute) src=result.src||result.getAttribute('src')||'';
-    else if(result && result.image_url) src=result.image_url.url||result.image_url;
-    else if(result && result.message && result.message.images && result.message.images[0]) src=result.message.images[0].image_url?.url||'';
-    if(!src) throw new Error('المولد ما رجّع صورة');
-    await radarEditorAdoptSrc(src);
-    set('✅ تم التعديل على نفس الصورة — احفظي أو ارجعي للأصل');
-  }catch(e){
-    set('⚠️ '+((e&&e.message)||'فشل المولد'));
-  }
-}
-function radarEditorApplyCommand(){
-  const st=radarEditorState;
-  const box=document.getElementById('radarEdCommand');
-  const status=document.getElementById('radarEdCmdStatus');
-  const cmd=String(box?.value||'').trim();
-  if(!st){ if(status) status.textContent='⚠️ افتحي صورة أولاً'; return; }
-  if(!cmd){ if(status) status.textContent='⚠️ اكتبي أمر التعديل'; return; }
-  const raw=cmd, t=cmd.toLowerCase();
-  const done=[];
-  const {bright,contrast,saturate,color}=radarEditorEls();
-  const bump=(el,delta,min,max)=>{ if(!el) return; el.value=Math.max(min,Math.min(max, Number(el.value||100)+delta)); };
-  if(/رمادي|أبيض وأسود|ابيض واسود|black\s*and\s*white|grayscale|noir/.test(t)){ radarEditorPreset('gray'); done.push('رمادي'); }
-  if(/عكس|نفي|invert|negative/.test(t)){ radarEditorPreset('invert'); done.push('عكس ألوان'); }
-  if(/يمين|clockwise|90/.test(t) && /دور|لف|rotate/.test(t)){ radarEditorRotate(90); done.push('دوران يمين'); }
-  else if(/يسار|عكس عقارب|270|-90/.test(t) && /دور|لف|rotate/.test(t)){ radarEditorRotate(-90); done.push('دوران يسار'); }
-  else if(/180|مقلوب كامل/.test(t) && /دور|لف|rotate/.test(t)){ radarEditorRotate(180); done.push('دوران 180'); }
-  else if(/دور|لف|rotate/.test(t)){ radarEditorRotate(90); done.push('دوران'); }
-  if(/افقي|أفقي|يمين يسار|mirror|flip\s*h/.test(t) && /قلب|اقلب|뒤|flip/.test(t+' '+t)){ radarEditorFlip('h'); done.push('قلب أفقي'); }
-  if(/عمودي|رأسي|فوق تحت|flip\s*v/.test(t)){ radarEditorFlip('v'); done.push('قلب عمودي'); }
-  else if(/اقلب|قلب|mirror|flip/.test(t) && !done.includes('قلب أفقي') && !done.includes('قلب عمودي')){ radarEditorFlip('h'); done.push('قلب أفقي'); }
-  if(/سطوع|bright/.test(t)){
-    if(/قلل|خفف|أقل|اقل|dark/.test(t)) bump(bright,-30,0,300);
-    else bump(bright,35,0,300);
-    radarEditorFilter(); done.push('سطوع');
-  }
-  if(/تباين|contrast/.test(t)){
-    if(/قلل|خفف/.test(t)) bump(contrast,-30,0,300);
-    else bump(contrast,30,0,300);
-    radarEditorFilter(); done.push('تباين');
-  }
-  if(/تشبع|ألوان أقوى|الوان اقوى|satur/.test(t)){
-    if(/قلل|خفف|بدون لون/.test(t)) bump(saturate,-40,0,400);
-    else bump(saturate,50,0,400);
-    radarEditorFilter(); done.push('تشبع');
-  }
-  const write=raw.match(/(?:اكتب|كتابة|حط كلمة|نص)\s*[:：]?\s*(.+)$/i);
-  if(write){
-    const msg=write[1].replace(/^["'«]|["'»]$/g,'').trim();
-    if(msg){
-      st.strokes.push({type:'text', text:msg, x:40, y:Math.max(70, Math.round(st.h*0.08)), color:(color&&color.value)||'#2e6bff', size:Math.max(28, Math.round(st.w*0.045))});
-      radarEditorRedraw();
-      done.push('نص');
-    }
-  }
-  if(/قص الوسط|قص المنتصف|crop/.test(t)){
-    const c=document.getElementById('radarEditorCanvas');
-    const ctx=c.getContext('2d');
-    const mw=Math.round(c.width*0.8), mh=Math.round(c.height*0.8);
-    const sx=Math.round((c.width-mw)/2), sy=Math.round((c.height-mh)/2);
-    const cut=ctx.getImageData(sx,sy,mw,mh);
-    const img=new Image();
-    img.onload=()=>{
-      st.img=img; st.origW=mw; st.origH=mh; st.w=mw; st.h=mh; st.rot=0;
-      radarEditorRedraw();
-    };
-    const tmp=document.createElement('canvas'); tmp.width=mw; tmp.height=mh;
-    tmp.getContext('2d').putImageData(cut,0,0);
-    img.src=tmp.toDataURL('image/png');
-    done.push('قص الوسط');
-  }
-  if(!done.length){
-    const modelBox=document.getElementById('radarEdModelPrompt');
-    if(modelBox && !modelBox.value.trim()) modelBox.value=cmd;
-    if(status) status.textContent='↩ الأمر مش فلتر مباشر — ينرسل لنموذج الصور بدون فلترة من RADAR';
-    radarEditorApplyModel();
-    return;
-  }
-  if(status) status.textContent='✅ تم تطبيق: '+done.join(' · ');
-}
-function radarEditorReset(){
-  const st=radarEditorState;
-  if(!st) return;
-  const src=st.baseData||st.src;
-  if(!src){ return; }
-  const img=new Image();
-  img.onload=()=>{
-    const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
-    st.img=img; st.origW=ow; st.origH=oh; st.w=ow; st.h=oh;
-    st.rot=0; st.flipH=false; st.flipV=false; st.preset=''; st.strokes=[];
-    const {bright,contrast,saturate}=radarEditorEls();
-    if(bright) bright.value=100; if(contrast) contrast.value=100; if(saturate) saturate.value=100;
-    const live=document.getElementById('radarEditorLive');
-    const canvas=document.getElementById('radarEditorCanvas');
-    if(live) live.style.display='none';
-    if(canvas) canvas.style.display='block';
-    radarEditorRedraw();
-  };
-  img.src=src;
-}
-function radarEditorRecolorFromPrompt(prompt){
-  const st=radarEditorState; if(!st?.img) return false;
-  const t=String(prompt||'').toLowerCase();
-  let target=null;
-  if(/سود|اسود|أسود|black/.test(t)) target=[18,18,18];
-  else if(/ابيض|أبيض|white/.test(t)) target=[242,242,242];
-  else if(/احمر|أحمر|red/.test(t)) target=[170,28,36];
-  else if(/ازرق|أزرق|blue/.test(t)) target=[28,48,150];
-  else if(/اخضر|أخضر|green/.test(t)) target=[28,118,58];
-  else if(/بني|brown/.test(t)) target=[92,52,28];
-  if(!target || !/(لبس|لباس|ملابس|فستان|تيشيرت|قميص|لون|clothes|dress|outfit|color|لون)/.test(t)){
-    if(target && /(غير|غيّر|change|خلي)/.test(t)) {/* color change without clothes word still ok */}
-    else if(!target) return false;
-  }
-  const img=st.img, w=img.naturalWidth||st.w, h=img.naturalHeight||st.h;
-  const c=document.createElement('canvas'); c.width=w; c.height=h;
-  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0);
-  const data=ctx.getImageData(0,0,w,h), px=data.data;
-  for(let i=0;i<px.length;i+=4){
-    const r=px[i], g=px[i+1], b=px[i+2];
-    const max=Math.max(r,g,b), min=Math.min(r,g,b);
-    const l=(max+min)/2;
-    const s=max===min?0:(max-min)/(255-Math.abs(2*l-255)||1);
-    if(l<22 || l>248 || s<0.16) continue;
-    const skin=r>90 && g>40 && b>20 && r>g && r>b && (r-g)>12 && (r-g)<110 && l>65 && l<215 && s<0.58;
-    if(skin) continue;
-    const a=0.78;
-    px[i]=Math.round(r*(1-a)+target[0]*a);
-    px[i+1]=Math.round(g*(1-a)+target[1]*a);
-    px[i+2]=Math.round(b*(1-a)+target[2]*a);
-  }
-  ctx.putImageData(data,0,0);
-  const url=c.toDataURL('image/png');
-  const next=new Image();
-  next.onload=()=>{
-    st.img=next; st.origW=next.naturalWidth; st.origH=next.naturalHeight; st.w=st.origW; st.h=st.origH;
-    st.rot=0; st.flipH=false; st.flipV=false; st.preset=''; st.strokes=[];
-    const live=document.getElementById('radarEditorLive');
-    const canvas=document.getElementById('radarEditorCanvas');
-    if(live) live.style.display='none';
-    if(canvas) canvas.style.display='block';
-    radarEditorRedraw();
-  };
-  next.src=url;
-  return true;
-}
-function radarEditorBindCanvas(){
-  const {canvas,color,size}=radarEditorEls();
-  if(!canvas||canvas.dataset.bound) return;
-  canvas.dataset.bound='1';
-  const pos=e=>{
-    const r=canvas.getBoundingClientRect();
-    const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
-    const y=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
-    return {x:x*(canvas.width/r.width), y:y*(canvas.height/r.height)};
-  };
-  const start=e=>{
-    if(!radarEditorState||radarEditorState.tool!=='draw') return;
-    e.preventDefault();
-    radarEditorState.drawing=true;
-    radarEditorState.strokes.push({type:'path', color:color.value, size:Number(size.value)||6, pts:[pos(e)]});
-  };
-  const move=e=>{
-    if(!radarEditorState?.drawing) return;
-    e.preventDefault();
-    const s=radarEditorState.strokes[radarEditorState.strokes.length-1];
-    if(s&&s.type==='path'){ s.pts.push(pos(e)); radarEditorRedraw(); }
-  };
-  const end=()=>{ if(radarEditorState) radarEditorState.drawing=false; };
-  canvas.addEventListener('pointerdown',start);
-  canvas.addEventListener('pointermove',move);
-  window.addEventListener('pointerup',end);
-  canvas.addEventListener('touchstart',start,{passive:false});
-  canvas.addEventListener('touchmove',move,{passive:false});
-  window.addEventListener('touchend',end);
-}
-function radarEditorExportBlob(){
-  return new Promise(resolve=>{
-    const {canvas}=radarEditorEls();
-    canvas.toBlob(b=>resolve(b),'image/png');
-  });
-}
-async function radarEditorSave(){
-  if(!radarEditorState) return;
-  try{
-    const blob=await radarEditorExportBlob();
-    if(!blob) throw 0;
-    const url=URL.createObjectURL(blob);
-    await saveLinkToStorage(url, radarEditorState.src||url);
-    if(document.getElementById('savedLinksArea')?.classList.contains('show')) await renderSavedLinks();
-    alert('✅ انحفظت النسخة المعدّلة في 📌 صور');
-  }catch(e){ alert('⚠️ تعذر حفظ التعديل'); }
-}
-async function radarEditorDownload(){
-  if(!radarEditorState) return;
-  const blob=await radarEditorExportBlob();
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='radar-edit-'+Date.now()+'.png';
-  a.click();
-}
-
-if(!window.__radarReelSearchBound){
-  window.__radarReelSearchBound = true;
-  document.addEventListener('click', function(e){
-    const el = e.target.closest('[data-reel-q]');
-    if(!el) return;
-    e.preventDefault();
-    searchFromReel(el.getAttribute('data-reel-q'));
-  });
-}
 init();
 
-/* ===================== بيانات المنصات (فيسبوك + قابل للتوسعة لاحقًا) ===================== */
-// كل منصة جديدة = عنصر واحد بهالكائن، بدون تعديل أي كود ثاني
-const PLATFORM_DATA_PROVIDERS = {
-  facebook: {
-    label: 'فيسبوك',
-    icon: '📘',
-    color: '#1877F2',
-    // رابط Cloudflare Worker الوسيط (يخبي مفتاح Bright Data ويدير trigger/poll)
-    workerUrl: 'https://facebook-data-proxy.alihumied.workers.dev',
-    types: {
-      posts:    { label: 'منشورات',  icon: '📝' },
-      comments: { label: 'تعليقات', icon: '💬' },
-      images:   { label: 'صور',      icon: '🖼️' },
-      reels:    { label: 'ريلز',     icon: '🎬' },
-      profile:  { label: 'ملف شخصي/صفحة', icon: '👤' }
-    },
-    matches: url => /facebook\.com|fb\.watch|fb\.me/i.test(url)
-  }
-  // instagram: { label:'انستجرام', icon:'📷', color:'#E4405F', workerUrl:'...', types:{...}, matches:url=>/instagram\.com/i.test(url) },
-  // tiktok: { label:'تيك توك', icon:'🎵', color:'#000000', workerUrl:'...', types:{...}, matches:url=>/tiktok\.com/i.test(url) },
-};
-
-handleSharedLink();
 
 
-
-/* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
-let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=40,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
-// أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
-// المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
-// المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
-let SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'};
 function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&').replace(/=3D/g,'=').replace(/\s+/g,' ').trim()}
 // ترقية جودة صور X/تويتر لأعلى دقة متاحة (name=orig) — الرابط الأساسي نفسه بيضل شغّال بس بيرجّع أعلى دقة.
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
@@ -4279,7 +3768,7 @@ function radarShowIconHud(tile){
   let hud=document.getElementById('radarIconHud');
   if(!hud){
     hud=document.createElement('div');hud.id='radarIconHud';hud.className='radar-icon-hud';
-    hud.innerHTML='<span class="saved-corner-btn radar-hud-type" style="top:-7px;left:50%;background:#000b;pointer-events:none"></span><button type="button" class="saved-corner-btn radar-hud-zoom" style="top:-7px;left:-7px;background:#16233a" data-act="zoom">🔍</button><button type="button" class="saved-corner-btn saved-image-source radar-hud-open" data-act="open">▶</button><button type="button" class="saved-corner-btn saved-image-open radar-hud-save" data-act="save">💾</button><button type="button" class="saved-corner-btn radar-hud-edit" style="bottom:-7px;right:18px;background:linear-gradient(135deg,#2e6bff,#1747c9)" data-act="edit">✏️</button><button type="button" class="saved-corner-btn radar-hud-dl" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" data-act="dl">⬇</button>';
+    hud.innerHTML='<span class="saved-corner-btn radar-hud-type" style="top:-7px;left:50%;background:#000b;pointer-events:none"></span><button type="button" class="saved-corner-btn radar-hud-zoom" style="top:-7px;left:-7px;background:#16233a" data-act="zoom">🔍</button><button type="button" class="saved-corner-btn saved-image-source radar-hud-open" data-act="open">▶</button><button type="button" class="saved-corner-btn saved-image-open radar-hud-save" data-act="save">💾</button><button type="button" class="saved-corner-btn radar-hud-dl" style="bottom:-7px;left:-7px;background:linear-gradient(135deg,#2eb872,#136b3e)" data-act="dl">⬇</button>';
     hud.addEventListener('click',e=>{
       const act=e.target.closest('[data-act]')?.getAttribute('data-act');
       if(!act)return;
@@ -4290,7 +3779,6 @@ function radarShowIconHud(tile){
       if(act==='zoom'&&full)openImageZoomPage(full);
       else if(act==='open')hxOpen(id);
       else if(act==='save')hxSave(id);
-      else if(act==='edit'&&full)openRadarEditor(full, id);
       else if(act==='dl')hxDownloadById(id);
     });
   }
@@ -4610,49 +4098,9 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusEdit" type="button" class="saved-inline-focus-btn" style="color:#cfe0ff;border-color:#2e6bff88;background:#2e6bff22;cursor:pointer;" onclick="event.stopPropagation();openRadarEditor(document.getElementById('savedInlineFocusImg')?.src||'')">✏️ تعديل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 
 
-<div id="radarEditor" class="radar-editor" hidden>
-  <div class="radar-ed-shell">
-    <div class="radar-ed-bar">
-      <b>تعديل الصورة</b>
-      <div class="radar-ed-actions">
-        <button class="ok" type="button" onclick="radarEditorSave()">حفظ</button>
-        <button type="button" onclick="radarEditorDownload()">تنزيل</button>
-        <button type="button" onclick="radarEditorReset()">الأصل</button>
-        <button type="button" onclick="closeRadarEditor()">إغلاق</button>
-      </div>
-    </div>
-    <div class="radar-ed-preview"><img id="radarEditorLive" alt="" style="display:none;max-width:100%;max-height:100%;border-radius:12px"><canvas id="radarEditorCanvas"></canvas></div>
-    <div class="radar-ed-panel">
-      <label>نموذج الصور</label>
-      <select id="radarEdModelName">
-        <option value="nanobanana">NanoBanana عبر Puter — مو رصيد Grok</option>
-        <option value="nanobanana2">NanoBanana 2 عبر Puter</option>
-        <option value="kontext-hf">FLUX Kontext على HuggingFace</option>
-      </select>
-      <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
-      <div class="radar-ed-row">
-        <button class="go-btn" type="button" onclick="radarEditorApplyModel()">تشغيل النموذج</button>
-        <span id="radarEdModelStatus" class="hint"></span>
-      </div>
-    </div>
-    <div class="radar-ed-panel">
-      <label>أمر مباشر سريع</label>
-      <div class="radar-ed-row">
-        <textarea id="radarEdCommand" rows="2" placeholder="أبيض وأسود، دورها يمين، زيد السطوع..."></textarea>
-        <button class="go-btn" type="button" onclick="radarEditorApplyCommand()">تطبيق</button>
-      </div>
-      <div id="radarEdCmdStatus" class="hint"></div>
-    </div>
-    <input type="hidden" id="radarEdBright" value="100">
-    <input type="hidden" id="radarEdContrast" value="100">
-    <input type="hidden" id="radarEdSaturate" value="100">
-    <input type="hidden" id="radarEdColor" value="#2e6bff">
-    <input type="hidden" id="radarEdSize" value="6">
-  </div>
-</div>
 </body>
 
 </html>
