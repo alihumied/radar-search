@@ -194,6 +194,8 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   .radar-ed-actions button{min-height:40px;padding:8px 11px}
   .radar-ed-panel textarea{font-size:16px}
 }
+
+#radarEditorLive{max-width:100%;max-height:34vh;border-radius:12px;object-fit:contain}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -3523,11 +3525,20 @@ async function openRadarEditor(src, meta){
   radarEditorState={
     img, src, meta:meta||'', origW:ow, origH:oh, w:ow, h:oh,
     rot:0, flipH:false, flipV:false, preset:'',
-    tool:'', strokes:[], drawing:false
+    tool:'', strokes:[], drawing:false, baseData:null
   };
+  try{
+    const snap=document.createElement('canvas');
+    snap.width=ow; snap.height=oh;
+    snap.getContext('2d').drawImage(img,0,0);
+    radarEditorState.baseData=snap.toDataURL('image/png');
+  }catch(e){ radarEditorState.baseData=src; }
   if(bright) bright.value=100;
   if(contrast) contrast.value=100;
   if(saturate) saturate.value=100;
+  const live=document.getElementById('radarEditorLive');
+  if(live) live.style.display='none';
+  if(canvas) canvas.style.display='block';
   radarEditorRedraw();
   radarEditorBindCanvas();
   root.hidden=false;
@@ -3622,37 +3633,88 @@ async function radarFetchImage(api){
     return {ok:false, status:'cors'};
   }
 }
+function radarModelImageUrl(prompt, model, imageUrl){
+  let u='https://image.pollinations.ai/prompt/'+encodeURIComponent(prompt)
+    +'?model='+encodeURIComponent(model||'flux')
+    +'&nologo=true&safe=false&enhance=false&referrer=radar'
+    +'&seed='+(Date.now()%999999);
+  if(imageUrl) u+='&image='+encodeURIComponent(imageUrl);
+  return u;
+}
+function radarEditorShowLive(src){
+  const live=document.getElementById('radarEditorLive');
+  const canvas=document.getElementById('radarEditorCanvas');
+  if(live){ live.src=src; live.style.display='block'; }
+  if(canvas) canvas.style.display='none';
+}
+async function radarEditorAdoptSrc(src){
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.referrerPolicy='no-referrer';
+  await new Promise((resolve,reject)=>{ img.onload=resolve; img.onerror=reject; img.src=src; });
+  const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
+  if(!ow) throw new Error('الصورة رجعت فارغة');
+  if(!radarEditorState){
+    radarEditorState={img, src, meta:'model', origW:ow, origH:oh, w:ow, h:oh, rot:0, flipH:false, flipV:false, preset:'', tool:'', strokes:[], drawing:false};
+  } else {
+    radarEditorState.img=img; radarEditorState.src=src;
+    radarEditorState.origW=ow; radarEditorState.origH=oh; radarEditorState.w=ow; radarEditorState.h=oh;
+    radarEditorState.rot=0; radarEditorState.flipH=false; radarEditorState.flipV=false;
+    radarEditorState.preset=''; radarEditorState.strokes=[];
+  }
+  const live=document.getElementById('radarEditorLive');
+  const canvas=document.getElementById('radarEditorCanvas');
+  if(live) live.style.display='none';
+  if(canvas) canvas.style.display='block';
+  radarEditorRedraw();
+}
 async function radarEditorApplyModel(){
   const prompt=String(document.getElementById('radarEdModelPrompt')?.value||document.getElementById('radarEdCommand')?.value||'').trim();
   const chosen=document.getElementById('radarEdModelName')?.value||'flux';
   const status=document.getElementById('radarEdModelStatus');
   const set=t=>{ if(status) status.textContent=t; };
-  if(!prompt){ set('⚠️ اكتبي وصف التعديل في خانة نموذج الصور'); return; }
-  if(!radarEditorState){ set('⚠️ افتحي صورة أولاً'); return; }
+  if(!prompt){ set('⚠️ اكتبي الأمر أولاً'); return; }
+  if(radarEditorState && radarEditorRecolorFromPrompt(prompt)){
+    set('✅ تغيّر اللون على نفس الصورة — اضغطي الأصل للرجوع');
+    return;
+  }
+  if(radarEditorState && chosen!=='generate'){
+    set('⚠️ هذا الأمر يحتاج إعادة تلوين واضح مثل: غير اللباس للأسود. Flux رح يستبدل الصورة كاملة لذلك ما شغّلته.');
+    return;
+  }
   try{
-    set('⏳ رفع الصورة لمصدر عام...');
     let publicUrl='';
     const src=radarEditorState?.src||'';
     if(/^https?:/i.test(src) && !src.includes('blob:') && !src.startsWith('data:')) publicUrl=src;
-    else {
-      const blob=await radarEditorCanvasBlob();
-      if(!blob) throw new Error('تعذر قراءة الصورة');
-      publicUrl=await radarEditorHostImage(blob);
+    else if(radarEditorState){
+      try{
+        const blob=await radarEditorCanvasBlob();
+        if(blob) publicUrl=await radarEditorHostImage(blob);
+      }catch(e){ publicUrl=''; }
     }
-    const editPrompt='Edit this photo only. Keep the same person and pose. Request: '+prompt;
-    const models=[chosen,'flux','turbo','kontext','nanobanana','seedream'].filter((m,i,a)=>a.indexOf(m)===i);
-    let out=null, used='', notes=[];
+    const models=[chosen,'flux','turbo'].filter((m,i,a)=>a.indexOf(m)===i);
+    let ok=false, used='', lastErr='';
     for(const model of models){
-      set('⏳ تجربة '+model+'...');
-      const api='https://image.pollinations.ai/prompt/'+encodeURIComponent(editPrompt)
-        +'?nologo=true&enhance=false&safe=false&model='+encodeURIComponent(model)
-        +'&image='+encodeURIComponent(publicUrl)
-        +'&seed='+(Date.now()%999999);
-      const got=await radarFetchImage(api);
-      if(got.ok){ out=got.blob; used=model; break; }
-      notes.push(model+' '+(got.status||'فشل'));
+      const api=radarModelImageUrl(prompt, model, publicUrl);
+      set('⏳ جارٍ جلب الصورة من '+model+'...');
+      radarEditorShowLive(api);
+      try{
+        const got=await radarFetchImage(api);
+        if(got.ok){
+          const blobUrl=URL.createObjectURL(got.blob);
+          await radarEditorAdoptSrc(blobUrl);
+          used=model; ok=true; break;
+        }
+        lastErr=String(got.status||'');
+        await radarEditorAdoptSrc(api);
+        used=model; ok=true; break;
+      }catch(e){ lastErr=(e&&e.message)||lastErr||'فشل'; }
     }
-    if(!out) throw new Error('النماذج الآن: '+notes.join(' · ')+'. Kontext/NanoBanana غالباً مقفولة بدون مفتاح. Flux اشتغل سابقاً إذا ما كان في حد طلبات.');
+    if(!ok) throw new Error('ما انجلبت صورة ('+lastErr+') — جرّبي Flux بعد نصف دقيقة');
+    set('✅ انجلبت الصورة عبر '+used+' — احفظيها إذا عجبتك');
+    return;
+    let out=null;
+    if(!out) throw new Error('skip');
     const url=URL.createObjectURL(out);
     set('✅ تم عبر '+used);
     const img=new Image();
@@ -3744,14 +3806,70 @@ function radarEditorApplyCommand(){
   if(status) status.textContent='✅ تم تطبيق: '+done.join(' · ');
 }
 function radarEditorReset(){
-  if(!radarEditorState) return;
-  radarEditorState.rot=0; radarEditorState.flipH=false; radarEditorState.flipV=false;
-  radarEditorState.preset=''; radarEditorState.strokes=[];
-  radarEditorState.w=radarEditorState.origW;
-  radarEditorState.h=radarEditorState.origH;
-  const {bright,contrast,saturate}=radarEditorEls();
-  if(bright) bright.value=100; if(contrast) contrast.value=100; if(saturate) saturate.value=100;
-  radarEditorRedraw();
+  const st=radarEditorState;
+  if(!st) return;
+  const src=st.baseData||st.src;
+  if(!src){ return; }
+  const img=new Image();
+  img.onload=()=>{
+    const ow=img.naturalWidth||img.width, oh=img.naturalHeight||img.height;
+    st.img=img; st.origW=ow; st.origH=oh; st.w=ow; st.h=oh;
+    st.rot=0; st.flipH=false; st.flipV=false; st.preset=''; st.strokes=[];
+    const {bright,contrast,saturate}=radarEditorEls();
+    if(bright) bright.value=100; if(contrast) contrast.value=100; if(saturate) saturate.value=100;
+    const live=document.getElementById('radarEditorLive');
+    const canvas=document.getElementById('radarEditorCanvas');
+    if(live) live.style.display='none';
+    if(canvas) canvas.style.display='block';
+    radarEditorRedraw();
+  };
+  img.src=src;
+}
+function radarEditorRecolorFromPrompt(prompt){
+  const st=radarEditorState; if(!st?.img) return false;
+  const t=String(prompt||'').toLowerCase();
+  let target=null;
+  if(/سود|اسود|أسود|black/.test(t)) target=[18,18,18];
+  else if(/ابيض|أبيض|white/.test(t)) target=[242,242,242];
+  else if(/احمر|أحمر|red/.test(t)) target=[170,28,36];
+  else if(/ازرق|أزرق|blue/.test(t)) target=[28,48,150];
+  else if(/اخضر|أخضر|green/.test(t)) target=[28,118,58];
+  else if(/بني|brown/.test(t)) target=[92,52,28];
+  if(!target || !/(لبس|لباس|ملابس|فستان|تيشيرت|قميص|لون|clothes|dress|outfit|color|لون)/.test(t)){
+    if(target && /(غير|غيّر|change|خلي)/.test(t)) {/* color change without clothes word still ok */}
+    else if(!target) return false;
+  }
+  const img=st.img, w=img.naturalWidth||st.w, h=img.naturalHeight||st.h;
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0);
+  const data=ctx.getImageData(0,0,w,h), px=data.data;
+  for(let i=0;i<px.length;i+=4){
+    const r=px[i], g=px[i+1], b=px[i+2];
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    const l=(max+min)/2;
+    const s=max===min?0:(max-min)/(255-Math.abs(2*l-255)||1);
+    if(l<22 || l>248 || s<0.16) continue;
+    const skin=r>90 && g>40 && b>20 && r>g && r>b && (r-g)>12 && (r-g)<110 && l>65 && l<215 && s<0.58;
+    if(skin) continue;
+    const a=0.78;
+    px[i]=Math.round(r*(1-a)+target[0]*a);
+    px[i+1]=Math.round(g*(1-a)+target[1]*a);
+    px[i+2]=Math.round(b*(1-a)+target[2]*a);
+  }
+  ctx.putImageData(data,0,0);
+  const url=c.toDataURL('image/png');
+  const next=new Image();
+  next.onload=()=>{
+    st.img=next; st.origW=next.naturalWidth; st.origH=next.naturalHeight; st.w=st.origW; st.h=st.origH;
+    st.rot=0; st.flipH=false; st.flipV=false; st.preset=''; st.strokes=[];
+    const live=document.getElementById('radarEditorLive');
+    const canvas=document.getElementById('radarEditorCanvas');
+    if(live) live.style.display='none';
+    if(canvas) canvas.style.display='block';
+    radarEditorRedraw();
+  };
+  next.src=url;
+  return true;
 }
 function radarEditorBindCanvas(){
   const {canvas,color,size}=radarEditorEls();
@@ -4522,15 +4640,12 @@ window.addEventListener('message',async event=>{
         <button type="button" onclick="closeRadarEditor()">إغلاق</button>
       </div>
     </div>
-    <div class="radar-ed-preview"><canvas id="radarEditorCanvas"></canvas></div>
+    <div class="radar-ed-preview"><img id="radarEditorLive" alt="" style="display:none;max-width:100%;max-height:100%;border-radius:12px"><canvas id="radarEditorCanvas"></canvas></div>
     <div class="radar-ed-panel">
       <label>نموذج الصور</label>
       <select id="radarEdModelName">
-        <option value="flux" selected>Flux — يعمل بدون مفتاح</option>
-        <option value="turbo">Turbo — سريع</option>
-        <option value="kontext">Kontext — قد يتطلب مفتاح</option>
-        <option value="nanobanana">NanoBanana — قد يتطلب مفتاح</option>
-        <option value="seedream">Seedream — قد يتطلب مفتاح</option>
+        <option value="flux" selected>تعديل اللون على نفس الصورة</option>
+        <option value="generate">توليد صورة جديدة (يستبدل الصورة)</option>
       </select>
       <textarea id="radarEdModelPrompt" rows="3" placeholder="اكتبي وصف التعديل هنا..."></textarea>
       <div class="radar-ed-row">
