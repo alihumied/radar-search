@@ -3220,7 +3220,7 @@ async function radarOpenReverseSearch(engine, ev){
     if(engine==='yandex'){
       radarSubmitEngineForm('https://yandex.com/images/search?rpt=imageview', 'upfile', file, {prg:'1'});
     }else{
-      radarSubmitEngineForm('https://www.google.com/searchbyimage/upload', 'encoded_image', file, {image_url:'', sbisrc:'cr_1_5_2'});
+      radarSubmitEngineForm('https://lens.google.com/v3/upload?ep=ccm&s=&st='+Date.now(), 'encoded_image', file, {processed_image_dimensions:'1000,1000'});
     }
   }catch(err){
     alert('تعذّر فتح البحث: '+(err&&err.message?err.message:err));
