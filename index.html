@@ -1407,8 +1407,8 @@ async function runImageSearch(){
     <div class="result-card extracted-preview-card" style="margin-bottom:14px;flex-direction:column;align-items:center;gap:12px;">
       <div class="saved-inline-focus-actions" style="position:static;transform:none;opacity:1;visibility:visible;pointer-events:auto;display:flex;">
         <button type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveCurrentExtractedImage()">💾 حفظ</button>
-        <a class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" href="https://yandex.com/images/search?rpt=imageview&url=${encoded}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a>
-        <a class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a>
+        <a class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" href="#" onclick="event.preventDefault();currentExtractedImage&&openInlineSavedFocus((document.getElementById('extractedThumb')||{}).src,(document.getElementById('extractedThumb')||{}).src,currentExtractedImage.imageUrl);radarOpenReverseSearch('yandex',event)">🔍 ياندكس</a>
+        <a class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" href="#" onclick="event.preventDefault();currentExtractedImage&&openInlineSavedFocus((document.getElementById('extractedThumb')||{}).src,(document.getElementById('extractedThumb')||{}).src,currentExtractedImage.imageUrl);radarOpenReverseSearch('google',event)">🔍 جوجل</a>
       </div>
       <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
         <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; cursor:pointer; -webkit-user-select:none; user-select:none;" onclick="openInlineSavedFocus(this.src,this.src,'${String(imageUrl).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" onerror="this.style.display='none'">
@@ -3082,28 +3082,109 @@ function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.set
 function radarPublicImageUrl(){
   for(const raw of arguments){
     const u=String(raw||'').trim();
-    if(/^https?:\/\//i.test(u) && !/^blob:/i.test(u) && !/^data:/i.test(u)) return u;
+    if(/^https?:\/\//i.test(u) && !/^blob:/i.test(u) && !/^data:/i.test(u) && !/vt\.tiktok\.com|vm\.tiktok\.com/i.test(u)) return u;
   }
   return '';
 }
+function radarYandexSearchHref(imageUrl){
+  return `https://yandex.com/images/search?rpt=imageview&url=${encodeURIComponent(imageUrl)}`;
+}
+function radarGoogleSearchHref(imageUrl){
+  return `https://www.google.com/searchbyimage?sbisrc=cr_1_5_2&image_url=${encodeURIComponent(imageUrl)}`;
+}
+async function radarBlobFromSrc(src){
+  if(!src) return null;
+  try{
+    const r=await fetch(src);
+    if(r.ok){
+      const b=await r.blob();
+      if(b && b.size) return b;
+    }
+  }catch(e){}
+  try{
+    const img=document.getElementById('savedInlineFocusImg');
+    if(!img || !img.naturalWidth) return null;
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    return await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',0.9));
+  }catch(e){ return null; }
+}
+async function radarUploadPublicImage(blob){
+  if(!blob) return '';
+  const file=blob.type&&blob.type.startsWith('image/')?blob:new Blob([blob],{type:'image/jpeg'});
+  try{
+    const fd=new FormData();
+    fd.append('image', file, 'radar.jpg');
+    const r=await fetchWithTimeout('https://api.imgur.com/3/image', 14000, {method:'POST', headers:{Authorization:'Client-ID 546c25a59c58ad7'}, body:fd});
+    const d=await r.json();
+    if(d && d.data && d.data.link) return d.data.link;
+  }catch(e){}
+  try{
+    const fd=new FormData();
+    fd.append('file', file, 'radar.jpg');
+    const r=await fetchWithTimeout('https://tmpfiles.org/api/v1/upload', 14000, {method:'POST', body:fd});
+    const d=await r.json();
+    const u=d && d.data && d.data.url;
+    if(u) return String(u).replace('tmpfiles.org/','tmpfiles.org/dl/');
+  }catch(e){}
+  try{
+    const fd=new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', file, 'radar.jpg');
+    const r=await fetchWithTimeout('https://litterbox.catbox.moe/resources/internals/api.php', 14000, {method:'POST', body:fd});
+    const t=(await r.text()).trim();
+    if(/^https?:\/\//i.test(t)) return t;
+  }catch(e){}
+  return '';
+}
+async function radarResolveSearchImageUrl(preferred){
+  const img=document.getElementById('savedInlineFocusImg');
+  const overlay=document.getElementById('savedInlineFocus');
+  const direct=radarPublicImageUrl(
+    preferred,
+    overlay && overlay.dataset.searchUrl,
+    img && img.dataset.searchUrl,
+    img && img.src,
+    currentExtractedImage && currentExtractedImage.imageUrl
+  );
+  if(direct) return direct;
+  const blob=await radarBlobFromSrc((img&&(img.currentSrc||img.src))||preferred||'');
+  return await radarUploadPublicImage(blob);
+}
+async function radarOpenReverseSearch(engine, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
+  const old=btn?btn.textContent:'';
+  if(btn) btn.textContent='⏳ جارٍ النقل...';
+  try{
+    const imageUrl=await radarResolveSearchImageUrl();
+    if(!imageUrl){
+      alert('ما قدرنا نجهّز رابط الصورة للمحرك. جرّبي حفظ الصورة أولاً أو ارفعيها يدويًا.');
+      window.open(engine==='google'?'https://lens.google.com/':'https://yandex.com/images/search?rpt=imageview','_blank','noopener');
+      return;
+    }
+    window.open(engine==='google'?radarGoogleSearchHref(imageUrl):radarYandexSearchHref(imageUrl),'_blank','noopener');
+  }catch(err){
+    alert('تعذّر فتح البحث العكسي: '+(err&&err.message?err.message:err));
+  }finally{
+    if(btn) btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');
+  }
+}
 function radarBindFocusSearchButtons(searchUrl){
+  const overlay=document.getElementById('savedInlineFocus');
+  const img=document.getElementById('savedInlineFocusImg');
   const yandexBtn=document.getElementById('savedInlineFocusYandex');
   const googleBtn=document.getElementById('savedInlineFocusGoogle');
+  if(overlay) overlay.dataset.searchUrl=searchUrl||'';
+  if(img) img.dataset.searchUrl=searchUrl||'';
   if(!yandexBtn||!googleBtn)return;
   yandexBtn.style.display='';
   googleBtn.style.display='';
-  if(searchUrl){
-    const encoded=encodeURIComponent(searchUrl);
-    yandexBtn.href=`https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
-    googleBtn.href=`https://lens.google.com/uploadbyurl?url=${encoded}`;
-    yandexBtn.title='بحث عكسي في ياندكس بالصورة';
-    googleBtn.title='بحث عكسي في جوجل بالصورة';
-  }else{
-    yandexBtn.href='https://yandex.com/images/search?rpt=imageview';
-    googleBtn.href='https://lens.google.com/';
-    yandexBtn.title='افتحي ياندكس وارفعي الصورة يدويًا';
-    googleBtn.title='افتحي عدسة جوجل وارفعي الصورة يدويًا';
-  }
+  yandexBtn.href='#';
+  googleBtn.href='#';
+  yandexBtn.title='بحث عكسي في ياندكس بالصورة';
+  googleBtn.title='بحث عكسي في جوجل بالصورة';
 }
 function openInlineSavedFocus(src, preview, searchUrl){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
@@ -3854,7 +3935,7 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="#" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" onclick="radarOpenReverseSearch('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="#" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" onclick="radarOpenReverseSearch('google',event)">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 </body>
 
 </html>
