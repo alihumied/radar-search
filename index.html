@@ -3205,27 +3205,82 @@ function radarSubmitEngineForm(action, fieldName, file, extraFields){
 }
 async function radarOpenReverseSearch(engine, ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const old=btn?btn.textContent:'';
-  if(btn) btn.textContent='⏳';
+
+  const btn = engine === 'google'
+    ? document.getElementById('savedInlineFocusGoogle')
+    : document.getElementById('savedInlineFocusYandex');
+  const oldText = btn ? btn.textContent : '';
+
+  if(btn){
+    btn.textContent = '⏳';
+    btn.style.pointerEvents = 'none';
+  }
+
   try{
-    const blob=await radarGetSearchBlob();
-    if(!blob){
-      alert('ما قدرنا نقرأ الصورة من المعاينة. احفظيها أولاً من زر حفظ بعدين افتحيها من 📌 صور وجرّبي البحث.');
+    const overlay = document.getElementById('savedInlineFocus');
+    const overlayImg = document.getElementById('savedInlineFocusImg');
+    const publicUrl = radarPublicImageUrl(
+      overlay && overlay.dataset.searchUrl,
+      overlayImg && overlayImg.dataset.searchUrl,
+      currentExtractedImage && currentExtractedImage.imageUrl
+    );
+
+    // إذا كانت الصورة على رابط عام، ابحث بها مباشرة دون POST داخلي.
+    if(publicUrl){
+      const targetUrl = engine === 'google'
+        ? 'https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(publicUrl)
+        : 'https://yandex.com/images/search?rpt=imageview&url=' + encodeURIComponent(publicUrl);
+      const win = window.open(targetUrl, '_blank');
+      if(!win) alert('اسمح بالنوافذ المنبثقة لتشغيل البحث العكسي.');
       return;
     }
-    const ext=radarImageExt(blob, (document.getElementById('savedInlineFocusImg')||{}).src);
-    const mime=blob.type&&blob.type.startsWith('image/')?blob.type:(ext==='png'?'image/png':'image/jpeg');
-    const file=new File([blob], `radar-search.${ext}`, {type:mime});
-    if(engine==='yandex'){
-      radarSubmitEngineForm('https://yandex.com/images/search?rpt=imageview', 'upfile', file, {prg:'1'});
-    }else{
-      radarSubmitEngineForm('https://lens.google.com/v3/upload?ep=ccm&s=&st='+Date.now(), 'encoded_image', file, {processed_image_dimensions:'1000,1000'});
+
+    // للصور المحلية: تنزيل نسخة ثم فتح المحرك لاختيارها من التنزيلات.
+    const blob = await radarGetSearchBlob();
+    if(!blob){
+      alert('ما قدرنا نقرأ الصورة. احفظ الصورة داخل معرض "📌 صور" ثم افتحها وجرّب مرة ثانية.');
+      return;
     }
+
+    const previewSrc = (overlayImg && (overlayImg.currentSrc || overlayImg.src)) || '';
+    const ext = radarImageExt(blob, previewSrc);
+    const mime = blob.type && blob.type.startsWith('image/')
+      ? blob.type
+      : (ext === 'png' ? 'image/png' : 'image/jpeg');
+    const cleanBlob = blob.type === mime ? blob : new Blob([blob], {type:mime});
+    const objectUrl = URL.createObjectURL(cleanBlob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `radar-reverse-search-${Date.now()}.${ext}`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+
+    const engineHome = engine === 'google'
+      ? 'https://lens.google.com/'
+      : 'https://yandex.com/images/';
+    const win = window.open(engineHome, '_blank');
+    if(!win){
+      alert('تم تنزيل الصورة. اسمح بالنوافذ المنبثقة، ثم افتح المحرك واختر الصورة من التنزيلات.');
+      return;
+    }
+
+    setTimeout(() => {
+      alert(engine === 'google'
+        ? 'تم تنزيل الصورة. داخل Google Lens اختر آخر صورة من التنزيلات.'
+        : 'تم تنزيل الصورة. داخل ياندكس اضغط أيقونة الكاميرا واختر آخر صورة من التنزيلات.');
+    }, 500);
   }catch(err){
-    alert('تعذّر فتح البحث: '+(err&&err.message?err.message:err));
+    alert('تعذّر تشغيل البحث العكسي: ' + (err && err.message ? err.message : String(err)));
   }finally{
-    if(btn) setTimeout(()=>{btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');}, 600);
+    if(btn){
+      setTimeout(() => {
+        btn.textContent = oldText || (engine === 'google' ? '🔍 جوجل' : '🔍 ياندكس');
+        btn.style.pointerEvents = '';
+      }, 600);
+    }
   }
 }
 
