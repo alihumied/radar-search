@@ -1404,9 +1404,14 @@ async function runImageSearch(){
   }
 
   cards.innerHTML = embedHtml + `
-    <div class="result-card extracted-preview-card" style="margin-bottom:14px;">
+    <div class="result-card extracted-preview-card" style="margin-bottom:14px;flex-direction:column;align-items:center;gap:12px;">
+      <div class="saved-inline-focus-actions" style="position:static;transform:none;opacity:1;visibility:visible;pointer-events:auto;display:flex;">
+        <button type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveCurrentExtractedImage()">💾 حفظ</button>
+        <a class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" href="https://yandex.com/images/search?rpt=imageview&url=${encoded}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 ياندكس</a>
+        <a class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 جوجل</a>
+      </div>
       <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
-        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
+        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; cursor:pointer; -webkit-user-select:none; user-select:none;" onclick="openInlineSavedFocus(this.src,this.src,'${String(imageUrl).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" onerror="this.style.display='none'">
       </div>
     </div>
   ` + engines.map(eng => `
@@ -1616,7 +1621,7 @@ async function idbAddImage(imageUrl, sourceUrl){
       if(dup) store.delete(dup.id);
       // لو نجح تحميل الـBlob، منخزّنه هو (الصورة محفوظة جوا الجهاز فعليًا، تضل موجودة حتى لو
       // الرابط الأصلي مات لاحقًا). لو فشل، منخزّن الرابط النصي بس (السلوك القديم كخطة بديلة).
-      store.add({imageUrl: blob?null:imageUrl, blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
+      store.add({imageUrl: (/^https?:\/\//i.test(imageUrl||'')?imageUrl:(blob?null:imageUrl)), blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -1672,7 +1677,7 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile" data-search="${esc((x.imageUrl&&/^https?:/.test(x.imageUrl)?x.imageUrl:x.sourceUrl)||'')}"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
   attachSavedZoom();
 }
 const RADAR_ZIP_MAX_ARCHIVES=5;
@@ -3035,7 +3040,7 @@ function attachSavedZoom(){
     if(moved){ moved=false; activeImg=null; return; }
     activeImg=null;
     const tile = img.closest('.saved-image-tile');
-    if(radarSelectTile(tile)) openInlineSavedFocus(img.currentSrc||img.src);
+    if(radarSelectTile(tile)) openInlineSavedFocus(img.currentSrc||img.src, img.currentSrc||img.src, tile.getAttribute('data-search')||'');
   });
   list.addEventListener('contextmenu', e=>{ if(e.target.closest('.saved-image-thumb')) e.preventDefault(); });
 }
@@ -3074,7 +3079,33 @@ window.saveFallbackLinkDirect=function(button){
 function toggleSavedUrlsView(){const a=document.getElementById('savedUrlsArea');const isShown=a.classList.contains('show');closeOtherGalleries('savedUrlsArea');if(isShown){a.classList.remove('show');return}renderSavedUrls();a.classList.add('show')}
 function renderSavedUrls(items){const l=document.getElementById('savedUrlsList'),a=Array.isArray(items)?items:getSavedUrls();l.innerHTML=a.length?a.map((u,i)=>`<div class="result-card saved-url-card"><span class="red-pin">📌</span><a class="saved-url-open" href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a><button class="saved-url-delete" onclick="removeSavedUrl(${i})">×</button></div>`).join(''):'<div class="hint">لا توجد روابط محفوظة بعد.</div>'}
 function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.setItem(SAVED_URLS_KEY,JSON.stringify(a));renderSavedUrls()}
-function openInlineSavedFocus(src, preview){
+function radarPublicImageUrl(){
+  for(const raw of arguments){
+    const u=String(raw||'').trim();
+    if(/^https?:\/\//i.test(u) && !/^blob:/i.test(u) && !/^data:/i.test(u)) return u;
+  }
+  return '';
+}
+function radarBindFocusSearchButtons(searchUrl){
+  const yandexBtn=document.getElementById('savedInlineFocusYandex');
+  const googleBtn=document.getElementById('savedInlineFocusGoogle');
+  if(!yandexBtn||!googleBtn)return;
+  yandexBtn.style.display='';
+  googleBtn.style.display='';
+  if(searchUrl){
+    const encoded=encodeURIComponent(searchUrl);
+    yandexBtn.href=`https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
+    googleBtn.href=`https://lens.google.com/uploadbyurl?url=${encoded}`;
+    yandexBtn.title='بحث عكسي في ياندكس بالصورة';
+    googleBtn.title='بحث عكسي في جوجل بالصورة';
+  }else{
+    yandexBtn.href='https://yandex.com/images/search?rpt=imageview';
+    googleBtn.href='https://lens.google.com/';
+    yandexBtn.title='افتحي ياندكس وارفعي الصورة يدويًا';
+    googleBtn.title='افتحي عدسة جوجل وارفعي الصورة يدويًا';
+  }
+}
+function openInlineSavedFocus(src, preview, searchUrl){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
   if(!l||!p)return;
   const full=String(src||preview||'');
@@ -3091,19 +3122,7 @@ function openInlineSavedFocus(src, preview){
       hi.src=full;
     }
   }
-  const isRemote = /^https?:\/\//i.test(full||quick);
-  const yandexBtn = document.getElementById('savedInlineFocusYandex');
-  const googleBtn = document.getElementById('savedInlineFocusGoogle');
-  if(isRemote){
-    const encoded = encodeURIComponent(full||quick);
-    yandexBtn.href = `https://yandex.com/images/search?rpt=imageview&url=${encoded}`;
-    googleBtn.href = `https://lens.google.com/uploadbyurl?url=${encoded}`;
-    yandexBtn.style.display = '';
-    googleBtn.style.display = '';
-  }else{
-    yandexBtn.style.display = 'none';
-    googleBtn.style.display = 'none';
-  }
+  radarBindFocusSearchButtons(radarPublicImageUrl(searchUrl, full, quick, currentExtractedImage&&currentExtractedImage.imageUrl));
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
   l.classList.remove('show');
   requestAnimationFrame(()=>l.classList.add('show'));
