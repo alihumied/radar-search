@@ -3205,33 +3205,82 @@ function radarSubmitEngineForm(action, fieldName, file, extraFields){
 }
 async function radarOpenReverseSearch(engine, ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const old=btn?btn.textContent:'';
-  if(btn){btn.textContent='⏳';btn.style.pointerEvents='none';}
+
+  const btn = engine === 'google'
+    ? document.getElementById('savedInlineFocusGoogle')
+    : document.getElementById('savedInlineFocusYandex');
+  const oldText = btn ? btn.textContent : '';
+
+  if(btn){
+    btn.textContent = '⏳';
+    btn.style.pointerEvents = 'none';
+  }
+
   try{
-    const overlay=document.getElementById('savedInlineFocus');
-    const overlayImg=document.getElementById('savedInlineFocusImg');
-    const extracted=document.getElementById('extractedThumb');
-    const publicUrl=radarPublicImageUrl(
-      overlay&&overlay.dataset.searchUrl,
-      overlayImg&&overlayImg.dataset.searchUrl,
-      currentExtractedImage&&currentExtractedImage.imageUrl,
-      overlayImg&&(overlayImg.currentSrc||overlayImg.src),
-      extracted&&(extracted.currentSrc||extracted.src)
+    const overlay = document.getElementById('savedInlineFocus');
+    const overlayImg = document.getElementById('savedInlineFocusImg');
+    const publicUrl = radarPublicImageUrl(
+      overlay && overlay.dataset.searchUrl,
+      overlayImg && overlayImg.dataset.searchUrl,
+      currentExtractedImage && currentExtractedImage.imageUrl
     );
-    if(!publicUrl){
-      alert('هذه الصورة محفوظة داخل الجهاز فقط ولا تملك رابط صورة عامًا يصل إليه محرك البحث. البحث المباشر يعمل للصور المستخرجة من رابط عام وصور الملفات المستوردة.');
+
+    // إذا كانت الصورة على رابط عام، ابحث بها مباشرة دون POST داخلي.
+    if(publicUrl){
+      const targetUrl = engine === 'google'
+        ? 'https://lens.google.com/uploadbyurl?url=' + encodeURIComponent(publicUrl)
+        : 'https://yandex.com/images/search?rpt=imageview&url=' + encodeURIComponent(publicUrl);
+      const win = window.open(targetUrl, '_blank');
+      if(!win) alert('اسمح بالنوافذ المنبثقة لتشغيل البحث العكسي.');
       return;
     }
-    const target=engine==='google'
-      ? 'https://lens.google.com/uploadbyurl?url='+encodeURIComponent(publicUrl)
-      : 'https://yandex.com/images/search?rpt=imageview&url='+encodeURIComponent(publicUrl);
-    const win=window.open(target,'_blank','noopener');
-    if(!win) alert('اسمح بالنوافذ المنبثقة ثم اضغط زر البحث مرة ثانية.');
+
+    // للصور المحلية: تنزيل نسخة ثم فتح المحرك لاختيارها من التنزيلات.
+    const blob = await radarGetSearchBlob();
+    if(!blob){
+      alert('ما قدرنا نقرأ الصورة. احفظ الصورة داخل معرض "📌 صور" ثم افتحها وجرّب مرة ثانية.');
+      return;
+    }
+
+    const previewSrc = (overlayImg && (overlayImg.currentSrc || overlayImg.src)) || '';
+    const ext = radarImageExt(blob, previewSrc);
+    const mime = blob.type && blob.type.startsWith('image/')
+      ? blob.type
+      : (ext === 'png' ? 'image/png' : 'image/jpeg');
+    const cleanBlob = blob.type === mime ? blob : new Blob([blob], {type:mime});
+    const objectUrl = URL.createObjectURL(cleanBlob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `radar-reverse-search-${Date.now()}.${ext}`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+
+    const engineHome = engine === 'google'
+      ? 'https://lens.google.com/'
+      : 'https://yandex.com/images/';
+    const win = window.open(engineHome, '_blank');
+    if(!win){
+      alert('تم تنزيل الصورة. اسمح بالنوافذ المنبثقة، ثم افتح المحرك واختر الصورة من التنزيلات.');
+      return;
+    }
+
+    setTimeout(() => {
+      alert(engine === 'google'
+        ? 'تم تنزيل الصورة. داخل Google Lens اختر آخر صورة من التنزيلات.'
+        : 'تم تنزيل الصورة. داخل ياندكس اضغط أيقونة الكاميرا واختر آخر صورة من التنزيلات.');
+    }, 500);
   }catch(err){
-    alert('تعذّر فتح البحث: '+(err&&err.message?err.message:err));
+    alert('تعذّر تشغيل البحث العكسي: ' + (err && err.message ? err.message : String(err)));
   }finally{
-    if(btn)setTimeout(()=>{btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');btn.style.pointerEvents='';},600);
+    if(btn){
+      setTimeout(() => {
+        btn.textContent = oldText || (engine === 'google' ? '🔍 جوجل' : '🔍 ياندكس');
+        btn.style.pointerEvents = '';
+      }, 600);
+    }
   }
 }
 
@@ -3656,7 +3705,7 @@ function radarShowIconHud(tile){
   hud.querySelector('.radar-hud-dl').hidden=tile.getAttribute('data-candl')!=='1';
   tile.appendChild(hud);
 }
-function hxSelect(e,tile){e.stopPropagation();if(!tile)return;const was=radarSelectTile(tile);const full=tile.getAttribute('data-full')||'';const thumb=tile.querySelector('.saved-image-thumb');const preview=(thumb&&(thumb.currentSrc||thumb.src))||'';if(was){if(full||preview)openInlineSavedFocus(full||preview,preview,full||preview);return}if(tile.closest('#htmlImportResultsList'))radarShowIconHud(tile)}
+function hxSelect(e,tile){e.stopPropagation();if(!tile)return;const was=radarSelectTile(tile);const full=tile.getAttribute('data-full')||'';const thumb=tile.querySelector('.saved-image-thumb');const preview=(thumb&&(thumb.currentSrc||thumb.src))||'';if(was){if(full||preview)openInlineSavedFocus(full||preview,preview);return}if(tile.closest('#htmlImportResultsList'))radarShowIconHud(tile)}
 if(!window.__radarIconDismissBound){window.__radarIconDismissBound=true;document.addEventListener('click',e=>{if(e.target.closest('.saved-image-tile,.radar-icon-hud'))return;radarClearTileSelection()})}
 if(!window.__radarHxGridBound){window.__radarHxGridBound=true;const hxList=document.getElementById('htmlImportResultsList');if(hxList)hxList.addEventListener('click',e=>{if(e.target.closest('[data-act],.radar-video-convert-action'))return;const tile=e.target.closest('.saved-image-tile');if(!tile||!hxList.contains(tile))return;hxSelect(e,tile)})}
 function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram\.com\/(p|reel|tv)\/([\w.-]+)/)))return`https://www.instagram.com/${m[1]}/${m[2]}/embed/captioned/`;if(HXplatform==='facebook')return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(x.url)+'&show_text=false&width=500';if(HXplatform==='youtube'&&(m=x.url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]+)/)))return'https://www.youtube.com/embed/'+m[1];if(HXplatform==='tiktok'&&(m=x.url.match(/video\/(\d+)/)))return'https://www.tiktok.com/player/v1/'+m[1];if(HXplatform==='telegram')return x.url+'?embed=1';if(HXplatform==='x')return'https://twitframe.com/show?url='+encodeURIComponent(x.url);return x.url}
