@@ -169,6 +169,25 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     #htmlImportResultsList .hx-grid .saved-image-thumb{width:100%!important;height:100%!important;}
     #htmlImportResultsList .hx-grid .saved-corner-btn{z-index:12!important;}
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -178,13 +197,13 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
   <header>
     <div class="brand">
       <div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="#fff"/></svg></div>
-      <div><h1>RADAR</h1><p>Deep Cross-Platform Search</p></div>
+      <div><h1>RADAR</h1><p>OSINT · Reels · Stories · X Deep Fetch</p></div>
     </div>
     <div class="theme-actions"><button class="theme-btn" id="themeBtn" onclick="toggleAppTheme()" title="تغيير الثيم: أزرق أو أبيض" aria-label="تغيير ثيم التطبيق"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 18V4a8 8 0 0 1 0 16Z"/></svg></button><div class="status"><span class="dot"></span> SafeSearch: متوقف دائماً</div></div>
   </header>
 
   <div class="core">
-    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي</h2></div>
+    <div class="section-title" style="margin:0 0 12px;"><h2>🔍 البحث العكسي · بدون مسح المحفوظات</h2></div>
 
     <div class="hint" style="margin-top:0; margin-bottom:8px;">عندك رابط فيديو/صورة؟</div>
     <div class="search-row" style="z-index:1;">
@@ -411,7 +430,7 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div id="resultCards"></div>
   </div>
 
-  <footer>RADAR — بحث موجّه نحو الروابط العامة للمنصات · لا يقوم بأي تجاوز لخصوصية أو اختراق حسابات</footer>
+  <footer>RADAR 2026 — بحث عام عبر المنصات · ريلز/ستوري/منشورات · جلب X العميق · لا يتجاوز الخصوصية</footer>
 </div>
 
 <script>
@@ -1052,15 +1071,36 @@ function googleUrl(q, type, opts){
   if(tbs.length) params.set('tbs', tbs.join(','));
   return `https://www.google.com/search?${params.toString()}`;
 }
-function facebookUrl(q){ return `https://www.facebook.com/search/top?q=${encodeURIComponent(q)}`; }
-function xUrl(q){
-  let url = `https://x.com/search?q=${encodeURIComponent(q)}&src=typed_query`;
+function facebookUrl(q, type){
+  const encoded = encodeURIComponent(q);
+  if(type === 'image') return `https://www.facebook.com/search/photos?q=${encoded}`;
+  if(type === 'video' || type === 'live') return `https://www.facebook.com/search/videos?q=${encoded}`;
+  if(type === 'person') return `https://www.facebook.com/search/people?q=${encoded}`;
+  if(type === 'location') return `https://www.facebook.com/search/places?q=${encoded}`;
+  if(type === 'comment') return `https://www.facebook.com/search/posts?q=${encoded}`;
+  return `https://www.facebook.com/search/posts?q=${encoded}`;
+}
+function xUrl(q, type){
+  const bits = [q];
+  if(type === 'image') bits.push('filter:images');
+  if(type === 'video') bits.push('(filter:native_video OR filter:videos OR filter:spaces)');
+  if(type === 'live') bits.push('(filter:native_video OR "live now" OR spaces)');
+  if(type === 'comment') bits.push('(filter:replies OR filter:quote)');
+  if(type === 'person') bits.push('(filter:verified OR filter:blue_verified)');
   const v = document.getElementById('timeRange').value;
-  if(v === 'custom'){
+  if(v === 'h') bits.push('within_time:1h');
+  else if(v === 'd') bits.push('within_time:1d');
+  else if(v === 'w') bits.push('within_time:7d');
+  else if(v === 'm') bits.push('within_time:31d');
+  else if(v === 'y') bits.push('within_time:365d');
+  else if(v === 'custom'){
     const from = document.getElementById('dateFrom').value, to = document.getElementById('dateTo').value;
-    if(from && to) url = `https://x.com/search?q=${encodeURIComponent(q + ' since:'+from+' until:'+to)}&src=typed_query`;
+    if(from) bits.push('since:'+from);
+    if(to) bits.push('until:'+to);
   }
-  return url;
+  const query = bits.filter(Boolean).join(' ');
+  const tab = (type === 'live' || type === 'comment') ? 'live' : 'latest';
+  return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=${tab}`;
 }
 function youtubeUrl(q, type){
   const params = new URLSearchParams({search_query:q});
@@ -1148,37 +1188,326 @@ async function fetchWithTimeout(url, ms=5000, options={}){
     clearTimeout(timer);
   }
 }
-/* يرجّع أول نتيجة "ناجحة" (غير فارغة) من مجموعة طلبات تشتغل بالتوازي، بدل انتظارها وحدة ورا وحدة — يقلل وقت الانتظار الكلي لما نجرب نفس الطلب عبر أكثر من مصدر/وسيط بنفس الوقت */
-function firstTruthy(promises){
-  return new Promise(resolve=>{
-    let left = promises.length;
-    if(!left) return resolve(null);
-    promises.forEach(p=>Promise.resolve(p).then(v=>{
-      if(v) resolve(v);
-      else if(--left===0) resolve(null);
-    }));
-  });
+function extractXStatusId(url){
+  const m = String(url||'').match(/(?:x\.com|twitter\.com|fxtwitter\.com|vxtwitter\.com)\/(?:i\/web\/status|i\/status|[^/\s]+)\/status\/(\d+)/i);
+  return m ? m[1] : null;
+}
+function extractFacebookMediaKind(url){
+  const u = String(url||'');
+  if(/\/stories\/|story\.php|\/story\//i.test(u)) return 'story';
+  if(/\/reel\/|\/reels\/|\/share\/r\//i.test(u)) return 'reel';
+  if(/\/videos?\/|\/watch\/?|fb\.watch|\/share\/v\//i.test(u)) return 'video';
+  if(/\/photo|\/photos\/|photo\.php|\/share\/p\//i.test(u)) return 'photo';
+  if(/facebook\.com\/share\//i.test(u)) return 'share';
+  if(/facebook\.com|fb\.watch/i.test(u)) return 'post';
+  return '';
+}
+function extractFacebookVideoId(url){
+  const u = String(url||'');
+  const m = u.match(/\/(?:reel|reels|videos|video)\/(\d{8,})/i)
+    || u.match(/[?&](?:v|video_id|story_fbid|fbid)=(\d{8,})/i)
+    || u.match(/facebook\.com\/watch\/?\?v=(\d{8,})/i);
+  return m ? m[1] : '';
+}
+function facebookShareToken(url){
+  const m = String(url||'').match(/facebook\.com\/share\/(?:[rvp]\/)?([^/?#]+)/i);
+  return (m && m[1] || '').replace(/\/$/,'');
+}
+function rememberFacebookShareAlias(shareUrl, canonical){
+  const token = facebookShareToken(shareUrl);
+  if(!token || !canonical) return;
+  try{
+    const saved = JSON.parse(localStorage.getItem('radar_share_aliases')||'{}');
+    saved[token.toLowerCase()] = canonical;
+    localStorage.setItem('radar_share_aliases', JSON.stringify(saved));
+  }catch(e){}
+}
+function isFacebookLoginWall(meta){
+  const title = String(meta?.title||'');
+  const url = String(meta?.url||meta?.canonical||'');
+  return /log in|log into facebook|create an account|تسجيل الدخول/i.test(title)
+    || /^https?:\/\/(?:www\.)?facebook\.com\/?$/i.test(url);
+}
+function facebookCanonicalCandidates(canonical, original){
+  const out = [];
+  const add = u => { if(u && !out.includes(u)) out.push(u); };
+  add(canonical);
+  const id = extractFacebookVideoId(canonical) || extractFacebookVideoId(original);
+  if(id){
+    add(`https://www.facebook.com/reel/${id}/`);
+    add(`https://www.facebook.com/watch/?v=${id}`);
+    add(`https://www.facebook.com/facebook/videos/${id}/`);
+    add(`https://www.facebook.com/video.php?v=${id}`);
+  }
+  add(original);
+  return out.filter(Boolean);
+}
+function facebookOfficialEmbed(url, kind){
+  kind = kind || extractFacebookMediaKind(url);
+  const href = encodeURIComponent(url);
+  if(kind === 'photo' || kind === 'post' || kind === 'story' || kind === 'share'){
+    return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true&width=500`;
+  }
+  return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500`;
+}
+function isWatchableFacebook(url){
+  const kind = extractFacebookMediaKind(url);
+  return ['reel','video'].includes(kind) || !!extractFacebookVideoId(url);
+}
+async function resolveFacebookPublicLink(pageUrl){
+  const original = unwrapFacebookLink(pageUrl);
+  const local = localFacebookShareResolution(original);
+  const seed = {
+    original,
+    canonical: local || '',
+    image: '',
+    title: '',
+    desc: '',
+    videoId: extractFacebookVideoId(local||original),
+    kind: extractFacebookMediaKind(local||original),
+    privateLikely: false
+  };
+  const applyUrl = (u)=>{
+    if(!u || !/facebook\.com|fb\.watch/i.test(u)) return;
+    if(/^https?:\/\/(?:www\.)?facebook\.com\/?$/i.test(u)) return;
+    seed.canonical = u;
+    seed.videoId = extractFacebookVideoId(u) || seed.videoId;
+    const k = extractFacebookMediaKind(u);
+    if(k && k !== 'share') seed.kind = k;
+    if(seed.videoId && (seed.kind==='share' || seed.kind==='post')) seed.kind = /\/reel\//i.test(u) ? 'reel' : 'video';
+  };
+  try{
+    const r = await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(original)}`, 6000);
+    const d = await r.json();
+    const m = d && d.data;
+    if(m){
+      if(m.url) applyUrl(m.url);
+      seed.title = m.title || seed.title;
+      seed.desc = m.description || seed.desc;
+      const img = m.image?.url || '';
+      if(img && !isGenericSocialAsset(img) && !/^data:/i.test(img)) seed.image = img;
+      if(isFacebookLoginWall({title:m.title, url:m.url})) seed.privateLikely = true;
+    }
+  }catch(e){}
+  if(!seed.canonical || seed.privateLikely){
+    const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`];
+    for(const make of proxies){
+      try{
+        const r = await fetchWithTimeout(make(original.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com')), 5000);
+        if(!r.ok) continue;
+        const html = await r.text();
+        if(html.length<200) continue;
+        const doc = new DOMParser().parseFromString(html,'text/html');
+        const ogUrl = doc.querySelector('meta[property="og:url"]')?.content || '';
+        const ogImg = doc.querySelector('meta[property="og:image"],meta[property="og:image:secure_url"]')?.content || '';
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.content || '';
+        applyUrl(ogUrl);
+        if(ogTitle) seed.title = seed.title || ogTitle;
+        if(ogImg && !isGenericSocialAsset(ogImg)) seed.image = seed.image || ogImg;
+        const reelHit = html.match(/facebook\.com\/(?:reel|videos)\/(\d{8,})/i);
+        if(reelHit) applyUrl(`https://www.facebook.com/reel/${reelHit[1]}/`);
+        if(seed.canonical && !isFacebookLoginWall({title:ogTitle,url:ogUrl})) break;
+      }catch(e){}
+    }
+  }
+  if(seed.canonical) rememberFacebookShareAlias(original, seed.canonical);
+  if(!seed.kind) seed.kind = extractFacebookMediaKind(seed.canonical||original);
+  if(!seed.videoId) seed.videoId = extractFacebookVideoId(seed.canonical||original);
+  if(!seed.image && seed.privateLikely) seed.kind = seed.kind==='reel'||seed.kind==='video' ? seed.kind : 'story';
+  return seed;
+}
+function renderFacebookPreviewCard(resolved){
+  // المستخدم لا يريد iframe فيسبوك الرسمي — المعاينة تُستبدل بالصورة المستخرجة والنص القابل للبحث.
+  return '';
+}
+function cleanReelCaption(text){
+  return String(text||'')
+    .replace(/[\d.,]+\s*[KMBك]?\s*(views?|reactions?|likes?|comments?|shares?|مشاهدة|مشاهدات|تفاعل|إعجاب)/gi,'')
+    .replace(/\bon Reels\b/gi,'')
+    .replace(/\s*[|·•]\s*/g,' | ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .replace(/^(?:\|\s*)+|(?:\s*\|)+$/g,'')
+    .trim();
+}
+function splitReelSentences(text){
+  let s = cleanReelCaption(text);
+  s = s.replace(/#[\w\u0600-\u06FF]+/g,' ').replace(/@[A-Za-z0-9._]+/g,' ');
+  return s
+    .split(/\s*[|·•]+\s*|\s*[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]+\s+/u)
+    .map(x=>x.replace(/\s+/g,' ').trim())
+    .filter(x=>x.length>=2 && !/^https?:/i.test(x));
+}
+function extractReelChips(text){
+  const raw = String(text||'');
+  const chips = [];
+  const add = (t, tag)=>{
+    const s = String(t||'').replace(/\s+/g,' ').trim();
+    if(s.length<2 || s.length>120) return;
+    if(/^https?:/i.test(s)) return;
+    if(/^(views?|reactions?|likes?|comments?|shares?|reels?|original|audio|facebook|on)$/i.test(s)) return;
+    if(chips.some(c=>c.text.toLowerCase()===s.toLowerCase())) return;
+    chips.push({text:s, tag:tag||'جملة'});
+  };
+  (raw.match(/#[\w\u0600-\u06FF]+/g)||[]).forEach(t=>add(t,'هاشتاق'));
+  (raw.match(/@[A-Za-z0-9._]+/g)||[]).forEach(t=>add(t,'حساب'));
+  splitReelSentences(raw).forEach(s=>add(s,'جملة'));
+  return chips.slice(0,20);
+}
+function searchFromReel(text){
+  const q = String(text||'').trim();
+  if(!q) return;
+  SEARCH_TARGET = {meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'};
+  const input = document.getElementById('query');
+  if(!input) return;
+  input.value = q;
+  refreshEffectiveType();
+  updateHashtagHint(fullQueryText());
+  hideSuggestions();
+  const box = input.closest('.core') || input;
+  box.scrollIntoView({behavior:'smooth', block:'center'});
+  input.focus();
+  runSearch();
+}
+function searchHashtag(tag){ searchFromReel(tag); }
+function renderReelSearchHtml(caption){
+  const chips = extractReelChips(caption);
+  if(!chips.length) return '';
+  const hashes = chips.filter(c=>c.tag==='هاشتاق' || c.tag==='حساب');
+  const sentences = chips.filter(c=>c.tag!=='هاشتاق' && c.tag!=='حساب');
+  const hashHtml = hashes.map(c=>`<button type="button" class="reel-hash" data-reel-q="${esc(c.text)}">${esc(c.text)}</button>`).join('');
+  const sentHtml = sentences.map(c=>`<button type="button" class="reel-sentence" data-reel-q="${esc(c.text)}">${esc(c.text)}</button>`).join('');
+  return `
+    <div class="reel-extract">
+      <div class="hint" style="margin:0 0 8px;">🏷️ هاشتاقات وجمل مستخرجة — اضغطي جملة واحدة للبحث عنها في المحرك الرئيسي</div>
+      ${hashHtml?`<div class="reel-chips">${hashHtml}</div>`:''}
+      <div class="reel-sentences">${sentHtml}</div>
+    </div>`;
+}
+function isGenericSocialAsset(imageUrl){
+  const u = String(imageUrl||'');
+  if(!u || /^data:/i.test(u)) return true;
+  return /abs\.twimg\.com|static\.[a-z0-9.-]*fbcdn\.net|scontent[^/]*\/static|instagram\.com\/static|tiktok\.com\/obj\/static|tiktok-web-tx|tiktok-loading|player-split\/webapp|webapp-desktop\/static\/image|lf16-tiktok-web|favicon\.ico/i.test(u)
+    || (/tiktok/i.test(u) && /\.gif(?:\?|$)/i.test(u));
+}
+function extractTikTokVideoId(url, extra){
+  const s = `${url||''} ${extra||''}`;
+  const m = s.match(/\/video\/(\d{15,})/i)
+    || s.match(/embed_product_id"\s*:\s*"(\d{15,})"/i)
+    || s.match(/data-video-id=["'](\d{15,})/i)
+    || s.match(/\/embed\/(?:v2\/)?(\d{15,})/i);
+  return m ? m[1] : '';
+}
+async function fetchTikTokMedia(pageUrl){
+  const original = String(pageUrl||'').trim();
+  let videoId = extractTikTokVideoId(original);
+  let image='', title='', desc='', canonical='';
+  const take = (img, t, d, can)=>{
+    if(img && !isGenericSocialAsset(img)) image = image || img;
+    if(t) title = title || t;
+    if(d) desc = desc || d;
+    if(can) canonical = canonical || can;
+  };
+  const oembedUrls = [original];
+  if(videoId) oembedUrls.push(`https://www.tiktok.com/@_/video/${videoId}`);
+  for(const u of oembedUrls){
+    const data = await fetchJsonQuiet(`https://www.tiktok.com/oembed?url=${encodeURIComponent(u)}`, 6000);
+    if(!data) continue;
+    videoId = videoId || data.embed_product_id || extractTikTokVideoId(data.html||'', JSON.stringify(data));
+    take(data.thumbnail_url, data.title, [data.author_name, data.title].filter(Boolean).join(' · '), data.author_url);
+    if(image && title) break;
+  }
+  const tikwmEndpoints = [
+    `https://www.tikwm.com/api/?url=${encodeURIComponent(original)}`,
+    videoId ? `https://www.tikwm.com/api/?url=${encodeURIComponent('https://www.tiktok.com/@i/video/'+videoId)}` : ''
+  ].filter(Boolean);
+  const tikwmProxies = [
+    u=>u,
+    u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+  ];
+  if(!image){
+    outer: for(const ep of tikwmEndpoints){
+      for(const make of tikwmProxies){
+        try{
+          const r = await fetchWithTimeout(make(ep), 8000, {headers:{'accept':'application/json'}});
+          if(!r.ok) continue;
+          const raw = await r.text();
+          const d = JSON.parse(raw);
+          const item = d?.data || d;
+          if(!item || d?.code === -1) continue;
+          videoId = videoId || String(item.id||'');
+          const covers = [item.origin_cover, item.cover, item.ai_dynamic_cover, item.originCover, item.dynamic_cover].filter(Boolean);
+          covers.forEach(c=>take(c, item.title||item.author||'', item.title||item.content_desc||'', item.play_url || (videoId?`https://www.tiktok.com/@${item.author||'i'}/video/${videoId}`:'')));
+          if(item.author) title = title || `@${String(item.author).replace(/^@/,'')}${item.title? ' · '+item.title:''}`;
+          if(image) break outer;
+        }catch(e){}
+      }
+    }
+  }
+  if(!image){
+    try{
+      const og = await fetchOgTags(videoId ? `https://www.tiktok.com/@i/video/${videoId}` : original);
+      take(og.image, og.title, og.desc, og.canonicalUrl);
+    }catch(e){}
+  }
+  if(image) image = await pickBestPublicImage([image]) || image;
+  return {image, title, desc, videoId, canonical: canonical || (videoId?`https://www.tiktok.com/@i/video/${videoId}`:original), source: image?'tiktok-deep':''};
+}
+async function fetchJsonQuiet(url, ms=5000){
+  try{
+    const r = await fetchWithTimeout(url, ms, {headers:{'accept':'application/json'}});
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(e){ return null; }
+}
+async function fetchXStatusMedia(pageUrl){
+  const id = extractXStatusId(pageUrl);
+  if(!id) return null;
+  const endpoints = [
+    `https://api.fxtwitter.com/status/${id}`,
+    `https://api.vxtwitter.com/status/${id}`,
+    `https://api.fxtwitter.com/i/status/${id}`
+  ];
+  for(const ep of endpoints){
+    const data = await fetchJsonQuiet(ep, 5000);
+    const tweet = data?.tweet || data;
+    if(!tweet) continue;
+    const photos = tweet.media?.photos || tweet.media_extended?.filter(x=>x.type==='image') || [];
+    const videos = tweet.media?.videos || tweet.media_extended?.filter(x=>/video|gif/i.test(x.type||'')) || [];
+    const image = photos[0]?.url || photos[0]?.original || videos[0]?.thumbnail_url || videos[0]?.thumbnail || tweet.media?.mosaic?.formats?.jpeg || tweet.image || null;
+    const videoUrl = videos[0]?.url || videos[0]?.variants?.slice?.(-1)?.[0]?.url || '';
+    const title = tweet.text || tweet.altText || '';
+    const author = tweet.author?.screen_name || tweet.user_name || tweet.author?.name || '';
+    if(image || title){
+      return {image, title, desc: author ? `@${String(author).replace(/^@/,'')} · ${title}` : title, videoUrl, source:'x-deep'};
+    }
+  }
+  try{
+    const oembed = await fetchJsonQuiet(`https://publish.twitter.com/oembed?omit_script=true&url=${encodeURIComponent(pageUrl)}`, 4500);
+    if(oembed?.thumbnail_url || oembed?.html){
+      return {image:oembed.thumbnail_url||'', title:oembed.author_name||'', desc:(oembed.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(), videoUrl:'', source:'x-oembed'};
+    }
+  }catch(e){}
+  return null;
 }
 async function fetchOgTags(pageUrl){
+  const xDeep = await fetchXStatusMedia(pageUrl);
   const scrapeUrl=pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com');
-  const candidates=[];let title=null,desc=null;
-  const add=(url,w=0,h=0)=>{if(url&&/^https?:\/\//i.test(url)&&!candidates.some(x=>x.url===url))candidates.push({url,w:Number(w)||0,h:Number(h)||0})};
-  try{const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=m.title||title;desc=m.description||desc}}catch(e){}
-  try{const r=await fetchWithTimeout(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=d.title||title}}catch(e){}
+  const candidates=[];let title=xDeep?.title||null,desc=xDeep?.desc||null;
+  const add=(url,w=0,h=0)=>{if(url&&/^https?:\/\//i.test(url)&&!candidates.some(x=>x.url===url)&&!isGenericSocialAsset(url))candidates.push({url,w:Number(w)||0,h:Number(h)||0})};
+  if(xDeep?.image) add(xDeep.image);
+  let canonicalUrl='';
+  try{const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(pageUrl)}`,6000),d=await r.json(),m=d&&d.data;if(m){if(m.image)add(m.image.url,m.image.width,m.image.height);if(Array.isArray(m.images))m.images.forEach(x=>add(x.url,x.width,x.height));title=title||m.title;desc=desc||m.description;canonicalUrl=m.url||'';}}catch(e){}
+  try{const r=await fetchWithTimeout(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=title||d.title}}catch(e){}
   const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`];
-  for(const make of proxies){try{const r=await fetchWithTimeout(make(scrapeUrl),4500);if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=doc.querySelector('meta[property="og:title"]')?.content||title;desc=doc.querySelector('meta[property="og:description"]')?.content||desc;if(candidates.length)break}catch(e){}}
+  for(const make of proxies){try{const r=await fetchWithTimeout(make(scrapeUrl),4500);if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=title||doc.querySelector('meta[property="og:title"]')?.content;desc=desc||doc.querySelector('meta[property="og:description"]')?.content;if(candidates.length)break}catch(e){}}
   const image=await pickBestPublicImage(candidates.map(x=>x.url));
-  return {image,title,desc,candidates};
+  return {image,title,desc,candidates,videoUrl:xDeep?.videoUrl||'',source:xDeep?.source||'og',canonicalUrl};
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
 /* الضغط على هاشتاق مستخرَج من البحث العكسي يبحث عنه مباشرة عبر كل المنصات */
-function searchHashtag(tag){
-  document.getElementById('query').value = tag;
-  refreshEffectiveType();
-  updateHashtagHint(fullQueryText());
-  runSearch();
-}
 
 function openOriginalLinkHtml(url){
   return `
@@ -1213,21 +1542,34 @@ async function runImageSearch(){
   let captionText = '';
   let sourceLabel = '';
 
-  // معاينة embed حية للفيديو/الريلز — نحسبها بدري لأنها لازم تظهر حتى لو فشل استخراج صورة
-  const isFbVideoLink = /facebook\.com\/(?:[^/]+\/videos?\/|reel\/|watch\/?\?)/i.test(url) || /fb\.watch/i.test(url);
-  const embedHtml = isFbVideoLink ? `
+  // معاينة حيّة بعد فك روابط share المختصرة. المعارض المحفوظة لا تُغلق.
+  const xStatusId = extractXStatusId(url);
+  let embedHtml = '';
+  let facebookResolved = null;
+  if(/facebook\.com|fb\.watch/i.test(url)){
+    status.textContent = 'جارٍ فك رابط فيسبوك إلى الريلز/الفيديو الأصلي...';
+    document.getElementById('imageResultsArea').classList.add('show');
+    facebookResolved = await resolveFacebookPublicLink(url);
+    if(facebookResolved.canonical){
+      input.value = facebookResolved.canonical;
+    }
+    embedHtml = openOriginalLinkHtml(facebookResolved.canonical || url);
+    cards.innerHTML = embedHtml;
+    if(facebookResolved.image && !isGenericSocialAsset(facebookResolved.image)){
+      imageUrl = facebookResolved.image;
+      captionText = facebookResolved.title || facebookResolved.desc || '';
+      sourceLabel = facebookResolved.canonical ? 'تم فك رابط المشاركة وجلب الصورة ✅' : 'تم جلب الصورة تلقائيًا ✅';
+    }else if(facebookResolved.privateLikely || facebookResolved.kind==='story'){
+      status.innerHTML = '⚠️ الستوري/المشاركة غير عامة أو منتهية. فيسبوك ما بيرجع صورة ولا iframe. افتحي الرابط الأصلي وخذي سكرين شوت — المحفوظات ما انمسحت.';
+    }
+  } else if(xStatusId){
+    embedHtml = `
       <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-        <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة (Embed رسمي من فيسبوك)</div>
-        <iframe src="https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=400" width="100%" height="380" style="border:none; border-radius:10px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
-        <div class="hint" style="margin:0; padding:0 4px;">⚠️ ما نقدر نلتقط سكرين شوت من جوا هالمعاينة تلقائيًا (فيسبوك محمي من هالنوع من الالتقاط بكل المتصفحات لأي موقع). لأخذ سكرين شوت: استخدمي زر السكرين شوت العادي بجهازك وهاي المعاينة مفتوحة قدامك.</div>
-      </div>` : '';
-
-  // فيديو/ريلز فيسبوك: نعرض المعاينة الحية فورًا بدون أي انتظار — الاستخراج البطيء مش لازم أصلًا هون
-  if(isFbVideoLink){
-    status.textContent = '';
+        <div class="result-title" style="padding:0 4px;">𝕏 معاينة المنشور + جلب عميق</div>
+        <iframe src="https://twitframe.com/show?url=${encodeURIComponent('https://x.com/i/status/'+xStatusId)}" width="100%" height="420" style="border:none; border-radius:14px; background:#000;" scrolling="no" frameborder="0"></iframe>
+      </div>`;
     cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
     document.getElementById('imageResultsArea').classList.add('show');
-    return;
   }
 
   // 1) يوتيوب: استخراج فوري ومضمون 100% للصورة المصغّرة، بدون أي طلب شبكة
@@ -1236,126 +1578,50 @@ async function runImageSearch(){
     imageUrl = await pickBestPublicImage([`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,`https://img.youtube.com/vi/${ytId}/sddefault.jpg`,`https://img.youtube.com/vi/${ytId}/hq720.jpg`,`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`]);
     sourceLabel = 'تم جلب أعلى دقة متاحة علنًا من يوتيوب ✅';
   }
-  // 2) تيك توك: oEmbed أولاً، وبعدها واجهة عامة ترجع غلاف الفيديو حتى للروابط المختصرة والمحتوى المحمي بالعمر
+  // 2) تيك توك: الروابط المختصرة vt.tiktok.com صار oEmbed الرسمي يرجع thumbnail فارغ + microlink يجيب GIF الشعار 200×200.
+  // نفك المعرّف الرقمي ثم نجيب الغلاف من مصدر الغلاف المباشر، ونرفض صور الشعار/التحميل.
   else if(/tiktok\.com/i.test(url)){
-    status.textContent = 'جارٍ جلب سكرين الفيديو من تيك توك...';
-    const tiktokIdFrom = (u, extra='') => {
-      const src = `${u||''} ${extra||''}`;
-      const m = src.match(/\/(?:video|photo)\/(\d{8,})/i) || src.match(/embed_product_id["']?\s*[:=]\s*["']?(\d{8,})/i) || src.match(/data-video-id=["'](\d{8,})/i);
-      return m ? m[1] : '';
-    };
-    const isGenericTikTokCover = (img) => /black-placeholder|placeholder-bg|eden-sg\/nupwbpxnuhfbv|tiktok-share-logo|obj\/eden-sg/i.test(img||'');
-    const pickTikTokCover = (obj) => {
-      if(!obj || typeof obj !== 'object') return '';
-      const imgs = Array.isArray(obj.images) ? obj.images.filter(x=>typeof x==='string' && /^https?:\/\//i.test(x)) : [];
-      const list = [obj.ai_dynamic_cover, obj.cover, obj.origin_cover, obj.thumbnail_url, obj.thumbnail, imgs[0]];
-      return list.find(x=>typeof x==='string' && /^https?:\/\//i.test(x) && !isGenericTikTokCover(x)) || '';
-    };
-    const authorLine = (obj) => {
-      const a = obj && obj.author;
-      if(a && typeof a==='object') return a.nickname || a.unique_id || a.author_name || '';
-      return (obj && (obj.author_name || obj.author)) || '';
-    };
-
-    const oembedTarget = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
-    const tryOembedJson = async (fetchUrl) => {
-      try{
-        const r = await fetchWithTimeout(fetchUrl, 5000);
-        if(!r.ok) return null;
-        const d = await r.json();
-        return (d && typeof d==='object') ? d : null;
-      }catch(e){ return null; }
-    };
-    const oembedData = await firstTruthy([
-      tryOembedJson(oembedTarget),
-      tryOembedJson(`https://api.allorigins.win/raw?url=${encodeURIComponent(oembedTarget)}`),
-      tryOembedJson(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(oembedTarget)}`),
-      tryOembedJson(`https://corsproxy.io/?${encodeURIComponent(oembedTarget)}`)
-    ]);
-    if(oembedData && oembedData.thumbnail_url && !isGenericTikTokCover(oembedData.thumbnail_url)){
-      imageUrl = oembedData.thumbnail_url;
-      captionText = oembedData.title || '';
-      sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
-    }
-
-    // مسار إضافي: tikwm يفتح CORS للمتصفح ويرجع غلاف الفيديو الحقيقي حتى لو oEmbed رجع thumbnail فاضي
-    if(!imageUrl){
-      const tikwmQs = `url=${encodeURIComponent(url)}`;
-      const tryTikwm = async (fetchUrl) => {
-        try{
-          const r = await fetchWithTimeout(fetchUrl, 8000);
-          if(!r.ok) return null;
-          const d = await r.json();
-          const payload = (d && d.data && typeof d.data==='object') ? d.data : d;
-          const cover = pickTikTokCover(payload);
-          if(!cover) return null;
-          return {cover, title: (payload && payload.title) || '', author: authorLine(payload), id: (payload && payload.id) || ''};
-        }catch(e){ return null; }
-      };
-      const tw = await firstTruthy([
-        tryTikwm(`https://www.tikwm.com/api/?${tikwmQs}`),
-        tryTikwm(`https://tikwm.com/api/?${tikwmQs}`),
-        tryTikwm(`https://corsproxy.io/?${encodeURIComponent('https://www.tikwm.com/api/?'+tikwmQs)}`),
-        tryTikwm(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.tikwm.com/api/?'+tikwmQs)}`)
-      ]);
-      if(tw){
-        imageUrl = tw.cover;
-        captionText = [tw.author, tw.title].filter(Boolean).join(' — ');
-        sourceLabel = 'تم جلب سكرين الفيديو من تيك توك تلقائيًا ✅';
-      }
-    }
-
-    if(!imageUrl){
-      try{
-        const og = await fetchOgTags(url);
-        if(og.image && !isGenericTikTokCover(og.image)){
-          const probe = await probePublicImage(og.image);
-          if(probe.ok && probe.height > probe.width * 1.15){
-            imageUrl = og.image;
-            captionText = og.title || og.desc || '';
-            sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
-          }
-        }
-      }catch(err){ /* فشلت كل المحاولات */ }
-    }
-
-    if(!imageUrl){
-      const vid = tiktokIdFrom(url, JSON.stringify(oembedData||{}));
-      const embedCard = vid ? `
-        <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-          <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة لأخذ سكرين (مشغّل تيك توك الرسمي)</div>
-          <iframe src="https://www.tiktok.com/player/v1/${vid}?music_info=1&description=1" width="100%" height="520" style="border:none; border-radius:10px; background:#000; min-height:420px;" allow="fullscreen; autoplay; encrypted-media" allowfullscreen></iframe>
-          <div class="hint" style="margin:0; padding:0 4px;">إذا ما انعرض الفيديو هون، افتحي الرابط الأصلي وخذي السكرين من هناك.</div>
-        </div>` : '';
-      status.innerHTML = '⚠️ ما قدرنا نجيب سكرين تيك توك كصورة ثابتة الآن. جرّبي المعاينة الحية تحت أو افتحي الرابط الأصلي.';
-      cards.innerHTML = embedCard + openOriginalLinkHtml(url);
-      document.getElementById('imageResultsArea').classList.add('show');
-      return;
-    }
-  }
-
-  // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
-  else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
-    status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
+    status.textContent = 'جارٍ جلب غلاف فيديو تيك توك...';
+    document.getElementById('imageResultsArea').classList.add('show');
     try{
-      const og = await fetchOgTags(url);
-      // X وفيسبوك أحيانًا يرجّعوا صورة عامة تابعة لواجهة التطبيق نفسه (abs.twimg.com / static.xx.fbcdn.net) بدل صورة المنشور الحقيقية — نتجاهلها لأنها مضلّلة
-      const isGenericAsset = og.image && (/abs\.twimg\.com|static\.[a-z]+\.fbcdn\.net/i.test(og.image) || og.image.startsWith('data:'));
-      if(og.image && !isGenericAsset){
-        imageUrl = og.image;
-        captionText = og.title || og.desc || '';
-        sourceLabel = 'تم جلب الصورة والوصف تلقائيًا ✅';
+      const tk = await fetchTikTokMedia(url);
+      if(tk.canonical && tk.canonical !== url) input.value = tk.canonical;
+      if(tk.image && !isGenericSocialAsset(tk.image)){
+        imageUrl = tk.image;
+        captionText = tk.title || tk.desc || '';
+        sourceLabel = 'تم جلب غلاف تيك توك الحقيقي ✅';
       }
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو (لو كان رابط ستوري) الستوريهات لا تعرض معاينة عامة لأنها مؤقتة بطبيعتها. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
-      cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+      status.innerHTML = '⚠️ تيك توك ما رجّع غلاف الفيديو (oEmbed فاضي وصورة الشعار مرفوضة). افتحي الرابط وخذي سكرين، أو جرّبي الرابط الكامل www.tiktok.com/@user/video/ID.';
+      cards.innerHTML = openOriginalLinkHtml(url);
+      return;
+    }
+  }
+  // 3) إنستجرام / X، أو فيسبوك إذا فك الرابط ما رجّع صورة بعد
+  else if(/instagram\.com|x\.com|twitter\.com/i.test(url) || (/facebook\.com|fb\.watch/i.test(url) && !imageUrl)){
+    status.textContent = xStatusId ? 'جارٍ الجلب العميق من X...' : 'جارٍ محاولة جلب بيانات المنشور...';
+    try{
+      const og = await fetchOgTags(facebookResolved?.canonical || url);
+      if(og.image && !isGenericSocialAsset(og.image)){
+        imageUrl = og.image;
+        captionText = og.title || og.desc || captionText;
+        sourceLabel = og.source==='x-deep' ? 'تم الجلب العميق من X ✅' : 'تم جلب الصورة والوصف تلقائيًا ✅';
+      }
+      if(og.canonicalUrl && facebookResolved && !facebookResolved.canonical){
+        facebookResolved.canonical = og.canonicalUrl;
+        rememberFacebookShareAlias(url, og.canonicalUrl);
+      }
+    }catch(err){ /* فشلت المحاولة */ }
+    if(!imageUrl){
+      status.innerHTML = status.innerHTML && status.innerHTML.indexOf('⚠️')===0 ? status.innerHTML : '⚠️ ما قدرنا نجيب صورة عامة للمنشور. المعاينة والرابط الأصلي ظلّوا ظاهرين، والمحفوظات ما انمسحت. افتح الرابط وخذ سكرين شوت إذا المحتوى خاص.';
+      cards.innerHTML = embedHtml + openOriginalLinkHtml(facebookResolved?.canonical || url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
-  // 4) غير ذلك: افترض إنه رابط صورة مباشر
-  else{
+  // 4) غير ذلك: رابط صورة مباشر، إلا إذا كنا بجيب فيسبوك/منصة ونجح أو فشل الجلب أعلاه
+  else if(!facebookResolved && !imageUrl){
     imageUrl = url;
     sourceLabel = 'بحث عكسي بالرابط المُدخل';
   }
@@ -1380,17 +1646,16 @@ async function runImageSearch(){
     const extractedTags = [...new Set(captionText.match(/#[\w\u0600-\u06FF]+/g) || [])];
     const vq = (cleanedCaption || captionText.trim());
     const videoEngines = [
+      {name:'X — بحث عميق بنفس النص', color:'#000000', letter:'𝕏', url: xUrl(vq, effectiveType==='image'?'image':'video')},
       {name:'يوتيوب — فيديوهات مشابهة', color:'#FF0000', letter:'▶', url: youtubeUrl(vq, 'general')},
       {name:'تيك توك — فيديوهات مشابهة', color:'#010101', letter:'♪', url: googleUrl(vq, 'video', {siteDomain:'tiktok.com'})},
+      {name:'فيسبوك — منشورات/ريلز مشابهة', color:'#1877F2', letter:'f', url: facebookUrl(vq, 'video')},
       {name:'جوجل فيديو — نفس الوصف', color:'#4285F4', letter:'G', url: googleUrl(vq, 'video', {})},
     ];
     const tagsHtml = extractedTags.length
       ? `<div class="hint" style="margin-bottom:8px;">🏷️ هاشتاقات (اضغط لبحث مباشر): ${extractedTags.map(t=>`<span onclick="searchHashtag('${t.replace(/'/g,"\\'")}')" style="color:var(--cyan); cursor:pointer; text-decoration:underline; margin-inline-end:8px;">${t}</span>`).join('')}</div>`
       : '';
-    videoEnginesHtml = `
-      <div class="hint" style="margin:16px 0 8px;">🎬 الوصف الكامل المستخرَج (يتضمن أرقام المشاهدات/التفاعل إن وُجدت): <b style="color:var(--cyan);">${captionText.trim()}</b></div>
-      ${tagsHtml}
-    ` + videoEngines.map(eng => `
+    videoEnginesHtml = renderReelSearchHtml(captionText) + videoEngines.map(eng => `
       <div class="result-card">
         <a class="main-link" href="${eng.url}" target="_blank" rel="noopener">
           <div class="result-icon" style="background:${eng.color}">${eng.letter}</div>
@@ -1404,14 +1669,9 @@ async function runImageSearch(){
   }
 
   cards.innerHTML = embedHtml + `
-    <div class="result-card extracted-preview-card" style="margin-bottom:14px;flex-direction:column;align-items:center;gap:12px;">
-      <div class="saved-inline-focus-actions" style="position:static;transform:none;opacity:1;visibility:visible;pointer-events:auto;display:flex;">
-        <button type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveCurrentExtractedImage()">💾 حفظ</button>
-        <a class="saved-inline-focus-btn" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" href="#" onclick="event.preventDefault();currentExtractedImage&&openInlineSavedFocus((document.getElementById('extractedThumb')||{}).src,(document.getElementById('extractedThumb')||{}).src,currentExtractedImage.imageUrl);radarOpenReverseSearch('yandex',event)">🔍 ياندكس</a>
-        <a class="saved-inline-focus-btn" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" href="#" onclick="event.preventDefault();currentExtractedImage&&openInlineSavedFocus((document.getElementById('extractedThumb')||{}).src,(document.getElementById('extractedThumb')||{}).src,currentExtractedImage.imageUrl);radarOpenReverseSearch('google',event)">🔍 جوجل</a>
-      </div>
+    <div class="result-card extracted-preview-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
-        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; cursor:pointer; -webkit-user-select:none; user-select:none;" onclick="openInlineSavedFocus(this.src,this.src,'${String(imageUrl).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" onerror="this.style.display='none'">
+        <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
       </div>
     </div>
   ` + engines.map(eng => `
@@ -1426,7 +1686,7 @@ async function runImageSearch(){
       </a>
     </div>`).join('') + videoEnginesHtml;
   document.getElementById('imageResultsArea').classList.add('show');
-  document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById('imageResultsArea').classList.add('show');
   setCurrentExtractedImage(imageUrl, url);
 }
 
@@ -1621,7 +1881,7 @@ async function idbAddImage(imageUrl, sourceUrl){
       if(dup) store.delete(dup.id);
       // لو نجح تحميل الـBlob، منخزّنه هو (الصورة محفوظة جوا الجهاز فعليًا، تضل موجودة حتى لو
       // الرابط الأصلي مات لاحقًا). لو فشل، منخزّن الرابط النصي بس (السلوك القديم كخطة بديلة).
-      store.add({imageUrl: (/^https?:\/\//i.test(imageUrl||'')?imageUrl:(blob?null:imageUrl)), blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
+      store.add({imageUrl: blob?null:imageUrl, blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -1677,7 +1937,10 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile" data-search="${esc((x.imageUrl&&/^https?:/.test(x.imageUrl)?x.imageUrl:x.sourceUrl)||'')}"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · البحث العكسي من المعاينة يرفع الملف نفسه (مثل صور الاستيراد) حتى لو الرابط الأصلي مات.</div><div class="saved-images-grid">${a.map(x=>{
+    const searchUrl = [x.imageUrl, x.sourceUrl].find(u=>u && /^https?:\/\//i.test(u)) || '';
+    return `<div class="saved-image-tile" data-id="${x.id}" data-full="${esc(x.displayUrl)}" data-search="${esc(searchUrl)}"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`;
+  }).join('')}</div>`;
   attachSavedZoom();
 }
 const RADAR_ZIP_MAX_ARCHIVES=5;
@@ -2063,13 +2326,25 @@ function attachLongPressSave(url){
 // يفكّك روابط فيسبوك الملفوفة (m.facebook.com/?next=..، plugins/video.php?href=..) للرابط الحقيقي بداخلها
 function unwrapFacebookLink(url){
   try{
-    const u = new URL(url);
-    if(/m\.facebook\.com$/i.test(u.hostname) && u.searchParams.has('next')){
-      return decodeURIComponent(u.searchParams.get('next'));
+    let raw = String(url||'').trim();
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./i,'');
+    const pick = (val)=>{ try{ return decodeURIComponent(val||''); }catch(e){ return val||''; } };
+    if(/^(?:l|lm|m|mbasic)\.facebook\.com$/i.test(host)){
+      for(const key of ['u','next','href','story_fbid','redirect_uri']){
+        if(u.searchParams.has(key)){
+          const inner = pick(u.searchParams.get(key));
+          if(/^https?:\/\//i.test(inner)) return unwrapFacebookLink(inner);
+        }
+      }
     }
-    if(/facebook\.com$/i.test(u.hostname) && u.pathname.includes('/plugins/video.php') && u.searchParams.has('href')){
-      return decodeURIComponent(u.searchParams.get('href'));
+    if(/facebook\.com$/i.test(host) && /\/plugins\/(?:video|post)\.php/i.test(u.pathname) && u.searchParams.has('href')){
+      return unwrapFacebookLink(pick(u.searchParams.get('href')));
     }
+    if(u.searchParams.has('u') && /facebook\.|fb\.watch|instagram\.|tiktok\.|x\.com|twitter\./i.test(pick(u.searchParams.get('u')))){
+      return unwrapFacebookLink(pick(u.searchParams.get('u')));
+    }
+    return raw;
   }catch(e){}
   return url;
 }
@@ -2125,10 +2400,11 @@ function detectProfileScope(rawText){
 // لا توجد أسماء ثابتة؛ الاسم يُستخرج من الصفحة العامة أو نتائج البحث ويُحفظ محليًا بعد التحقق.
 const VERIFIED_PROFILE_NAMES = Object.freeze({});
 const VERIFIED_FACEBOOK_SHARE_MAP = {
-  '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661'
+  '1z4n5n9qqp': 'https://www.facebook.com/maysoon.suleiman.549661',
+  '14mzsfueekf': 'https://www.facebook.com/61594045108402/videos/4289913911321487/'
 };
 function localFacebookShareResolution(url){
-  const token=(String(url||'').match(/facebook\.com\/share\/([^/?#]+)/i)||[])[1]?.toLowerCase()||'';
+  const token=(String(url||'').match(/facebook\.com\/share\/(?:[rvp]\/)?([^/?#]+)/i)||[])[1]?.toLowerCase()||'';
   if(VERIFIED_FACEBOOK_SHARE_MAP[token]) return VERIFIED_FACEBOOK_SHARE_MAP[token];
   try{
     const saved=JSON.parse(localStorage.getItem('radar_share_aliases')||'{}');
@@ -3042,8 +3318,8 @@ function attachSavedZoom(){
     const tile = img.closest('.saved-image-tile');
     if(radarSelectTile(tile)){
       const imgEl=document.getElementById('savedInlineFocusImg');
-      if(imgEl) imgEl.dataset.id=img.getAttribute('data-id')||'';
-      openInlineSavedFocus(img.currentSrc||img.src, img.currentSrc||img.src, tile.getAttribute('data-search')||'');
+      if(imgEl) imgEl.dataset.id=img.getAttribute('data-id')||tile.getAttribute('data-id')||'';
+      openInlineSavedFocus(tile.getAttribute('data-full')||img.currentSrc||img.src, img.currentSrc||img.src, tile.getAttribute('data-search')||'');
     }
   });
   list.addEventListener('contextmenu', e=>{ if(e.target.closest('.saved-image-thumb')) e.preventDefault(); });
@@ -3090,41 +3366,6 @@ function radarPublicImageUrl(){
   }
   return '';
 }
-function radarBindFocusSearchButtons(searchUrl){
-  const overlay=document.getElementById('savedInlineFocus');
-  const img=document.getElementById('savedInlineFocusImg');
-  if(overlay) overlay.dataset.searchUrl=searchUrl||'';
-  if(img) img.dataset.searchUrl=searchUrl||'';
-  const yandexBtn=document.getElementById('savedInlineFocusYandex');
-  const googleBtn=document.getElementById('savedInlineFocusGoogle');
-  if(!yandexBtn||!googleBtn)return;
-  yandexBtn.style.display='';
-  googleBtn.style.display='';
-  yandexBtn.href='#';
-  googleBtn.href='#';
-}
-function openInlineSavedFocus(src, preview, searchUrl){
-  const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
-  if(!l||!p)return;
-  const full=String(src||preview||'');
-  const quick=String(preview||full);
-  if(!full&&!quick)return;
-  l.style.pointerEvents='';
-  if(p.dataset.shown!==full){
-    p.removeAttribute('src');
-    p.dataset.shown=full;
-    p.src=quick;
-    if(full&&full!==quick){
-      const hi=new Image();
-      hi.onload=()=>{if(p.dataset.shown===full)p.src=full};
-      hi.src=full;
-    }
-  }
-  radarBindFocusSearchButtons(radarPublicImageUrl(searchUrl, full, quick, currentExtractedImage&&currentExtractedImage.imageUrl));
-  document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
-  l.classList.remove('show');
-  requestAnimationFrame(()=>l.classList.add('show'));
-}
 function radarImageExt(blob,src){
   const t=(blob&&blob.type)||'';
   if(/png/i.test(t)||/\.png(?:$|\?)/i.test(src||'')) return 'png';
@@ -3156,7 +3397,6 @@ async function radarFetchBlob(url){
 async function radarGetSearchBlob(){
   const overlayImg=document.getElementById('savedInlineFocusImg');
   const extracted=document.getElementById('extractedThumb');
-  const src=(overlayImg&&overlayImg.classList.contains('show')?null:null);
   const visibleSrc=(overlayImg&&(overlayImg.currentSrc||overlayImg.src))||(extracted&&(extracted.currentSrc||extracted.src))||'';
   if(visibleSrc&&(/^(blob:|data:)/i.test(visibleSrc))){
     const b=await radarFetchBlob(visibleSrc);
@@ -3169,6 +3409,7 @@ async function radarGetSearchBlob(){
       const row=rows.find(x=>String(x.id)===String(tileId));
       if(row&&row.blob) return row.blob;
       if(row&&row.displayUrl){const b=await radarFetchBlob(row.displayUrl); if(b) return b;}
+      if(row&&row.imageUrl){const b=await radarFetchBlob(row.imageUrl); if(b) return b;}
     }catch(e){}
   }
   if(visibleSrc){const b=await radarFetchBlob(visibleSrc); if(b) return b;}
@@ -3211,7 +3452,7 @@ async function radarOpenReverseSearch(engine, ev){
   try{
     const blob=await radarGetSearchBlob();
     if(!blob){
-      alert('ما قدرنا نقرأ الصورة من المعاينة. احفظيها أولاً من زر حفظ بعدين افتحيها من 📌 صور وجرّبي البحث.');
+      alert('ما قدرنا نقرأ الصورة من المعاينة. افتحيها من 📌 صور بعد الحفظ وجرّبي البحث من جديد.');
       return;
     }
     const ext=radarImageExt(blob, (document.getElementById('savedInlineFocusImg')||{}).src);
@@ -3228,7 +3469,41 @@ async function radarOpenReverseSearch(engine, ev){
     if(btn) setTimeout(()=>{btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');}, 600);
   }
 }
-
+function radarBindFocusSearchButtons(searchUrl){
+  const overlay=document.getElementById('savedInlineFocus');
+  const img=document.getElementById('savedInlineFocusImg');
+  if(overlay) overlay.dataset.searchUrl=searchUrl||'';
+  if(img) img.dataset.searchUrl=searchUrl||'';
+  const yandexBtn=document.getElementById('savedInlineFocusYandex');
+  const googleBtn=document.getElementById('savedInlineFocusGoogle');
+  if(!yandexBtn||!googleBtn)return;
+  yandexBtn.style.display='';
+  googleBtn.style.display='';
+  yandexBtn.href='#';
+  googleBtn.href='#';
+}
+function openInlineSavedFocus(src, preview, searchUrl){
+  const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
+  if(!l||!p)return;
+  const full=String(src||preview||'');
+  const quick=String(preview||full);
+  if(!full&&!quick)return;
+  l.style.pointerEvents='';
+  if(p.dataset.shown!==full){
+    p.removeAttribute('src');
+    p.dataset.shown=full;
+    p.src=quick;
+    if(full&&full!==quick){
+      const hi=new Image();
+      hi.onload=()=>{if(p.dataset.shown===full)p.src=full};
+      hi.src=full;
+    }
+  }
+  radarBindFocusSearchButtons(radarPublicImageUrl(searchUrl, full, quick, currentExtractedImage&&currentExtractedImage.imageUrl));
+  document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
+  l.classList.remove('show');
+  requestAnimationFrame(()=>l.classList.add('show'));
+}
 function renderSavedLinksIfVisible(){
   if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
 }
@@ -3257,7 +3532,80 @@ function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFoc
 
 function openImageZoomPage(imageUrl){
  const safe=String(imageUrl||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
- const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=no"><title>عارض الصورة</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03060b;color:#fff;font-family:Arial}#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;background:radial-gradient(circle at center,#152033,#03060b 68%)}img{max-width:94vw;max-height:92vh;object-fit:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;will-change:transform;transform-origin:center;border-radius:12px;box-shadow:0 22px 70px #000c}.bar{position:fixed;z-index:3;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:7px;border-radius:999px;background:#08101ddd;border:1px solid #ffffff2b;backdrop-filter:blur(8px)}button{width:42px;height:42px;border-radius:50%;border:1px solid #ffffff33;background:#101a2b;color:#fff;font-size:20px;cursor:pointer}.hint{position:fixed;z-index:3;bottom:15px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:7px 12px;border-radius:999px;background:#08101ddd;color:#cbd8ea;font-size:12px}</style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script></body></html>`;
+ const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=no"><title>عارض الصورة</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03060b;color:#fff;font-family:Arial}#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;background:radial-gradient(circle at center,#152033,#03060b 68%)}img{max-width:94vw;max-height:92vh;object-fit:contain;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;will-change:transform;transform-origin:center;border-radius:12px;box-shadow:0 22px 70px #000c}.bar{position:fixed;z-index:3;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:7px;border-radius:999px;background:#08101ddd;border:1px solid #ffffff2b;backdrop-filter:blur(8px)}button{width:42px;height:42px;border-radius:50%;border:1px solid #ffffff33;background:#101a2b;color:#fff;font-size:20px;cursor:pointer}.hint{position:fixed;z-index:3;bottom:15px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:7px 12px;border-radius:999px;background:#08101ddd;color:#cbd8ea;font-size:12px}
+/* ===== RADAR 2026 visual refresh ===== */
+:root{
+  --bg-0:#05070c; --bg-1:#0a1018; --bg-2:#101826; --panel:rgba(14,20,32,.78); --line:rgba(120,150,200,.16);
+  --blue:#4d7cff; --blue-2:#2a55e8; --cyan:#5ce1ff; --text:#eef3fb;
+  --muted:#93a0b8; --muted-2:#64728a; --off:#3a4256;
+  --gold:#e8c36a; --ok:#4bdd98; --radius:22px;
+}
+body{
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(77,124,255,.22), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(92,225,255,.12), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 50% 100%, rgba(232,195,106,.06), transparent 50%),
+    linear-gradient(180deg,#05070c 0%, #070b12 100%);
+  letter-spacing:.01em;
+}
+body::before{
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+  background-size:48px 48px;
+  mask-image:radial-gradient(circle at 50% 20%, #000 20%, transparent 80%);
+}
+.wrap{position:relative;z-index:1}
+.core,.plat,.result-card,.hx-toolbar,.hx-comment{
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+}
+.core{
+  border-radius:var(--radius);
+  border:1px solid rgba(160,190,255,.14);
+  box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.brand-mark{
+  border-radius:14px;
+  background:conic-gradient(from 180deg, var(--blue), var(--cyan), var(--blue));
+}
+.brand h1{background:linear-gradient(90deg,#fff,#cfe6ff 55%,#8feaff); -webkit-background-clip:text; background-clip:text; color:transparent;}
+.search-box,.filter-input,.toggle,.type-chip,.plat{
+  border-radius:16px;
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.go-btn{
+  border-radius:16px;
+  background:linear-gradient(135deg,#5b86ff,#2a4fe0 60%,#1b3cc2);
+  box-shadow:0 10px 28px rgba(46,107,255,.38);
+}
+.type-chip.active{
+  color:#fff4c2!important;
+  border-color:#e8c36a!important;
+}
+.plat.selected{
+  border-color:rgba(92,225,255,.7);
+  box-shadow:0 0 0 1px rgba(92,225,255,.25), 0 10px 24px rgba(0,0,0,.2);
+}
+.status{backdrop-filter:blur(10px)}
+.theme-btn{border-radius:14px}
+@media(max-width:640px){
+  body{padding:16px 12px 48px}
+  .core{padding:16px}
+  .brand h1{font-size:18px}
+}
+
+.reel-extract{margin:12px 0 8px;padding:12px 4px;background:transparent}
+.reel-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.reel-hash{border:1px solid rgba(46,107,255,.45);background:rgba(46,107,255,.12);color:var(--cyan);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:700;cursor:pointer}
+.reel-sentences{display:flex;flex-direction:column;gap:0}
+.reel-sentence{display:block;width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--cyan);font-family:'Tajawal',sans-serif;font-size:15px;font-weight:500;line-height:1.8;text-align:right;padding:10px 4px;cursor:pointer}
+.reel-sentence:hover,.reel-hash:hover{color:#fff;filter:brightness(1.15)}
+</style></head><body><div id="stage"><img id="pic" src="${safe}" draggable="false"></div><div class="bar"><button id="plus">+</button><button id="minus">−</button><button id="reset">↺</button><button id="close">×</button></div><div class="hint">قرّب بإصبعين · اسحب بعد التكبير · نقرتان للتكبير</div><script>const stage=document.getElementById('stage'),pic=document.getElementById('pic');let scale=1,x=0,y=0,pts=new Map(),d0=0,s0=1;const apply=()=>pic.style.transform='translate3d('+x+'px,'+y+'px,0) scale('+scale+')';const setScale=v=>{scale=Math.max(1,Math.min(5,v));if(scale===1)x=y=0;apply()};stage.onpointerdown=e=>{e.preventDefault();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});stage.setPointerCapture?.(e.pointerId);if(pts.size===2){const p=[...pts.values()];d0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);s0=scale}};stage.onpointermove=e=>{if(!pts.has(e.pointerId))return;e.preventDefault();const old=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const p=[...pts.values()],d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);setScale(s0*d/Math.max(1,d0))}else if(scale>1){x+=e.clientX-old.x;y+=e.clientY-old.y;apply()}};const end=e=>pts.delete(e.pointerId);stage.onpointerup=end;stage.onpointercancel=end;stage.onwheel=e=>{e.preventDefault();setScale(scale+(e.deltaY<0?.25:-.25))};pic.ondblclick=()=>setScale(scale>1?1:2.5);plus.onclick=()=>setScale(scale+.5);minus.onclick=()=>setScale(scale-.5);reset.onclick=()=>setScale(1);close.onclick=()=>window.close();apply();<\/script>
+
+
+</body></html>`;
  const blob=new Blob([html],{type:'text/html'}),blobUrl=URL.createObjectURL(blob),win=window.open(blobUrl,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);if(!win){const status=document.getElementById('imageSearchStatus');if(status)status.textContent='⚠️ اسمح بالنوافذ المنبثقة لفتح صفحة التكبير';}
 }
 
@@ -3269,44 +3617,14 @@ async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPubl
 
 init();
 
-/* ===================== بيانات المنصات (فيسبوك + قابل للتوسعة لاحقًا) ===================== */
-// كل منصة جديدة = عنصر واحد بهالكائن، بدون تعديل أي كود ثاني
-const PLATFORM_DATA_PROVIDERS = {
-  facebook: {
-    label: 'فيسبوك',
-    icon: '📘',
-    color: '#1877F2',
-    // رابط Cloudflare Worker الوسيط (يخبي مفتاح Bright Data ويدير trigger/poll)
-    workerUrl: 'https://facebook-data-proxy.alihumied.workers.dev',
-    types: {
-      posts:    { label: 'منشورات',  icon: '📝' },
-      comments: { label: 'تعليقات', icon: '💬' },
-      images:   { label: 'صور',      icon: '🖼️' },
-      reels:    { label: 'ريلز',     icon: '🎬' },
-      profile:  { label: 'ملف شخصي/صفحة', icon: '👤' }
-    },
-    matches: url => /facebook\.com|fb\.watch|fb\.me/i.test(url)
-  }
-  // instagram: { label:'انستجرام', icon:'📷', color:'#E4405F', workerUrl:'...', types:{...}, matches:url=>/instagram\.com/i.test(url) },
-  // tiktok: { label:'تيك توك', icon:'🎵', color:'#000000', workerUrl:'...', types:{...}, matches:url=>/tiktok\.com/i.test(url) },
-};
-
-handleSharedLink();
 
 
-
-/* Multi-platform saved HTML explorer. Isolated from the rest of the application. */
-let HX=[],HXtype='image',HXpage=1,HXplatform='facebook';const HXSIZE=40,HXL={facebook:'فيسبوك',instagram:'إنستجرام',tiktok:'تيك توك',telegram:'تيليجرام',youtube:'يوتيوب',x:'X',snapchat:'سناب شات',messenger:'ماسنجر'};
-// أي كود بحث (runSearch/renderProfileScopedSearch/resolveShareLinkAndSearch) بيكتب نتائجه بالحاويات
-// المذكورة هون بدل أسماء ثابتة — هيك نقدر نوجّه "البحث العميق" جوا بطاقة استيراد HTML/JS لمكانه
-// المحلي تحتها (hxDeep*)، بدل ما ينزل يفتح نتيجة بآخر الصفحة بمنطقة البحث الرئيسي.
-let SEARCH_TARGET={meta:'resultMeta',cards:'resultCards',area:'resultsArea',queryId:'query'};
 function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&').replace(/=3D/g,'=').replace(/\s+/g,' ').trim()}
 // ترقية جودة صور X/تويتر لأعلى دقة متاحة (name=orig) — الرابط الأساسي نفسه بيضل شغّال بس بيرجّع أعلى دقة.
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
 function hxSetTwimgName(url,name){let s=String(url||'');if(!s)return'';s=s.replace(/:(?:orig|large|medium|small|thumb|360x360|4096x4096)(?=$|[?#])/i,'');if(/[?&]name=/i.test(s))s=s.replace(/([?&])name=[^&]*/i,'$1name='+name);else s+=(s.includes('?')?'&':'?')+'name='+name;return s}function hxImgQuality(url){let s=hxn(url);if(!s)return'';return/(?:pbs\.twimg\.com|pbs\.twitter\.com)/i.test(s)?hxSetTwimgName(s,'orig'):s}function hxThumbUrl(url){let s=hxn(url);if(!s||s.startsWith('data:')||s.startsWith('blob:'))return s;if(/(?:pbs\.twimg\.com|pbs\.twitter\.com)/i.test(s))return hxSetTwimgName(s,'small');if(/fbcdn\.net|scontent/i.test(s)){s=s.replace(/_[no]\.(jpe?g|png|webp)/i,'_s.$1');s=s.replace(/\/[sp]\d{3,4}x\d{3,4}\//,'/s320x320/');s=s.replace(/stp=[^&]+/i,'stp=dst-jpg_s320x320')}return s}
 function hxPlatform(doc,raw){const h=String(raw||'').slice(0,500000),loc=(h.match(/Snapshot-Content-Location:\s*(https?:\/\/[^\s]+)/i)||[])[1]||'',can=doc.querySelector('link[rel="canonical"]')?.href||doc.querySelector('meta[property="og:url"]')?.content||'',v=(loc+' '+can+' '+doc.title).toLowerCase();if(/instagram/.test(v))return'instagram';if(/tiktok/.test(v))return'tiktok';if(/telegram|t\.me/.test(v))return'telegram';if(/youtube|youtu\.be/.test(v))return'youtube';if(/twitter\.com|x\.com\b|\/\s*x\s*$/.test(v))return'x';if(/snapchat/.test(v))return'snapchat';return'facebook'}
-function hxLink(url,p){url=hxn(url);let m;if(p==='facebook'){if(url.startsWith('/'))url='https://www.facebook.com'+url;if(!/(facebook\.com|fb\.watch)/i.test(url))return null;let type=/stories|story\.php/i.test(url)?'story':/\/reels?\//i.test(url)?'reel':/\/videos?\/|watch|fb\.watch/i.test(url)?'video':/photos?|photo\.php/i.test(url)?'image':'post';return{url,type,id:'fb:'+url.split(/[?#]/)[0]}}if(p==='instagram'){if(url.startsWith('/'))url='https://www.instagram.com'+url;if(!(m=url.match(/instagram\.com\/(p|reel|tv|stories)\/([\w.-]+)/i)))return null;let k=m[1].toLowerCase();return{url:`https://www.instagram.com/${k}/${m[2]}/`,type:k==='reel'?'reel':k==='stories'?'story':k==='tv'?'video':'image',id:'ig:'+k+':'+m[2]}}if(p==='tiktok'&&(m=url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i)))return{url:url.split(/[?#]/)[0],type:'video',id:'tt:'+m[1]};if(p==='telegram'&&(m=url.match(/(?:t\.me|telegram\.me)\/([\w_]+)\/(\d+)/i)))return{url:`https://t.me/${m[1]}/${m[2]}`,type:'post',id:'tg:'+m[1]+m[2]};if(p==='youtube'&&(m=url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]{6,})/i)))return{url,type:/shorts\//i.test(url)?'reel':'video',id:'yt:'+m[1]};if(p==='x'&&(m=url.match(/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i)))return{url:`https://x.com/${m[1]}/status/${m[2]}`,type:'post',id:'x:'+m[2]};if(p==='snapchat'){if(m=url.match(/snapchat\.com\/spotlight\/([\w-]+)/i))return{url,type:'reel',id:'sc:sp:'+m[1]};if(m=url.match(/story\.snapchat\.com\/s\/([\w-]+)|snapchat\.com\/s\/([\w-]+)/i))return{url,type:'story',id:'sc:st:'+(m[1]||m[2])};if(m=url.match(/snapchat\.com\/add\/([\w.-]+)/i))return{url,type:'post',id:'sc:add:'+m[1]}}return null}
+function hxLink(url,p){url=hxn(url);let m;if(p==='facebook'){if(url.startsWith('/'))url='https://www.facebook.com'+url;if(!/(facebook\.com|fb\.watch)/i.test(url))return null;let type=/stories|story\.php|\/story\//i.test(url)?'story':/\/reels?\/|\/share\/r\//i.test(url)?'reel':/\/videos?\/|\/watch|fb\.watch|\/share\/v\//i.test(url)?'video':/photos?|photo\.php|\/share\/p\//i.test(url)?'image':'post';return{url,type,id:'fb:'+url.split(/[?#]/)[0]}}if(p==='instagram'){if(url.startsWith('/'))url='https://www.instagram.com'+url;if(!(m=url.match(/instagram\.com\/(p|reel|tv|stories)\/([\w.-]+)/i)))return null;let k=m[1].toLowerCase();return{url:`https://www.instagram.com/${k}/${m[2]}/`,type:k==='reel'?'reel':k==='stories'?'story':k==='tv'?'video':'image',id:'ig:'+k+':'+m[2]}}if(p==='tiktok'&&(m=url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i)))return{url:url.split(/[?#]/)[0],type:'video',id:'tt:'+m[1]};if(p==='telegram'&&(m=url.match(/(?:t\.me|telegram\.me)\/([\w_]+)\/(\d+)/i)))return{url:`https://t.me/${m[1]}/${m[2]}`,type:'post',id:'tg:'+m[1]+m[2]};if(p==='youtube'&&(m=url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]{6,})/i)))return{url,type:/shorts\//i.test(url)?'reel':'video',id:'yt:'+m[1]};if(p==='x'&&(m=url.match(/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i)))return{url:`https://x.com/${m[1]}/status/${m[2]}`,type:'post',id:'x:'+m[2]};if(p==='snapchat'){if(m=url.match(/snapchat\.com\/spotlight\/([\w-]+)/i))return{url,type:'reel',id:'sc:sp:'+m[1]};if(m=url.match(/story\.snapchat\.com\/s\/([\w-]+)|snapchat\.com\/s\/([\w-]+)/i))return{url,type:'story',id:'sc:st:'+(m[1]||m[2])};if(m=url.match(/snapchat\.com\/add\/([\w.-]+)/i))return{url,type:'post',id:'sc:add:'+m[1]}}return null}
 function hxKey(src){try{const u=new URL(src);return u.hostname+u.pathname}catch{return src.split('?')[0]}}
 function hxBad(img,src){const z=(src+' '+(img?.getAttribute?.('alt')||'')).toLowerCase(),w=+(img?.getAttribute?.('width')||0),h=+(img?.getAttribute?.('height')||0);return!src||/sprite|emoji|icon|logo|profile picture|avatar/.test(z)||(w&&w<80)||(h&&h<80)}
 function hxNear(img,p){let n=img;for(let i=0;n&&i<10;i++,n=n.parentElement){const links=[];if(n.matches?.('a[href]'))links.push(n);n.querySelectorAll?.('a[href]').forEach(a=>links.push(a));for(const a of links){const z=hxLink(a.getAttribute('href'),p);if(z)return z}}return null}
@@ -3342,7 +3660,7 @@ function hxExtract(doc,raw,p){const map=new Map(),media=new Map(),seen=new Set()
       pool.push(x);add(x);
     });
   }
-  let pats=[];if(p==='facebook')pats=[/https?:\/\/(?:www\.|m\.)?(?:facebook\.com|fb\.watch)\/[^\s"'<>\\]+/gi,/\/(?:reel|reels|videos|photos|stories)\/[^\s"'<>\\]+/gi];if(p==='instagram')pats=[/https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv|stories)\/[\w.-]+/gi,/\/(?:p|reel|tv|stories)\/[\w.-]+/gi];if(p==='tiktok')pats=[/https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s]+\/video\/\d+/gi];if(p==='telegram')pats=[/https?:\/\/(?:t\.me|telegram\.me)\/[\w_]+\/\d+/gi];if(p==='youtube')pats=[/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/gi];if(p==='x')pats=[/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[^/\s]+\/status\/\d+/gi];if(p==='snapchat')pats=[/https?:\/\/(?:www\.)?snapchat\.com\/spotlight\/[\w-]+/gi,/https?:\/\/(?:story\.)?snapchat\.com\/s\/[\w-]+/gi,/https?:\/\/(?:www\.)?snapchat\.com\/add\/[\w.-]+/gi];pats.forEach(re=>{let m;while((m=re.exec(flat))){const z=hxLink(m[0],p);if(z&&!media.has(z.id))media.set(z.id,{...z,thumb:'',text:'',author:'',date:''})}});
+  let pats=[];if(p==='facebook')pats=[/https?:\/\/(?:www\.|m\.)?(?:facebook\.com|fb\.watch)\/[^\s"'<>\\]+/gi,/\/(?:reel|reels|videos|photos|stories|share\/[rvp])\/[^\s"'<>\\]+/gi];if(p==='instagram')pats=[/https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv|stories)\/[\w.-]+/gi,/\/(?:p|reel|tv|stories)\/[\w.-]+/gi];if(p==='tiktok')pats=[/https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s]+\/video\/\d+/gi];if(p==='telegram')pats=[/https?:\/\/(?:t\.me|telegram\.me)\/[\w_]+\/\d+/gi];if(p==='youtube')pats=[/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/gi];if(p==='x')pats=[/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[^/\s]+\/status\/\d+/gi];if(p==='snapchat')pats=[/https?:\/\/(?:www\.)?snapchat\.com\/spotlight\/[\w-]+/gi,/https?:\/\/(?:story\.)?snapchat\.com\/s\/[\w-]+/gi,/https?:\/\/(?:www\.)?snapchat\.com\/add\/[\w.-]+/gi];pats.forEach(re=>{let m;while((m=re.exec(flat))){const z=hxLink(m[0],p);if(z&&!media.has(z.id))media.set(z.id,{...z,thumb:'',text:'',author:'',date:''})}});
  // Recover MHTML image resources.
  [...flat.matchAll(/Content-Location:\s*(https?:\/\/[^\r\n]+)/gi)].forEach((m,i)=>{const src=hxn(m[1]);if(!/\.(?:jpe?g|jpg|png|webp|gif)(?:\?|$)|fbcdn|scontent|cdninstagram|tiktokcdn|ytimg|twimg|sc-cdn|snapchat|pscp\.tv/i.test(src))return;const key=hxKey(src);if(seen.has(key))return;seen.add(key);const x={id:'mh:'+i+key,type:'image',url:'',thumb:src,directUrl:hxImgQuality(src),text:'',author:'',date:''};pool.push(x);add(x)});
  // Give every reel/video/story a poster. Remove assigned poster from plain image category.
@@ -3650,7 +3968,7 @@ function radarShowIconHud(tile){
   hud.querySelector('.radar-hud-dl').hidden=tile.getAttribute('data-candl')!=='1';
   tile.appendChild(hud);
 }
-function hxSelect(e,tile){e.stopPropagation();if(!tile)return;const was=radarSelectTile(tile);const full=tile.getAttribute('data-full')||'';const thumb=tile.querySelector('.saved-image-thumb');const preview=(thumb&&(thumb.currentSrc||thumb.src))||'';if(was){if(full||preview)openInlineSavedFocus(full||preview,preview);return}if(tile.closest('#htmlImportResultsList'))radarShowIconHud(tile)}
+function hxSelect(e,tile){e.stopPropagation();if(!tile)return;const was=radarSelectTile(tile);const full=tile.getAttribute('data-full')||'';const thumb=tile.querySelector('.saved-image-thumb');const preview=(thumb&&(thumb.currentSrc||thumb.src))||'';if(was){if(full||preview)openInlineSavedFocus(full||preview,preview,tile.getAttribute('data-search')||full||'');return}if(tile.closest('#htmlImportResultsList'))radarShowIconHud(tile)}
 if(!window.__radarIconDismissBound){window.__radarIconDismissBound=true;document.addEventListener('click',e=>{if(e.target.closest('.saved-image-tile,.radar-icon-hud'))return;radarClearTileSelection()})}
 if(!window.__radarHxGridBound){window.__radarHxGridBound=true;const hxList=document.getElementById('htmlImportResultsList');if(hxList)hxList.addEventListener('click',e=>{if(e.target.closest('[data-act],.radar-video-convert-action'))return;const tile=e.target.closest('.saved-image-tile');if(!tile||!hxList.contains(tile))return;hxSelect(e,tile)})}
 function hxEmbed(x){let m;if(HXplatform==='instagram'&&(m=x.url.match(/instagram\.com\/(p|reel|tv)\/([\w.-]+)/)))return`https://www.instagram.com/${m[1]}/${m[2]}/embed/captioned/`;if(HXplatform==='facebook')return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(x.url)+'&show_text=false&width=500';if(HXplatform==='youtube'&&(m=x.url.match(/(?:v=|shorts\/|youtu\.be\/)([\w-]+)/)))return'https://www.youtube.com/embed/'+m[1];if(HXplatform==='tiktok'&&(m=x.url.match(/video\/(\d+)/)))return'https://www.tiktok.com/player/v1/'+m[1];if(HXplatform==='telegram')return x.url+'?embed=1';if(HXplatform==='x')return'https://twitframe.com/show?url='+encodeURIComponent(x.url);return x.url}
@@ -3957,6 +4275,8 @@ window.addEventListener('message',async event=>{
 </script>
 
 <div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="#" style="color:#FF3333;border-color:#FF333388;background:#FF333322;" onclick="radarOpenReverseSearch('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="#" style="color:#4285F4;border-color:#4285F488;background:#4285F422;" onclick="radarOpenReverseSearch('google',event)">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+
+
 </body>
 
 </html>
