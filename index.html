@@ -1236,36 +1236,79 @@ async function runImageSearch(){
     imageUrl = await pickBestPublicImage([`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,`https://img.youtube.com/vi/${ytId}/sddefault.jpg`,`https://img.youtube.com/vi/${ytId}/hq720.jpg`,`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`]);
     sourceLabel = 'تم جلب أعلى دقة متاحة علنًا من يوتيوب ✅';
   }
-  // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
+  // 2) تيك توك: oEmbed أولاً، وبعدها واجهة عامة ترجع غلاف الفيديو حتى للروابط المختصرة والمحتوى المحمي بالعمر
   else if(/tiktok\.com/i.test(url)){
-    status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
+    status.textContent = 'جارٍ جلب سكرين الفيديو من تيك توك...';
+    const tiktokIdFrom = (u, extra='') => {
+      const src = `${u||''} ${extra||''}`;
+      const m = src.match(/\/(?:video|photo)\/(\d{8,})/i) || src.match(/embed_product_id["']?\s*[:=]\s*["']?(\d{8,})/i) || src.match(/data-video-id=["'](\d{8,})/i);
+      return m ? m[1] : '';
+    };
+    const isGenericTikTokCover = (img) => /black-placeholder|placeholder-bg|eden-sg\/nupwbpxnuhfbv|tiktok-share-logo|obj\/eden-sg/i.test(img||'');
+    const pickTikTokCover = (obj) => {
+      if(!obj || typeof obj !== 'object') return '';
+      const imgs = Array.isArray(obj.images) ? obj.images.filter(x=>typeof x==='string' && /^https?:\/\//i.test(x)) : [];
+      const list = [obj.ai_dynamic_cover, obj.cover, obj.origin_cover, obj.thumbnail_url, obj.thumbnail, imgs[0]];
+      return list.find(x=>typeof x==='string' && /^https?:\/\//i.test(x) && !isGenericTikTokCover(x)) || '';
+    };
+    const authorLine = (obj) => {
+      const a = obj && obj.author;
+      if(a && typeof a==='object') return a.nickname || a.unique_id || a.author_name || '';
+      return (obj && (obj.author_name || obj.author)) || '';
+    };
+
     const oembedTarget = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
     const tryOembedJson = async (fetchUrl) => {
       try{
         const r = await fetchWithTimeout(fetchUrl, 5000);
         if(!r.ok) return null;
         const d = await r.json();
-        return (d && d.thumbnail_url) ? d : null;
+        return (d && typeof d==='object') ? d : null;
       }catch(e){ return null; }
     };
-    // تيك توك غالبًا يمنع قراءة رد الـ oEmbed مباشرة من متصفح خارجي (CORS) حتى لو نجح الطلب فعليًا على مستوى السيرفر —
-    // فنجرب الطلب المباشر بالتوازي مع نفس الطلب بالضبط لكن ممرَّر عبر أكثر من وسيط CORS، ونأخذ أول رد فيه صورة فعلية
-    const data = await firstTruthy([
+    const oembedData = await firstTruthy([
       tryOembedJson(oembedTarget),
       tryOembedJson(`https://api.allorigins.win/raw?url=${encodeURIComponent(oembedTarget)}`),
       tryOembedJson(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(oembedTarget)}`),
       tryOembedJson(`https://corsproxy.io/?${encodeURIComponent(oembedTarget)}`)
     ]);
-    if(data){
-      imageUrl = data.thumbnail_url;
-      captionText = data.title || '';
+    if(oembedData && oembedData.thumbnail_url && !isGenericTikTokCover(oembedData.thumbnail_url)){
+      imageUrl = oembedData.thumbnail_url;
+      captionText = oembedData.title || '';
       sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
     }
+
+    // مسار إضافي: tikwm يفتح CORS للمتصفح ويرجع غلاف الفيديو الحقيقي حتى لو oEmbed رجع thumbnail فاضي
+    if(!imageUrl){
+      const tikwmQs = `url=${encodeURIComponent(url)}`;
+      const tryTikwm = async (fetchUrl) => {
+        try{
+          const r = await fetchWithTimeout(fetchUrl, 8000);
+          if(!r.ok) return null;
+          const d = await r.json();
+          const payload = (d && d.data && typeof d.data==='object') ? d.data : d;
+          const cover = pickTikTokCover(payload);
+          if(!cover) return null;
+          return {cover, title: (payload && payload.title) || '', author: authorLine(payload), id: (payload && payload.id) || ''};
+        }catch(e){ return null; }
+      };
+      const tw = await firstTruthy([
+        tryTikwm(`https://www.tikwm.com/api/?${tikwmQs}`),
+        tryTikwm(`https://tikwm.com/api/?${tikwmQs}`),
+        tryTikwm(`https://corsproxy.io/?${encodeURIComponent('https://www.tikwm.com/api/?'+tikwmQs)}`),
+        tryTikwm(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.tikwm.com/api/?'+tikwmQs)}`)
+      ]);
+      if(tw){
+        imageUrl = tw.cover;
+        captionText = [tw.author, tw.title].filter(Boolean).join(' — ');
+        sourceLabel = 'تم جلب سكرين الفيديو من تيك توك تلقائيًا ✅';
+      }
+    }
+
     if(!imageUrl){
       try{
         const og = await fetchOgTags(url);
-        if(og.image){
-          // صور فيديوهات تيك توك الحقيقية دائمًا طولية (نسبة تقارب 9:16) — لو الصورة المستخرجة عريضة أو مربعة فهذا معناه إننا أمسكنا صورة تيك توك العامة (لوجو/صورة مشاركة افتراضية تظهر لما تيك توك يكتشف إنه سكرابينج) مش صورة الفيديو الفعلية، فنرفضها بدل ما نعرضها وكأنها نجحت
+        if(og.image && !isGenericTikTokCover(og.image)){
           const probe = await probePublicImage(og.image);
           if(probe.ok && probe.height > probe.width * 1.15){
             imageUrl = og.image;
@@ -1275,13 +1318,22 @@ async function runImageSearch(){
         }
       }catch(err){ /* فشلت كل المحاولات */ }
     }
+
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن (تيك توك صار يحجب أغلب طرق الجلب الآلي مؤخرًا). افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
-      cards.innerHTML = openOriginalLinkHtml(url);
+      const vid = tiktokIdFrom(url, JSON.stringify(oembedData||{}));
+      const embedCard = vid ? `
+        <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+          <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة لأخذ سكرين (مشغّل تيك توك الرسمي)</div>
+          <iframe src="https://www.tiktok.com/player/v1/${vid}?music_info=1&description=1" width="100%" height="520" style="border:none; border-radius:10px; background:#000; min-height:420px;" allow="fullscreen; autoplay; encrypted-media" allowfullscreen></iframe>
+          <div class="hint" style="margin:0; padding:0 4px;">إذا ما انعرض الفيديو هون، افتحي الرابط الأصلي وخذي السكرين من هناك.</div>
+        </div>` : '';
+      status.innerHTML = '⚠️ ما قدرنا نجيب سكرين تيك توك كصورة ثابتة الآن. جرّبي المعاينة الحية تحت أو افتحي الرابط الأصلي.';
+      cards.innerHTML = embedCard + openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
   }
+
   // 3) فيسبوك / إنستجرام / X: عبر وسيط CORS يجيب og:image و og:title من الصفحة (بدون API key)
   else if(/facebook\.com|fb\.watch|instagram\.com|x\.com|twitter\.com/i.test(url)){
     status.textContent = 'جارٍ محاولة جلب بيانات المنشور... قد تأخذ بضع ثوانٍ';
