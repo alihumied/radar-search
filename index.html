@@ -269,10 +269,9 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
     <div class="toggles">
       <div class="toggle" onclick="document.getElementById('htmlImportInput').click()" style="cursor:pointer;"><span style="font-size:16px;">📄</span><span>رفع ملف HTML/JS</span></div>
       <div class="toggle" onclick="document.getElementById('jsonImportInput').click()" style="cursor:pointer;border-color:#45d9ff88"><span>{ }</span><span>رفع ملف JSON</span></div>
-      <div class="toggle" id="savedFilesToggle" onclick="toggleSavedFilesView()" style="cursor:pointer;border-color:#d4af5a88"><span style="font-size:16px;">📁</span><span>الملفات المحفوظة</span><b id="savedFilesCount" style="color:#d4af5a;font:10px 'JetBrains Mono';margin-right:4px"></b></div>
+      <div class="toggle" onclick="toggleSavedFilesView()" style="cursor:pointer;border-color:#d4af5a88"><span style="font-size:16px;">📁</span><span>الملفات المحفوظة (v3)</span></div>
     </div>
     <div class="results" id="savedFilesArea">
-      <div class="hint" style="margin-top:10px;color:#d4af5a">📁 أرشيف ملفات الاستيراد المحفوظة داخل الجهاز — HTML و JSON. ما بتنحذف إلا إذا ضغطتي حذف.</div>
       <div id="savedFilesList" style="margin-top:12px;"></div>
     </div>
     <div class="hint" id="htmlImportStatus" style="margin-top:8px;"></div>
@@ -3445,49 +3444,25 @@ function radarSubmitEngineForm(action, fieldName, file, extraFields){
   form.submit();
   setTimeout(()=>form.remove(), 4000);
 }
-let radarPrefetchedSearch=null;
-async function radarPrefetchSearchBlob(){
-  radarPrefetchedSearch=null;
-  try{
-    const blob=await radarGetSearchBlob();
-    if(blob) radarPrefetchedSearch={blob, ts:Date.now()};
-  }catch(e){}
-}
 async function radarOpenReverseSearch(engine, ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
   const old=btn?btn.textContent:'';
   if(btn) btn.textContent='⏳';
   try{
-    let blob=(radarPrefetchedSearch && (Date.now()-radarPrefetchedSearch.ts<60000) && radarPrefetchedSearch.blob) || null;
-    if(!blob) blob=await radarGetSearchBlob();
+    const blob=await radarGetSearchBlob();
     if(!blob){
       alert('ما قدرنا نقرأ الصورة من المعاينة. افتحيها من 📌 صور بعد الحفظ وجرّبي البحث من جديد.');
       return;
     }
     const ext=radarImageExt(blob, (document.getElementById('savedInlineFocusImg')||{}).src);
     const mime=blob.type&&blob.type.startsWith('image/')?blob.type:(ext==='png'?'image/png':'image/jpeg');
-    const rawFile=new File([blob], `radar-search.${ext}`, {type:mime});
+    const file=new File([blob], `radar-search.${ext}`, {type:mime});
     if(engine==='yandex'){
-      radarSubmitEngineForm('https://yandex.com/images/search?rpt=imageview', 'upfile', rawFile, {prg:'1'});
-      return;
+      radarSubmitEngineForm('https://yandex.com/images/search?rpt=imageview', 'upfile', file, {prg:'1'});
+    }else{
+      radarSubmitEngineForm('https://lens.google.com/v3/upload?ep=ccm&s=&st='+Date.now(), 'encoded_image', file, {processed_image_dimensions:'1000,1000'});
     }
-    const publicUrl=radarPublicImageUrl(
-      document.getElementById('savedInlineFocus')&&document.getElementById('savedInlineFocus').dataset.searchUrl,
-      document.getElementById('savedInlineFocusImg')&&document.getElementById('savedInlineFocusImg').dataset.searchUrl,
-      currentExtractedImage&&currentExtractedImage.imageUrl
-    );
-    if(publicUrl){
-      window.open(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(publicUrl)}`,'_blank','noopener');
-      return;
-    }
-    radarSubmitEngineForm('https://www.google.com/searchbyimage/upload', 'encoded_image', rawFile, {
-      image_content:'',
-      filename:rawFile.name||'radar-search.jpg',
-      hl:'ar',
-      image_url:'',
-      btnG:'Search'
-    });
   }catch(err){
     alert('تعذّر فتح البحث: '+(err&&err.message?err.message:err));
   }finally{
@@ -3506,7 +3481,6 @@ function radarBindFocusSearchButtons(searchUrl){
   googleBtn.style.display='';
   yandexBtn.href='#';
   googleBtn.href='#';
-  radarPrefetchSearchBlob();
 }
 function openInlineSavedFocus(src, preview, searchUrl){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
@@ -3642,7 +3616,6 @@ function platformQualityCandidates(imageUrl,pageUrl){const a=[imageUrl];try{cons
 async function maximizePlatformImage(imageUrl,pageUrl){return await pickBestPublicImage(platformQualityCandidates(imageUrl,pageUrl))||imageUrl}
 
 init();
-idbGetAllSourceFiles().then(items=>radarUpdateSavedFilesCount(items.length)).catch(()=>{});
 
 
 
@@ -3802,7 +3775,6 @@ window.handleHtmlImport=function(e){const f=e.target.files?.[0];e.target.value='
    idbAddSourceFile(f.name,'html',JSON.stringify(HX),HXplatform).then(async()=>{
      refreshSavedFilesIfVisible();
      const all=await idbGetAllSourceFiles();
-     radarUpdateSavedFilesCount(all.length);
      st.textContent=msg+` · ✅ انحفظت نسخة الملف (المجموع الكلي: ${all.length})`;
    }).catch(err=>{
      console.error('radar: failed to save html source file',err);
@@ -4132,15 +4104,10 @@ function refreshSavedFilesIfVisible(){
   const area=document.getElementById('savedFilesArea');
   if(area&&area.classList.contains('show'))renderSavedFiles();
 }
-function radarUpdateSavedFilesCount(n){
-  const el=document.getElementById('savedFilesCount');
-  if(el) el.textContent = n?`(${n})`:'';
-}
 async function renderSavedFiles(){
   const l=document.getElementById('savedFilesList');
   const items=await idbGetAllSourceFiles();
-  radarUpdateSavedFilesCount(items.length);
-  if(!items.length){l.innerHTML='<div class="hint">ما في ملفات بهالأرشيف بهالجهاز/الأصل الحالي. أي HTML أو JSON بترفعيه بينحفظ هون تلقائيًا ويضل موجود بعد تحديث الصفحة.</div>';return}
+  if(!items.length){l.innerHTML='<div class="hint">ما في ملفات محفوظة بعد — أي HTML أو JSON بترفعيه بينحفظ هون تلقائيًا.</div>';return}
   const ICON={facebook:'📘',instagram:'📸',tiktok:'🎵',snapchat:'👻',x:'🐦',telegram:'✈️',youtube:'▶️',messenger:'💬'};
   const groups=new Map();
   items.forEach(x=>{
@@ -4232,7 +4199,7 @@ async function deleteSavedFile(id){
   await idbDeleteSourceFile(id);
   renderSavedFiles();
 }
-function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const text=x.target.result;const d=JSON.parse(text);applyOfficialJsonData(d,f.name);idbAddSourceFile(f.name,'json',text,d.platform||'x').then(async()=>{refreshSavedFilesIfVisible();const all=await idbGetAllSourceFiles();radarUpdateSavedFilesCount(all.length)}).catch(err=>{console.error('radar: failed to save json source file',err);st.textContent+=` ⚠️ (تعذّر حفظ نسخة الملف: ${err?.message||err})`});}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
+function handleOfficialJson(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;const st=document.getElementById('htmlImportStatus');st.textContent='⏳ قراءة JSON...';const r=new FileReader();r.onload=x=>{try{const text=x.target.result;const d=JSON.parse(text);applyOfficialJsonData(d,f.name);idbAddSourceFile(f.name,'json',text,d.platform||'x').then(()=>{refreshSavedFilesIfVisible()}).catch(err=>{console.error('radar: failed to save json source file',err);st.textContent+=` ⚠️ (تعذّر حفظ نسخة الملف: ${err?.message||err})`});}catch(err){st.textContent='⚠️ '+err.message}};r.readAsText(f)}
 function loadXWidget(cb){if(window.twttr?.widgets)return cb();let sc=document.getElementById('xWidgets');if(!sc){sc=document.createElement('script');sc.id='xWidgets';sc.src='https://platform.x.com/widgets.js';sc.async=true;document.head.appendChild(sc)}let n=0;const t=setInterval(()=>{if(window.twttr?.widgets){clearInterval(t);cb()}else if(++n>40)clearInterval(t)},250)}
 const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);const isXPost=x?.postUrl&&/(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i.test(x.postUrl);if(!isXPost)return officialOldOpen(id);hxClose();const d=document.createElement('div');d.id='hxEmbed';d.className='hx-embed';d.innerHTML=`<div class="hx-box" onclick="event.stopPropagation()"><div class="hx-head"><b>X Embed الرسمي</b><button onclick="hxClose()">×</button></div><div id="xMount" style="min-height:340px;overflow:auto"><div class="hint">⏳ تحميل المنشور الرسمي...</div></div><div class="hx-actions"><a href="${esc(x.postUrl)}" target="_blank">فتح المنشور ↗</a></div><div id="xMsg" class="hint">يعتمد على رابط المنشور الرسمي</div></div>`;d.onclick=e=>{if(e.target===d)hxClose()};document.body.appendChild(d);loadXWidget(()=>{const m=x.postUrl.match(/\/status\/(\d+)/),mount=d.querySelector('#xMount'),msg=d.querySelector('#xMsg');if(!m)return msg.textContent='⚠️ رابط المنشور ناقص';mount.innerHTML='';twttr.widgets.createTweet(m[1],mount,{theme:document.body.classList.contains('light-theme')?'light':'dark',align:'center',conversation:'none',dnt:true}).then(el=>msg.textContent=el?'✅ تم تحميل X Embed الرسمي':'⚠️ لم يسمح X بعرض المنشور').catch(er=>msg.textContent='⚠️ '+er.message)})};
 /* ====== RADAR saved conversion bridge ====== */
