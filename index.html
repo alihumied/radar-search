@@ -1148,6 +1148,17 @@ async function fetchWithTimeout(url, ms=5000, options={}){
     clearTimeout(timer);
   }
 }
+/* يرجّع أول نتيجة "ناجحة" (غير فارغة) من مجموعة طلبات تشتغل بالتوازي، بدل انتظارها وحدة ورا وحدة — يقلل وقت الانتظار الكلي لما نجرب نفس الطلب عبر أكثر من مصدر/وسيط بنفس الوقت */
+function firstTruthy(promises){
+  return new Promise(resolve=>{
+    let left = promises.length;
+    if(!left) return resolve(null);
+    promises.forEach(p=>Promise.resolve(p).then(v=>{
+      if(v) resolve(v);
+      else if(--left===0) resolve(null);
+    }));
+  });
+}
 async function fetchOgTags(pageUrl){
   const scrapeUrl=pageUrl.replace(/^https?:\/\/(www\.)?facebook\.com/i,'https://m.facebook.com');
   const candidates=[];let title=null,desc=null;
@@ -1228,27 +1239,44 @@ async function runImageSearch(){
   // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
   else if(/tiktok\.com/i.test(url)){
     status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
-    try{
-      const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      if(data && data.thumbnail_url){
-        imageUrl = data.thumbnail_url;
-        captionText = data.title || '';
-        sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
-      }
-    }catch(err){ /* فشلت المحاولة، ننتقل للاحتياطي */ }
+    const oembedTarget = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+    const tryOembedJson = async (fetchUrl) => {
+      try{
+        const r = await fetchWithTimeout(fetchUrl, 5000);
+        if(!r.ok) return null;
+        const d = await r.json();
+        return (d && d.thumbnail_url) ? d : null;
+      }catch(e){ return null; }
+    };
+    // تيك توك غالبًا يمنع قراءة رد الـ oEmbed مباشرة من متصفح خارجي (CORS) حتى لو نجح الطلب فعليًا على مستوى السيرفر —
+    // فنجرب الطلب المباشر بالتوازي مع نفس الطلب بالضبط لكن ممرَّر عبر أكثر من وسيط CORS، ونأخذ أول رد فيه صورة فعلية
+    const data = await firstTruthy([
+      tryOembedJson(oembedTarget),
+      tryOembedJson(`https://api.allorigins.win/raw?url=${encodeURIComponent(oembedTarget)}`),
+      tryOembedJson(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(oembedTarget)}`),
+      tryOembedJson(`https://corsproxy.io/?${encodeURIComponent(oembedTarget)}`)
+    ]);
+    if(data){
+      imageUrl = data.thumbnail_url;
+      captionText = data.title || '';
+      sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
+    }
     if(!imageUrl){
       try{
         const og = await fetchOgTags(url);
         if(og.image){
-          imageUrl = og.image;
-          captionText = og.title || og.desc || '';
-          sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
+          // صور فيديوهات تيك توك الحقيقية دائمًا طولية (نسبة تقارب 9:16) — لو الصورة المستخرجة عريضة أو مربعة فهذا معناه إننا أمسكنا صورة تيك توك العامة (لوجو/صورة مشاركة افتراضية تظهر لما تيك توك يكتشف إنه سكرابينج) مش صورة الفيديو الفعلية، فنرفضها بدل ما نعرضها وكأنها نجحت
+          const probe = await probePublicImage(og.image);
+          if(probe.ok && probe.height > probe.width * 1.15){
+            imageUrl = og.image;
+            captionText = og.title || og.desc || '';
+            sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
+          }
         }
       }catch(err){ /* فشلت كل المحاولات */ }
     }
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن (تيك توك صار يحجب أغلب طرق الجلب الآلي مؤخرًا). افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
       cards.innerHTML = openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
