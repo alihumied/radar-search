@@ -3040,7 +3040,11 @@ function attachSavedZoom(){
     if(moved){ moved=false; activeImg=null; return; }
     activeImg=null;
     const tile = img.closest('.saved-image-tile');
-    if(radarSelectTile(tile)) openInlineSavedFocus(img.currentSrc||img.src, img.currentSrc||img.src, tile.getAttribute('data-search')||'');
+    if(radarSelectTile(tile)){
+      const imgEl=document.getElementById('savedInlineFocusImg');
+      if(imgEl) imgEl.dataset.id=img.getAttribute('data-id')||'';
+      openInlineSavedFocus(img.currentSrc||img.src, img.currentSrc||img.src, tile.getAttribute('data-search')||'');
+    }
   });
   list.addEventListener('contextmenu', e=>{ if(e.target.closest('.saved-image-thumb')) e.preventDefault(); });
 }
@@ -3082,109 +3086,22 @@ function removeSavedUrl(i){const a=getSavedUrls();a.splice(i,1);localStorage.set
 function radarPublicImageUrl(){
   for(const raw of arguments){
     const u=String(raw||'').trim();
-    if(/^https?:\/\//i.test(u) && !/^blob:/i.test(u) && !/^data:/i.test(u) && !/vt\.tiktok\.com|vm\.tiktok\.com/i.test(u)) return u;
+    if(/^https?:\/\//i.test(u) && !/^blob:/i.test(u) && !/^data:/i.test(u)) return u;
   }
   return '';
-}
-function radarYandexSearchHref(imageUrl){
-  return `https://yandex.com/images/search?rpt=imageview&url=${encodeURIComponent(imageUrl)}`;
-}
-function radarGoogleSearchHref(imageUrl){
-  return `https://www.google.com/searchbyimage?sbisrc=cr_1_5_2&image_url=${encodeURIComponent(imageUrl)}`;
-}
-async function radarBlobFromSrc(src){
-  if(!src) return null;
-  try{
-    const r=await fetch(src);
-    if(r.ok){
-      const b=await r.blob();
-      if(b && b.size) return b;
-    }
-  }catch(e){}
-  try{
-    const img=document.getElementById('savedInlineFocusImg');
-    if(!img || !img.naturalWidth) return null;
-    const c=document.createElement('canvas');
-    c.width=img.naturalWidth; c.height=img.naturalHeight;
-    c.getContext('2d').drawImage(img,0,0);
-    return await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',0.9));
-  }catch(e){ return null; }
-}
-async function radarUploadPublicImage(blob){
-  if(!blob) return '';
-  const file=blob.type&&blob.type.startsWith('image/')?blob:new Blob([blob],{type:'image/jpeg'});
-  try{
-    const fd=new FormData();
-    fd.append('image', file, 'radar.jpg');
-    const r=await fetchWithTimeout('https://api.imgur.com/3/image', 14000, {method:'POST', headers:{Authorization:'Client-ID 546c25a59c58ad7'}, body:fd});
-    const d=await r.json();
-    if(d && d.data && d.data.link) return d.data.link;
-  }catch(e){}
-  try{
-    const fd=new FormData();
-    fd.append('file', file, 'radar.jpg');
-    const r=await fetchWithTimeout('https://tmpfiles.org/api/v1/upload', 14000, {method:'POST', body:fd});
-    const d=await r.json();
-    const u=d && d.data && d.data.url;
-    if(u) return String(u).replace('tmpfiles.org/','tmpfiles.org/dl/');
-  }catch(e){}
-  try{
-    const fd=new FormData();
-    fd.append('reqtype', 'fileupload');
-    fd.append('fileToUpload', file, 'radar.jpg');
-    const r=await fetchWithTimeout('https://litterbox.catbox.moe/resources/internals/api.php', 14000, {method:'POST', body:fd});
-    const t=(await r.text()).trim();
-    if(/^https?:\/\//i.test(t)) return t;
-  }catch(e){}
-  return '';
-}
-async function radarResolveSearchImageUrl(preferred){
-  const img=document.getElementById('savedInlineFocusImg');
-  const overlay=document.getElementById('savedInlineFocus');
-  const direct=radarPublicImageUrl(
-    preferred,
-    overlay && overlay.dataset.searchUrl,
-    img && img.dataset.searchUrl,
-    img && img.src,
-    currentExtractedImage && currentExtractedImage.imageUrl
-  );
-  if(direct) return direct;
-  const blob=await radarBlobFromSrc((img&&(img.currentSrc||img.src))||preferred||'');
-  return await radarUploadPublicImage(blob);
-}
-async function radarOpenReverseSearch(engine, ev){
-  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const old=btn?btn.textContent:'';
-  if(btn) btn.textContent='⏳ جارٍ النقل...';
-  try{
-    const imageUrl=await radarResolveSearchImageUrl();
-    if(!imageUrl){
-      alert('ما قدرنا نجهّز رابط الصورة للمحرك. جرّبي حفظ الصورة أولاً أو ارفعيها يدويًا.');
-      window.open(engine==='google'?'https://lens.google.com/':'https://yandex.com/images/search?rpt=imageview','_blank','noopener');
-      return;
-    }
-    window.open(engine==='google'?radarGoogleSearchHref(imageUrl):radarYandexSearchHref(imageUrl),'_blank','noopener');
-  }catch(err){
-    alert('تعذّر فتح البحث العكسي: '+(err&&err.message?err.message:err));
-  }finally{
-    if(btn) btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');
-  }
 }
 function radarBindFocusSearchButtons(searchUrl){
   const overlay=document.getElementById('savedInlineFocus');
   const img=document.getElementById('savedInlineFocusImg');
-  const yandexBtn=document.getElementById('savedInlineFocusYandex');
-  const googleBtn=document.getElementById('savedInlineFocusGoogle');
   if(overlay) overlay.dataset.searchUrl=searchUrl||'';
   if(img) img.dataset.searchUrl=searchUrl||'';
+  const yandexBtn=document.getElementById('savedInlineFocusYandex');
+  const googleBtn=document.getElementById('savedInlineFocusGoogle');
   if(!yandexBtn||!googleBtn)return;
   yandexBtn.style.display='';
   googleBtn.style.display='';
   yandexBtn.href='#';
   googleBtn.href='#';
-  yandexBtn.title='بحث عكسي في ياندكس بالصورة';
-  googleBtn.title='بحث عكسي في جوجل بالصورة';
 }
 function openInlineSavedFocus(src, preview, searchUrl){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
@@ -3208,6 +3125,110 @@ function openInlineSavedFocus(src, preview, searchUrl){
   l.classList.remove('show');
   requestAnimationFrame(()=>l.classList.add('show'));
 }
+function radarImageExt(blob,src){
+  const t=(blob&&blob.type)||'';
+  if(/png/i.test(t)||/\.png(?:$|\?)/i.test(src||'')) return 'png';
+  if(/webp/i.test(t)||/\.webp(?:$|\?)/i.test(src||'')) return 'webp';
+  if(/gif/i.test(t)||/\.gif(?:$|\?)/i.test(src||'')) return 'gif';
+  return 'jpg';
+}
+async function radarFetchBlob(url){
+  if(!url) return null;
+  try{
+    const r=await fetch(url);
+    if(r.ok){const b=await r.blob(); if(b&&b.size>40) return b;}
+  }catch(e){}
+  if(/^https?:\/\//i.test(url)){
+    const proxies=[
+      u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+    ];
+    for(const make of proxies){
+      try{
+        const r=await fetchWithTimeout(make(url), 8000);
+        if(r&&r.ok){const b=await r.blob(); if(b&&b.size>40&&!/text\/html/i.test(b.type||'')) return b;}
+      }catch(e){}
+    }
+  }
+  return null;
+}
+async function radarGetSearchBlob(){
+  const overlayImg=document.getElementById('savedInlineFocusImg');
+  const extracted=document.getElementById('extractedThumb');
+  const src=(overlayImg&&overlayImg.classList.contains('show')?null:null);
+  const visibleSrc=(overlayImg&&(overlayImg.currentSrc||overlayImg.src))||(extracted&&(extracted.currentSrc||extracted.src))||'';
+  if(visibleSrc&&(/^(blob:|data:)/i.test(visibleSrc))){
+    const b=await radarFetchBlob(visibleSrc);
+    if(b) return b;
+  }
+  const tileId=overlayImg&&overlayImg.dataset.id;
+  if(tileId){
+    try{
+      const rows=await idbGetAllImages();
+      const row=rows.find(x=>String(x.id)===String(tileId));
+      if(row&&row.blob) return row.blob;
+      if(row&&row.displayUrl){const b=await radarFetchBlob(row.displayUrl); if(b) return b;}
+    }catch(e){}
+  }
+  if(visibleSrc){const b=await radarFetchBlob(visibleSrc); if(b) return b;}
+  const remote=radarPublicImageUrl(
+    document.getElementById('savedInlineFocus')&&document.getElementById('savedInlineFocus').dataset.searchUrl,
+    overlayImg&&overlayImg.dataset.searchUrl,
+    currentExtractedImage&&currentExtractedImage.imageUrl
+  );
+  if(remote){const b=await radarFetchBlob(remote); if(b) return b;}
+  return null;
+}
+function radarSubmitEngineForm(action, fieldName, file, extraFields){
+  const form=document.createElement('form');
+  form.method='POST';
+  form.enctype='multipart/form-data';
+  form.action=action;
+  form.target='_blank';
+  form.style.display='none';
+  const fileInput=document.createElement('input');
+  fileInput.type='file';
+  fileInput.name=fieldName;
+  const dt=new DataTransfer();
+  dt.items.add(file);
+  fileInput.files=dt.files;
+  form.appendChild(fileInput);
+  Object.entries(extraFields||{}).forEach(([k,v])=>{
+    const inp=document.createElement('input');
+    inp.type='hidden'; inp.name=k; inp.value=v;
+    form.appendChild(inp);
+  });
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(()=>form.remove(), 4000);
+}
+async function radarOpenReverseSearch(engine, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
+  const old=btn?btn.textContent:'';
+  if(btn) btn.textContent='⏳';
+  try{
+    const blob=await radarGetSearchBlob();
+    if(!blob){
+      alert('ما قدرنا نقرأ الصورة من المعاينة. احفظيها أولاً من زر حفظ بعدين افتحيها من 📌 صور وجرّبي البحث.');
+      return;
+    }
+    const ext=radarImageExt(blob, (document.getElementById('savedInlineFocusImg')||{}).src);
+    const mime=blob.type&&blob.type.startsWith('image/')?blob.type:(ext==='png'?'image/png':'image/jpeg');
+    const file=new File([blob], `radar-search.${ext}`, {type:mime});
+    if(engine==='yandex'){
+      radarSubmitEngineForm('https://yandex.com/images/search?rpt=imageview', 'upfile', file, {prg:'1'});
+    }else{
+      radarSubmitEngineForm('https://www.google.com/searchbyimage/upload', 'encoded_image', file, {image_url:'', sbisrc:'cr_1_5_2'});
+    }
+  }catch(err){
+    alert('تعذّر فتح البحث: '+(err&&err.message?err.message:err));
+  }finally{
+    if(btn) setTimeout(()=>{btn.textContent=old||(engine==='google'?'🔍 جوجل':'🔍 ياندكس');}, 600);
+  }
+}
+
 function renderSavedLinksIfVisible(){
   if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
 }
