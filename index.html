@@ -1164,69 +1164,116 @@ function isTikTokUrl(url){
   return /(?:^https?:\/\/)?(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/i.test(String(url||''));
 }
 function tiktokVideoIdFromText(text){
-  const m=String(text||'').match(/(?:video|embed|player\/v1|data-video-id=)[\/"](\d{8,})/i)||String(text||'').match(/\b(\d{19})\b/);
+  const m=String(text||'').match(/tiktok\.com\/(?:@[^/]+\/)?video\/(\d+)/i)||String(text||'').match(/data-video-id=["']?(\d{8,})/i)||String(text||'').match(/player\/v1\/(\d+)/i);
   return m?m[1]:'';
+}
+function parseTikTokCanonical(text){
+  const m=String(text||'').match(/tiktok\.com\/@([^/?#\s]+)\/(?:video|photo)\/(\d+)/i);
+  if(!m) return null;
+  const author=decodeURIComponent(m[1]).replace(/^@/,'');
+  const id=m[2];
+  return {author, id, canonical:`https://www.tiktok.com/@${author}/video/${id}`};
 }
 function canonicalTikTokUrl(author, id){
   if(!id) return '';
   const user=String(author||'').replace(/^@/,'').trim();
-  return user?`https://www.tiktok.com/@${encodeURIComponent(user).replace(/%40/g,'')}/video/${id}`:`https://www.tiktok.com/video/${id}`;
+  if(!user) return '';
+  return `https://www.tiktok.com/@${user}/video/${id}`;
 }
-function tiktokEmbedHtml(videoId){
-  if(!videoId) return '';
+function tiktokEmbedHtml(videoId, canonical){
+  if(!videoId && !canonical) return '';
+  const cite=canonical|| (videoId?`https://www.tiktok.com/video/${videoId}`:'');
+  const id=videoId||tiktokVideoIdFromText(cite);
   return `
-      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
-        <div class="result-title" style="padding:0 4px;">🎵 معاينة حيّة (تيك توك)</div>
-        <iframe src="https://www.tiktok.com/player/v1/${encodeURIComponent(videoId)}" width="100%" height="520" style="border:none;border-radius:10px;background:#000;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      <div class="result-card" style="flex-direction:column;align-items:stretch;gap:10px;">
+        <div class="result-title" style="padding:0 4px;">🎵 معاينة تيك توك</div>
+        <iframe src="https://www.tiktok.com/embed/v2/${encodeURIComponent(id)}" width="100%" height="580" style="border:none;border-radius:10px;background:#000;min-height:480px;" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <blockquote class="tiktok-embed" cite="${cite.replace(/"/g,'"')}" data-video-id="${id}" style="max-width:100%;min-width:280px;margin:0">
+          <section><a target="_blank" rel="noopener" href="${cite.replace(/"/g,'"')}">${cite}</a></section>
+        </blockquote>
       </div>`;
 }
+function radarLoadTikTokEmbed(){
+  document.querySelectorAll('script[data-radar-tt]').forEach(s=>s.remove());
+  if(!document.querySelector('.tiktok-embed')) return;
+  const s=document.createElement('script');
+  s.src='https://www.tiktok.com/embed.js';
+  s.async=true;
+  s.setAttribute('data-radar-tt','1');
+  document.body.appendChild(s);
+}
+async function expandTikTokShort(url){
+  const parsed=parseTikTokCanonical(url);
+  if(parsed) return parsed;
+  try{
+    const r=await fetchWithTimeout('https://unshorten.me/json/'+encodeURIComponent(url),10000);
+    const j=await r.json();
+    const resolved=j&&(j.resolved_url||j.resolvedUrl||'');
+    const p=parseTikTokCanonical(resolved);
+    if(p) return p;
+  }catch(e){}
+  try{
+    const r=await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(url)}`,8000);
+    const j=await r.json();
+    const p=parseTikTokCanonical(j&&j.data&&j.data.url);
+    if(p){
+      const title=j.data.title||j.data.author||'';
+      const handle=(String(title).match(/@([A-Za-z0-9._]+)/)||[])[1];
+      if(handle && !p.author) p.author=handle;
+      if(handle) p.canonical=`https://www.tiktok.com/@${handle}/video/${p.id}`;
+      return p;
+    }
+  }catch(e){}
+  return {canonical:url, author:'', id:tiktokVideoIdFromText(url)};
+}
 async function fetchTikTokViaTikwm(pageUrl){
-  const r=await fetchWithTimeout(`https://www.tikwm.com/api/?url=${encodeURIComponent(pageUrl)}`,12000);
-  if(!r.ok) return null;
-  const j=await r.json();
-  const d=j&&j.data;
-  if(!d||!d.id) return null;
-  const author=d.author||{};
-  const handle=String(author.unique_id||'').replace(/^@/,'');
-  const image=d.origin_cover||d.cover||d.ai_dynamic_cover||'';
-  const music=d.music_info||d.music||{};
-  const caption=[d.title, author.nickname&&`@${handle||author.nickname}`, music.title&&`♪ ${music.title}`].filter(Boolean).join(' · ');
-  return {id:String(d.id), canonical:canonicalTikTokUrl(handle,d.id), image, caption, author:handle};
+  const endpoints=[
+    `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(pageUrl)}`,
+    `https://tikwm.com/api/?hd=1&url=${encodeURIComponent(pageUrl)}`
+  ];
+  for(let attempt=0; attempt<3; attempt++){
+    const ep=endpoints[attempt%endpoints.length];
+    try{
+      const r=await fetchWithTimeout(ep,20000);
+      if(!r.ok) throw 0;
+      const j=await r.json();
+      if(j&&j.code===-1){ await new Promise(res=>setTimeout(res,1400)); continue; }
+      const d=j&&j.data;
+      if(!d||!d.id) throw 0;
+      const author=d.author||{};
+      const handle=String(author.unique_id||'').replace(/^@/,'');
+      const image=d.origin_cover||d.cover||d.ai_dynamic_cover||'';
+      const music=d.music_info||d.music||{};
+      const caption=[d.title, (author.nickname||handle)&&`@${handle||author.nickname}`, music.title&&`♪ ${music.title}`].filter(Boolean).join(' · ');
+      return {id:String(d.id), canonical:canonicalTikTokUrl(handle,d.id)||'', image, caption, author:handle};
+    }catch(e){
+      await new Promise(res=>setTimeout(res,800));
+    }
+  }
+  return null;
 }
 async function resolveTikTok(url){
-  let info=null;
-  try{ info=await fetchTikTokViaTikwm(url); }catch(e){}
-  if(!info||!info.image){
-    try{
-      const res=await fetchWithTimeout(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,5000);
-      const data=await res.json();
-      const id=String(data&&(data.embed_product_id||tiktokVideoIdFromText(data.html||''))||'');
-      const thumb=data&&data.thumbnail_url;
-      if(thumb||id){
-        const author=String(data.author_unique_id||'').replace(/^@/,'');
-        info={
-          id:id||(info&&info.id)||'',
-          canonical:(info&&info.canonical)||canonicalTikTokUrl(author,id)||url,
-          image:thumb||(info&&info.image)||'',
-          caption:(info&&info.caption)||[data.title,data.author_name].filter(Boolean).join(' · '),
-          author:author||(info&&info.author)||''
-        };
-      }
-    }catch(e){}
+  const expanded=await expandTikTokShort(url);
+  let tw=null;
+  try{ tw=await fetchTikTokViaTikwm(url); }catch(e){}
+  if((!tw||!tw.image)&&expanded.canonical&&expanded.canonical!==url){
+    try{ tw=await fetchTikTokViaTikwm(expanded.canonical); }catch(e){}
   }
-  if(!info||!info.image){
+  const author=(tw&&tw.author)||expanded.author||'';
+  const id=(tw&&tw.id)||expanded.id||'';
+  const canonical=canonicalTikTokUrl(author,id)||expanded.canonical||url;
+  let image=tw&&tw.image||'';
+  let caption=tw&&tw.caption||'';
+  if(!image){
     try{
-      const og=await fetchOgTags(url);
+      const og=await fetchOgTags(canonical||url);
       if(og.image&&!/tiktok-loading|webapp-desktop\/static\/image/i.test(og.image)){
-        info=Object.assign({id:'',canonical:url,caption:'',author:''}, info||{}, {
-          image:og.image,
-          caption:(info&&info.caption)||og.title||og.desc||''
-        });
+        image=og.image;
+        caption=caption||og.title||og.desc||'';
       }
     }catch(e){}
   }
-  if(info&&!info.id) info.id=tiktokVideoIdFromText(info.canonical||url);
-  return info;
+  return {id, canonical, image, caption, author};
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
@@ -1299,7 +1346,7 @@ async function runImageSearch(){
     status.textContent = 'جارٍ فك رابط تيك توك وجلب صورة الفيديو...';
     let tt=null;
     try{ tt=await resolveTikTok(url); }catch(err){}
-    if(tt&&tt.canonical&&tt.canonical!==url){
+    if(tt&&tt.canonical&&/tiktok\.com\/@[^/]+\/video\/\d+/i.test(tt.canonical)){
       url=tt.canonical;
       input.value=url;
     }
@@ -1308,12 +1355,13 @@ async function runImageSearch(){
       captionText=tt.caption||'';
       sourceLabel='تم جلب صورة ووصف فيديو تيك توك ✅';
     }
-    const ttEmbed=tiktokEmbedHtml(tt&&tt.id);
+    const ttEmbed=tiktokEmbedHtml(tt&&tt.id, (tt&&tt.canonical)||url);
     liveEmbedHtml=ttEmbed||liveEmbedHtml;
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب صورة الغلاف تلقائيًا. افتح الرابط أو شاهد المعاينة وخذ سكرين شوت.';
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة الغلاف تلقائيًا. افتح الرابط الكامل بالأسفل.';
       cards.innerHTML = ttEmbed + openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
+      radarLoadTikTokEmbed();
       return;
     }
   }
@@ -1406,6 +1454,7 @@ async function runImageSearch(){
   document.getElementById('imageResultsArea').classList.add('show');
   document.getElementById('imageResultsArea').scrollIntoView({behavior:'smooth', block:'start'});
   setCurrentExtractedImage(imageUrl, url);
+  radarLoadTikTokEmbed();
 }
 
 /* ===================== حفظ الصور — IndexedDB (سعة كبيرة جدًا مقارنة بـ localStorage) ===================== */
