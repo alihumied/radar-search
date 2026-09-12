@@ -1498,12 +1498,9 @@ async function idbDeleteVideo(id){
   });
 }
 async function urlToBlobIfPossible(url){
-  // لو الرابط أصلًا data: URI (من ملف مرفوع محليًا أو سكرين شوت) منحوّله Blob مباشرة بدون شبكة.
-  // لو رابط بعيد (تويتر/فيسبوك...) منحاول نجيب البايتات الفعلية وقت الحفظ نفسه — هاد أهم توقيت
-  // ممكن لأن الرابط لسا حي وقتها. لو فشل (CORS أو الرابط مات فعلاً بهاي اللحظة)، بنرجع null
-  // ونخزن الرابط النصي بس كخطة بديلة (نفس السلوك القديم).
   try{
-    if(url.startsWith('data:')){const r=await fetch(url);return await r.blob()}
+    if(!url) return null;
+    if(url.startsWith('data:')||url.startsWith('blob:')){const r=await fetch(url);return await r.blob()}
     const res=await fetch(url,{mode:'cors'});
     if(!res.ok)throw 0;
     return await res.blob();
@@ -1526,17 +1523,25 @@ async function idbGetAllImages(){
 }
 async function idbAddImage(imageUrl, sourceUrl){
   const db = await idbOpen();
-  const blob = await urlToBlobIfPossible(imageUrl);
+  const asHttp=u=>{u=String(u||'').trim();try{if(typeof hxn==='function')u=hxn(u)}catch(e){}return /^https?:\/\//i.test(u)?u:''};
+  const src=String(imageUrl||'');
+  let blob=null;
+  let storeUrl=asHttp(src)||asHttp(sourceUrl)||null;
+  if(src.startsWith('blob:')||src.startsWith('data:')){
+    blob=await urlToBlobIfPossible(src);
+  }else{
+    blob=await urlToBlobIfPossible(src);
+    storeUrl=asHttp(src)||storeUrl;
+  }
+  const storeSource=asHttp(sourceUrl)||storeUrl;
   return new Promise((resolve, reject)=>{
     const tx = db.transaction(IDB_STORE, 'readwrite');
     const store = tx.objectStore(IDB_STORE);
     const getAllReq = store.getAll();
     getAllReq.onsuccess = () => {
-      const dup = getAllReq.result.find(x => x.imageUrl === imageUrl);
+      const dup = getAllReq.result.find(x => (storeUrl && x.imageUrl === storeUrl) || (src && x.imageUrl === src));
       if(dup) store.delete(dup.id);
-      // لو نجح تحميل الـBlob، منخزّنه هو (الصورة محفوظة جوا الجهاز فعليًا، تضل موجودة حتى لو
-      // الرابط الأصلي مات لاحقًا). لو فشل، منخزّن الرابط النصي بس (السلوك القديم كخطة بديلة).
-      store.add({imageUrl: imageUrl || null, blob: blob||null, sourceUrl: sourceUrl || imageUrl, ts: Date.now()});
+      store.add({imageUrl: storeUrl, blob: blob||null, sourceUrl: storeSource || storeUrl, ts: Date.now()});
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -1592,7 +1597,7 @@ async function renderSavedLinks(){
     l.innerHTML = '<div class="hint">ما في صور محفوظة بعد.</div>';
     return;
   }
-  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>`<div class="saved-image-tile" data-full="${esc(x.imageUrl||'')}" data-source="${esc(x.sourceUrl||'')}"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(x.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage('${esc(x.displayUrl)}')" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`).join('')}</div>`;
+  l.innerHTML = `<div class="hint" style="margin:0 0 7px;color:#8feaff">📌 ${a.length} صورة محفوظة داخل الجهاز · الصور المحفوظة كملف (لا رابط) تضل موجودة حتى لو مصدرها الأصلي مات لاحقًا.</div><div class="saved-images-grid">${a.map(x=>{const http=/^https?:\/\//i.test(x.imageUrl||'')?x.imageUrl:(/^https?:\/\//i.test(x.sourceUrl||'')?x.sourceUrl:'');const srcHttp=/^https?:\/\//i.test(x.sourceUrl||'')?x.sourceUrl:http;return `<div class="saved-image-tile" data-full="${esc(http)}" data-source="${esc(srcHttp)}"><img class="saved-image-thumb" data-id="${x.id}" src="${esc(x.displayUrl)}" draggable="false" decoding="async" loading="lazy" onerror="markSavedImageBroken(this)"><a class="saved-corner-btn saved-image-source" href="${esc(srcHttp||'#')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="فتح المصدر الأصلي" ${srcHttp?'':'hidden'}">↗</a><button class="saved-corner-btn saved-image-open" onclick="event.stopPropagation();openImageZoomPage(this.closest('.saved-image-tile').querySelector('img').currentSrc||this.closest('.saved-image-tile').querySelector('img').src)" title="فتح الصورة في صفحة تكبير مستقلة">⛶</button><button class="saved-corner-btn saved-image-delete" onclick="event.stopPropagation();removeSavedLink(${x.id})" title="إلغاء الحفظ">×</button></div>`;}).join('')}</div>`;
   attachSavedZoom();
 }
 const RADAR_ZIP_MAX_ARCHIVES=5;
@@ -2951,11 +2956,16 @@ function attachSavedZoom(){
       if(e.target.classList.contains('saved-images-grid'))radarClearTileSelection();
       return;
     }
-    e.preventDefault();
+    e.stopPropagation();
     if(moved){ moved=false; activeImg=null; return; }
     activeImg=null;
     const tile = img.closest('.saved-image-tile');
-    if(radarSelectTile(tile)) openInlineSavedFocus(tile.getAttribute('data-full')||img.currentSrc||img.src, img.currentSrc||img.src);
+    if(!tile) return;
+    if(radarSelectTile(tile)){
+      const full=tile.getAttribute('data-full')||tile.getAttribute('data-source')||'';
+      const preview=img.currentSrc||img.src||'';
+      openInlineSavedFocus(full||preview, preview);
+    }
   });
   list.addEventListener('contextmenu', e=>{ if(e.target.closest('.saved-image-thumb')) e.preventDefault(); });
 }
@@ -3033,95 +3043,140 @@ function radarOpenSearchTab(url){
 async function radarImageBlobFromFocus(){
   const img=document.getElementById('savedInlineFocusImg');
   if(!img) return null;
+  if(!(img.complete && img.naturalWidth)){
+    await new Promise(res=>{
+      const done=()=>{img.removeEventListener('load',done);img.removeEventListener('error',done);res()};
+      img.addEventListener('load',done);
+      img.addEventListener('error',done);
+      setTimeout(done,2500);
+    });
+  }
   const src=img.currentSrc||img.src||'';
   if(!src) return null;
-  if(src.startsWith('data:')){
-    try{ const r=await fetch(src); return await r.blob(); }catch(e){}
+  if(src.startsWith('data:')||src.startsWith('blob:')){
+    try{ const r=await fetch(src); if(r.ok||src.startsWith('blob:')||src.startsWith('data:')) return await r.blob(); }catch(e){}
   }
+  try{
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth||img.width; c.height=img.naturalHeight||img.height;
+    if(c.width&&c.height){
+      c.getContext('2d').drawImage(img,0,0);
+      const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.92));
+      if(blob) return blob;
+    }
+  }catch(e){}
   try{
     const r=await fetch(src,{mode:'cors'});
     if(r.ok) return await r.blob();
   }catch(e){}
-  try{
-    const c=document.createElement('canvas');
-    c.width=img.naturalWidth||img.width; c.height=img.naturalHeight||img.height;
-    if(!c.width||!c.height) return null;
-    c.getContext('2d').drawImage(img,0,0);
-    return await new Promise(res=>c.toBlob(res,'image/jpeg',0.92));
-  }catch(e){ return null; }
+  return null;
 }
 async function radarHostTempImage(blob){
   if(!blob) return '';
   const file=new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
-  try{
-    const fd=new FormData(); fd.append('file',file);
-    const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST',body:fd});
-    const j=await r.json();
-    let u=j?.data?.url||'';
-    if(u) return u.replace('://tmpfiles.org/','://tmpfiles.org/dl/');
-  }catch(e){}
-  try{
-    const fd=new FormData();
-    fd.append('reqtype','fileupload'); fd.append('time','24h'); fd.append('fileToUpload',file);
-    const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST',body:fd});
-    const t=(await r.text()).trim();
-    if(/^https?:\/\//i.test(t)) return t;
-  }catch(e){}
-  try{
-    const fd=new FormData(); fd.append('file',file);
-    const r=await fetch('https://0x0.st',{method:'POST',body:fd});
-    const t=(await r.text()).trim();
-    if(/^https?:\/\//i.test(t)) return t;
-  }catch(e){}
+  const hosts=[
+    async()=>{
+      const fd=new FormData(); fd.append('file',file);
+      const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST',body:fd});
+      const j=await r.json();
+      let u=j?.data?.url||'';
+      if(u) return u.replace('://tmpfiles.org/','://tmpfiles.org/dl/');
+      return '';
+    },
+    async()=>{
+      const fd=new FormData();
+      fd.append('reqtype','fileupload'); fd.append('time','24h'); fd.append('fileToUpload',file);
+      const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST',body:fd});
+      const t=(await r.text()).trim();
+      return /^https?:\/\//i.test(t)?t:'';
+    },
+    async()=>{
+      const fd=new FormData();
+      fd.append('reqtype','fileupload'); fd.append('fileToUpload',file);
+      const r=await fetch('https://catbox.moe/user/api.php',{method:'POST',body:fd});
+      const t=(await r.text()).trim();
+      return /^https?:\/\//i.test(t)?t:'';
+    },
+    async()=>{
+      const fd=new FormData(); fd.append('file',file);
+      const r=await fetch('https://0x0.st',{method:'POST',body:fd});
+      const t=(await r.text()).trim();
+      return /^https?:\/\//i.test(t)?t:'';
+    }
+  ];
+  for(const h of hosts){
+    try{ const u=await h(); if(u) return u; }catch(e){}
+  }
   return '';
 }
-function radarBindFocusSearchLinks(imageUrl){
-  let u=String(imageUrl||'').trim();
+function radarHttpImageUrl(u){
+  u=String(u||'').trim();
   try{ if(typeof hxn==='function') u=hxn(u); }catch(e){}
-  try{ if(u && typeof hxImgQuality==='function') u=hxImgQuality(u); }catch(e){}
-  const ok=/^https?:\/\//i.test(u);
-  const encoded=ok?encodeURIComponent(u):'';
+  if(!/^https?:\/\//i.test(u)) return '';
+  try{ if(typeof hxImgQuality==='function') u=hxImgQuality(u); }catch(e){}
+  return u;
+}
+function radarEngineHref(engine, imageUrl){
+  const u=radarHttpImageUrl(imageUrl);
+  const encoded=u?encodeURIComponent(u):'';
+  if(engine==='google') return u?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
+  return u?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
+}
+function radarBindFocusSearchLinks(imageUrl){
   const yandexBtn=document.getElementById('savedInlineFocusYandex');
   const googleBtn=document.getElementById('savedInlineFocusGoogle');
   if(yandexBtn){
     yandexBtn.hidden=false;
     yandexBtn.style.display='inline-flex';
-    yandexBtn.href=ok?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
+    yandexBtn.href=radarEngineHref('yandex', imageUrl);
   }
   if(googleBtn){
     googleBtn.hidden=false;
     googleBtn.style.display='inline-flex';
-    googleBtn.href=ok?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
+    googleBtn.href=radarEngineHref('google', imageUrl);
   }
 }
-function radarReverseSearch(engine, ev){
+let radarFocusHostPromise=null;
+function radarPrepareLocalSearch(){
+  const l=document.getElementById('savedInlineFocus');
+  const yandexBtn=document.getElementById('savedInlineFocusYandex');
+  const googleBtn=document.getElementById('savedInlineFocusGoogle');
+  const yLabel=yandexBtn?yandexBtn.textContent:'🔍 ياندكس';
+  const gLabel=googleBtn?googleBtn.textContent:'🔍 جوجل';
+  if(yandexBtn) yandexBtn.textContent='⏳ ياندكس';
+  if(googleBtn) googleBtn.textContent='⏳ جوجل';
+  radarFocusHostPromise=(async()=>{
+    const blob=await radarImageBlobFromFocus();
+    const hosted=blob?await radarHostTempImage(blob):'';
+    if(l && l.classList.contains('show')){
+      if(hosted){
+        l.dataset.searchUrl=hosted;
+        radarBindFocusSearchLinks(hosted);
+      }
+      if(yandexBtn) yandexBtn.textContent=yLabel;
+      if(googleBtn) googleBtn.textContent=gLabel;
+    }
+    return hosted||'';
+  })();
+  return radarFocusHostPromise;
+}
+function radarFocusEngineClick(engine, ev){
   if(ev) ev.stopPropagation();
   const l=document.getElementById('savedInlineFocus');
-  const img=document.getElementById('savedInlineFocusImg');
   const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const raw=radarNormalizeImageUrl(l?.dataset.searchUrl||'')||radarNormalizeImageUrl(img?.currentSrc||img?.src||'');
-  const searchable=radarSearchableImageUrl(raw);
-  if(searchable){
-    const dest=radarEngineSearchUrl(engine,searchable);
-    if(btn) btn.href=dest;
+  const ready=radarHttpImageUrl(l?.dataset.searchUrl||'')||radarHttpImageUrl(btn?.href||'');
+  if(ready){
+    if(btn) btn.href=radarEngineHref(engine, ready);
     return true;
   }
   if(ev) ev.preventDefault();
-  const tab=radarOpenSearchTab(radarEngineUploadUrl(engine));
-  const label=btn?btn.textContent:'';
-  if(btn) btn.textContent='…';
-  (async()=>{
-    try{
-      const blob=await radarImageBlobFromFocus();
-      const hosted=blob?await radarHostTempImage(blob):'';
-      if(hosted){
-        const u=radarEngineSearchUrl(engine,hosted);
-        if(tab&&!tab.closed) tab.location=u;
-        else radarOpenSearchTab(u);
-      }
-    }catch(e){}
-    finally{ if(btn&&label) btn.textContent=label; }
-  })();
+  const tab=window.open('about:blank','_blank');
+  Promise.resolve(radarFocusHostPromise||radarPrepareLocalSearch()).then(hosted=>{
+    const dest=radarEngineHref(engine, hosted||'');
+    if(btn) btn.href=dest;
+    if(tab && !tab.closed) tab.location=dest;
+    else window.open(dest,'_blank','noopener');
+  });
   return false;
 }
 function openInlineSavedFocus(src, preview){
@@ -3131,14 +3186,15 @@ function openInlineSavedFocus(src, preview){
   const quick=String(preview||full);
   if(!full&&!quick)return;
   l.style.pointerEvents='';
-  const searchUrl=[full,quick].map(s=>String(s||'').trim()).find(s=>/^https?:\/\//i.test(s))||'';
+  const searchUrl=radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'';
   l.dataset.searchUrl=searchUrl;
   radarBindFocusSearchLinks(searchUrl);
+  radarFocusHostPromise=null;
   if(p.dataset.shown!==full){
     p.removeAttribute('src');
     p.dataset.shown=full;
-    p.src=quick;
-    if(full&&full!==quick){
+    p.src=quick||full;
+    if(full&&full!==quick&&/^https?:\/\//i.test(full)){
       const hi=new Image();
       hi.onload=()=>{if(p.dataset.shown===full)p.src=full};
       hi.src=full;
@@ -3146,7 +3202,10 @@ function openInlineSavedFocus(src, preview){
   }
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
   l.classList.remove('show');
-  requestAnimationFrame(()=>l.classList.add('show'));
+  requestAnimationFrame(()=>{
+    l.classList.add('show');
+    if(!searchUrl) radarPrepareLocalSearch();
+  });
 }
 function renderSavedLinksIfVisible(){
   if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
@@ -3155,8 +3214,10 @@ async function saveZoomedImage(){
   const p = document.getElementById('savedInlineFocusImg');
   const btn = document.getElementById('savedInlineFocusSave');
   if(!p || !p.src) return;
+  const focus=document.getElementById('savedInlineFocus');
+  const saveUrl=(focus&&radarHttpImageUrl(focus.dataset.searchUrl))||p.src;
   try{
-    await saveLinkToStorage(p.src, p.src);
+    await saveLinkToStorage(p.src, saveUrl||p.src);
     if(navigator.vibrate) navigator.vibrate(30);
     if(btn){
       const old = btn.textContent;
@@ -3875,7 +3936,7 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarFocusEngineClick('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarFocusEngineClick('google',event)">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 </body>
 
 </html>
