@@ -3075,23 +3075,23 @@ async function radarHostTempImage(blob){
   }catch(e){}
   return '';
 }
-function radarBindFocusSearchLinks(publicUrl){
-  const searchable=radarSearchableImageUrl(publicUrl);
+function radarBindFocusSearchLinks(imageUrl){
+  let u=String(imageUrl||'').trim();
+  try{ if(typeof hxn==='function') u=hxn(u); }catch(e){}
+  try{ if(u && typeof hxImgQuality==='function') u=hxImgQuality(u); }catch(e){}
+  const ok=/^https?:\/\//i.test(u);
+  const encoded=ok?encodeURIComponent(u):'';
   const yandexBtn=document.getElementById('savedInlineFocusYandex');
   const googleBtn=document.getElementById('savedInlineFocusGoogle');
   if(yandexBtn){
     yandexBtn.hidden=false;
-    yandexBtn.style.cssText='display:inline-flex!important;visibility:visible!important;opacity:1!important;color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;';
-    yandexBtn.href=searchable?radarEngineSearchUrl('yandex',searchable):radarEngineUploadUrl('yandex');
-    yandexBtn.target='_blank';
-    yandexBtn.rel='noopener';
+    yandexBtn.style.display='inline-flex';
+    yandexBtn.href=ok?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
   }
   if(googleBtn){
     googleBtn.hidden=false;
-    googleBtn.style.cssText='display:inline-flex!important;visibility:visible!important;opacity:1!important;color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;';
-    googleBtn.href=searchable?radarEngineSearchUrl('google',searchable):radarEngineUploadUrl('google');
-    googleBtn.target='_blank';
-    googleBtn.rel='noopener';
+    googleBtn.style.display='inline-flex';
+    googleBtn.href=ok?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
   }
 }
 function radarReverseSearch(engine, ev){
@@ -3131,7 +3131,7 @@ function openInlineSavedFocus(src, preview){
   const quick=String(preview||full);
   if(!full&&!quick)return;
   l.style.pointerEvents='';
-  const searchUrl=radarNormalizeImageUrl(full)||radarNormalizeImageUrl(quick)||'';
+  const searchUrl=[full,quick].map(s=>String(s||'').trim()).find(s=>/^https?:\/\//i.test(s))||'';
   l.dataset.searchUrl=searchUrl;
   radarBindFocusSearchLinks(searchUrl);
   if(p.dataset.shown!==full){
@@ -3875,7 +3875,7 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarReverseSearch('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarReverseSearch('google',event)">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><img id="savedInlineFocusImg" draggable="false"><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="event.stopPropagation()">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="event.stopPropagation()">🔍 جوجل</a></div><div class="saved-inline-focus-tip">اضغط مرة واحدة للعودة</div></div>
 </body>
 
 </html>
