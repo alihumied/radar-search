@@ -1156,8 +1156,77 @@ async function fetchOgTags(pageUrl){
   try{const r=await fetchWithTimeout(`https://noembed.com/embed?url=${encodeURIComponent(pageUrl)}`,4500),d=await r.json();if(d){add(d.thumbnail_url,d.thumbnail_width,d.thumbnail_height);title=d.title||title}}catch(e){}
   const proxies=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`];
   for(const make of proxies){try{const r=await fetchWithTimeout(make(scrapeUrl),4500);if(!r.ok)continue;const html=await r.text();if(html.length<200)continue;const doc=new DOMParser().parseFromString(html,'text/html');doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"],meta[name="twitter:image:src"],link[rel="image_src"]').forEach(el=>add(el.content||el.href));title=doc.querySelector('meta[property="og:title"]')?.content||title;desc=doc.querySelector('meta[property="og:description"]')?.content||desc;if(candidates.length)break}catch(e){}}
-  const image=await pickBestPublicImage(candidates.map(x=>x.url));
+  const image=await pickBestPublicImage(candidates.filter(x=>!/tiktok-loading|webapp-desktop\/static\/image/i.test(x.url||'')).map(x=>x.url));
   return {image,title,desc,candidates};
+}
+
+function isTikTokUrl(url){
+  return /(?:^https?:\/\/)?(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/i.test(String(url||''));
+}
+function tiktokVideoIdFromText(text){
+  const m=String(text||'').match(/(?:video|embed|player\/v1|data-video-id=)[\/"](\d{8,})/i)||String(text||'').match(/\b(\d{19})\b/);
+  return m?m[1]:'';
+}
+function canonicalTikTokUrl(author, id){
+  if(!id) return '';
+  const user=String(author||'').replace(/^@/,'').trim();
+  return user?`https://www.tiktok.com/@${encodeURIComponent(user).replace(/%40/g,'')}/video/${id}`:`https://www.tiktok.com/video/${id}`;
+}
+function tiktokEmbedHtml(videoId){
+  if(!videoId) return '';
+  return `
+      <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div class="result-title" style="padding:0 4px;">🎵 معاينة حيّة (تيك توك)</div>
+        <iframe src="https://www.tiktok.com/player/v1/${encodeURIComponent(videoId)}" width="100%" height="520" style="border:none;border-radius:10px;background:#000;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      </div>`;
+}
+async function fetchTikTokViaTikwm(pageUrl){
+  const r=await fetchWithTimeout(`https://www.tikwm.com/api/?url=${encodeURIComponent(pageUrl)}`,12000);
+  if(!r.ok) return null;
+  const j=await r.json();
+  const d=j&&j.data;
+  if(!d||!d.id) return null;
+  const author=d.author||{};
+  const handle=String(author.unique_id||'').replace(/^@/,'');
+  const image=d.origin_cover||d.cover||d.ai_dynamic_cover||'';
+  const music=d.music_info||d.music||{};
+  const caption=[d.title, author.nickname&&`@${handle||author.nickname}`, music.title&&`♪ ${music.title}`].filter(Boolean).join(' · ');
+  return {id:String(d.id), canonical:canonicalTikTokUrl(handle,d.id), image, caption, author:handle};
+}
+async function resolveTikTok(url){
+  let info=null;
+  try{ info=await fetchTikTokViaTikwm(url); }catch(e){}
+  if(!info||!info.image){
+    try{
+      const res=await fetchWithTimeout(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,5000);
+      const data=await res.json();
+      const id=String(data&&(data.embed_product_id||tiktokVideoIdFromText(data.html||''))||'');
+      const thumb=data&&data.thumbnail_url;
+      if(thumb||id){
+        const author=String(data.author_unique_id||'').replace(/^@/,'');
+        info={
+          id:id||(info&&info.id)||'',
+          canonical:(info&&info.canonical)||canonicalTikTokUrl(author,id)||url,
+          image:thumb||(info&&info.image)||'',
+          caption:(info&&info.caption)||[data.title,data.author_name].filter(Boolean).join(' · '),
+          author:author||(info&&info.author)||''
+        };
+      }
+    }catch(e){}
+  }
+  if(!info||!info.image){
+    try{
+      const og=await fetchOgTags(url);
+      if(og.image&&!/tiktok-loading|webapp-desktop\/static\/image/i.test(og.image)){
+        info=Object.assign({id:'',canonical:url,caption:'',author:''}, info||{}, {
+          image:og.image,
+          caption:(info&&info.caption)||og.title||og.desc||''
+        });
+      }
+    }catch(e){}
+  }
+  if(info&&!info.id) info.id=tiktokVideoIdFromText(info.canonical||url);
+  return info;
 }
 
 /* زر بديل يظهر عند فشل الاستخراج التلقائي: يفتح الرابط الأصلي مباشرة لتاخذ سكرين شوت يدويًا */
@@ -1185,7 +1254,7 @@ function openOriginalLinkHtml(url){
 
 async function runImageSearch(){
   const input = document.getElementById('imageUrlInput');
-  const url = unwrapFacebookLink(input.value.trim());
+  let url = unwrapFacebookLink(input.value.trim());
   input.value = url;
   const cards = document.getElementById('imageResultCards');
   const status = document.getElementById('imageSearchStatus');
@@ -1204,7 +1273,7 @@ async function runImageSearch(){
 
   // معاينة embed حية للفيديو/الريلز — نحسبها بدري لأنها لازم تظهر حتى لو فشل استخراج صورة
   const isFbVideoLink = /facebook\.com\/(?:[^/]+\/videos?\/|reel\/|watch\/?\?)/i.test(url) || /fb\.watch/i.test(url);
-  const embedHtml = isFbVideoLink ? `
+  let liveEmbedHtml = isFbVideoLink ? `
       <div class="result-card" style="flex-direction:column; align-items:stretch; gap:10px;">
         <div class="result-title" style="padding:0 4px;">🎬 معاينة حيّة (Embed رسمي من فيسبوك)</div>
         <iframe src="https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=400" width="100%" height="380" style="border:none; border-radius:10px; background:#000;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
@@ -1214,7 +1283,7 @@ async function runImageSearch(){
   // فيديو/ريلز فيسبوك: نعرض المعاينة الحية فورًا بدون أي انتظار — الاستخراج البطيء مش لازم أصلًا هون
   if(isFbVideoLink){
     status.textContent = '';
-    cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+    cards.innerHTML = liveEmbedHtml + openOriginalLinkHtml(url);
     document.getElementById('imageResultsArea').classList.add('show');
     return;
   }
@@ -1225,31 +1294,25 @@ async function runImageSearch(){
     imageUrl = await pickBestPublicImage([`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,`https://img.youtube.com/vi/${ytId}/sddefault.jpg`,`https://img.youtube.com/vi/${ytId}/hq720.jpg`,`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`]);
     sourceLabel = 'تم جلب أعلى دقة متاحة علنًا من يوتيوب ✅';
   }
-  // 2) تيك توك: عبر oEmbed الرسمي أولاً، وإذا فشل (شائع مع الروابط المختصرة vt.tiktok.com) نجرب نفس السلسلة الاحتياطية المستخدمة لباقي المنصات
-  else if(/tiktok\.com/i.test(url)){
-    status.textContent = 'جارٍ جلب بيانات الفيديو من تيك توك...';
-    try{
-      const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      if(data && data.thumbnail_url){
-        imageUrl = data.thumbnail_url;
-        captionText = data.title || '';
-        sourceLabel = 'تم جلب الصورة والوصف من تيك توك تلقائيًا ✅';
-      }
-    }catch(err){ /* فشلت المحاولة، ننتقل للاحتياطي */ }
-    if(!imageUrl){
-      try{
-        const og = await fetchOgTags(url);
-        if(og.image){
-          imageUrl = og.image;
-          captionText = og.title || og.desc || '';
-          sourceLabel = 'تم جلب الصورة والوصف تلقائيًا (طريقة احتياطية) ✅';
-        }
-      }catch(err){ /* فشلت كل المحاولات */ }
+  // 2) تيك توك: فك الروابط المختصرة (vt/vm) ثم جلب الغلاف الحقيقي — oEmbed الرسمي غالبًا فاضي مع المختصرات
+  else if(isTikTokUrl(url)){
+    status.textContent = 'جارٍ فك رابط تيك توك وجلب صورة الفيديو...';
+    let tt=null;
+    try{ tt=await resolveTikTok(url); }catch(err){}
+    if(tt&&tt.canonical&&tt.canonical!==url){
+      url=tt.canonical;
+      input.value=url;
     }
+    if(tt&&tt.image){
+      imageUrl=tt.image;
+      captionText=tt.caption||'';
+      sourceLabel='تم جلب صورة ووصف فيديو تيك توك ✅';
+    }
+    const ttEmbed=tiktokEmbedHtml(tt&&tt.id);
+    liveEmbedHtml=ttEmbed||liveEmbedHtml;
     if(!imageUrl){
-      status.innerHTML = '⚠️ ما قدرنا نجيب بيانات تيك توك تلقائيًا الآن. افتح الرابط يدويًا لتاخذ سكرين شوت، أو جرّب رابط يوتيوب.';
-      cards.innerHTML = openOriginalLinkHtml(url);
+      status.innerHTML = '⚠️ ما قدرنا نجيب صورة الغلاف تلقائيًا. افتح الرابط أو شاهد المعاينة وخذ سكرين شوت.';
+      cards.innerHTML = ttEmbed + openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
@@ -1269,7 +1332,7 @@ async function runImageSearch(){
     }catch(err){ /* فشلت المحاولة */ }
     if(!imageUrl){
       status.innerHTML = '⚠️ ما قدرنا نجيب صورة حقيقية لهذا المنشور. الأسباب المحتملة: منشور نصي بدون صورة، محتوى خاص يتطلب تسجيل دخول، أو (لو كان رابط ستوري) الستوريهات لا تعرض معاينة عامة لأنها مؤقتة بطبيعتها. افتح الرابط بالأسفل وخذ سكرين شوت يدويًا.';
-      cards.innerHTML = embedHtml + openOriginalLinkHtml(url);
+      cards.innerHTML = liveEmbedHtml + openOriginalLinkHtml(url);
       document.getElementById('imageResultsArea').classList.add('show');
       return;
     }
@@ -1323,7 +1386,7 @@ async function runImageSearch(){
       </div>`).join('');
   }
 
-  cards.innerHTML = embedHtml + `
+  cards.innerHTML = liveEmbedHtml + `
     <div class="result-card extracted-preview-card" style="margin-bottom:14px;">
       <div class="result-body" style="display:flex;align-items:center;justify-content:center;">
         <img id="extractedThumb" src="${imageUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; flex-shrink:0; -webkit-user-select:none; user-select:none;" onerror="this.style.display='none'">
@@ -1506,6 +1569,7 @@ async function urlToBlobIfPossible(url){
     return await res.blob();
   }catch(e){ return null; }
 }
+const radarSavedBlobs=new Map();
 async function idbGetAllImages(){
   try{
     const db = await idbOpen();
@@ -1518,7 +1582,11 @@ async function idbGetAllImages(){
     // للسجلات المحفوظة فعليًا كـBlob (محفوظة دايمًا بغض النظر عن حياة الرابط الأصلي)، ننشئ رابط
     // عرض مؤقت (object URL) صالح للعرض المباشر بـ<img src>. السجلات القديمة (رابط نص بس، من قبل
     // هالتحديث) بتضل تعتمد على x.imageUrl متل ما كانت.
-    return rows.map(x=>({...x, displayUrl: x.blob?URL.createObjectURL(x.blob):x.imageUrl}));
+    radarSavedBlobs.clear();
+    return rows.map(x=>{
+      if(x.id!=null && x.blob) radarSavedBlobs.set(String(x.id), x.blob);
+      return {...x, displayUrl: x.blob?URL.createObjectURL(x.blob):x.imageUrl};
+    });
   }catch(e){ return []; }
 }
 async function idbAddImage(imageUrl, sourceUrl){
@@ -2964,7 +3032,7 @@ function attachSavedZoom(){
     if(radarSelectTile(tile)){
       const full=tile.getAttribute('data-full')||tile.getAttribute('data-source')||'';
       const preview=img.currentSrc||img.src||'';
-      openInlineSavedFocus(full||preview, preview);
+      openInlineSavedFocus(full||preview, preview, img.getAttribute('data-id')||'');
     }
   });
   list.addEventListener('contextmenu', e=>{ if(e.target.closest('.saved-image-thumb')) e.preventDefault(); });
@@ -3113,6 +3181,7 @@ function radarHttpImageUrl(u){
   u=String(u||'').trim();
   try{ if(typeof hxn==='function') u=hxn(u); }catch(e){}
   if(!/^https?:\/\//i.test(u)) return '';
+  if(/^(https?:\/\/)(?:www\.)?(?:yandex\.(?:com|ru)|google\.[a-z.]+|lens\.google|images\.google|tineye\.com|tmpfiles\.org|catbox\.moe|0x0\.st|wsrv\.nl)/i.test(u)) return '';
   try{ if(typeof hxImgQuality==='function') u=hxImgQuality(u); }catch(e){}
   return u;
 }
@@ -3136,60 +3205,59 @@ function radarBindFocusSearchLinks(imageUrl){
     googleBtn.href=radarEngineHref('google', imageUrl);
   }
 }
-let radarFocusHostPromise=null;
-function radarPrepareLocalSearch(){
-  const l=document.getElementById('savedInlineFocus');
-  const yandexBtn=document.getElementById('savedInlineFocusYandex');
-  const googleBtn=document.getElementById('savedInlineFocusGoogle');
-  const yLabel=yandexBtn?yandexBtn.textContent:'🔍 ياندكس';
-  const gLabel=googleBtn?googleBtn.textContent:'🔍 جوجل';
-  if(yandexBtn) yandexBtn.textContent='⏳ ياندكس';
-  if(googleBtn) googleBtn.textContent='⏳ جوجل';
-  radarFocusHostPromise=(async()=>{
-    const blob=await radarImageBlobFromFocus();
-    const hosted=blob?await radarHostTempImage(blob):'';
-    if(l && l.classList.contains('show')){
-      if(hosted){
-        l.dataset.searchUrl=hosted;
-        radarBindFocusSearchLinks(hosted);
-      }
-      if(yandexBtn) yandexBtn.textContent=yLabel;
-      if(googleBtn) googleBtn.textContent=gLabel;
-    }
-    return hosted||'';
-  })();
-  return radarFocusHostPromise;
+function radarPostFileToEngine(engine, blob){
+  if(!blob) return false;
+  const file=blob instanceof File?blob:new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
+  const dt=new DataTransfer();
+  dt.items.add(file);
+  const form=document.createElement('form');
+  form.method='POST';
+  form.enctype='multipart/form-data';
+  form.target='_blank';
+  form.style.display='none';
+  const inp=document.createElement('input');
+  inp.type='file';
+  if(engine==='google'){
+    form.action='https://www.google.com/searchbyimage/upload';
+    inp.name='encoded_image';
+  }else{
+    form.action='https://yandex.com/images/search?rpt=imageview';
+    inp.name='upfile';
+  }
+  inp.files=dt.files;
+  form.appendChild(inp);
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(()=>form.remove(),4000);
+  return true;
 }
 function radarFocusEngineClick(engine, ev){
   if(ev) ev.stopPropagation();
   const l=document.getElementById('savedInlineFocus');
   const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const ready=radarHttpImageUrl(l?.dataset.searchUrl||'')||radarHttpImageUrl(btn?.href||'');
-  if(ready){
-    if(btn) btn.href=radarEngineHref(engine, ready);
+  const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
+  if(imgUrl){
+    if(btn) btn.href=radarEngineHref(engine, imgUrl);
     return true;
   }
   if(ev) ev.preventDefault();
-  const tab=window.open('about:blank','_blank');
-  Promise.resolve(radarFocusHostPromise||radarPrepareLocalSearch()).then(hosted=>{
-    const dest=radarEngineHref(engine, hosted||'');
-    if(btn) btn.href=dest;
-    if(tab && !tab.closed) tab.location=dest;
-    else window.open(dest,'_blank','noopener');
-  });
+  const id=l?.dataset.savedId||'';
+  const mapped=id?radarSavedBlobs.get(String(id)):null;
+  if(mapped && radarPostFileToEngine(engine, mapped)) return false;
+  radarImageBlobFromFocus().then(b=>{ if(b) radarPostFileToEngine(engine,b); });
   return false;
 }
-function openInlineSavedFocus(src, preview){
+function openInlineSavedFocus(src, preview, savedId){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg');
   if(!l||!p)return;
   const full=String(src||preview||'');
   const quick=String(preview||full);
   if(!full&&!quick)return;
   l.style.pointerEvents='';
+  l.dataset.savedId=savedId?String(savedId):'';
   const searchUrl=radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'';
   l.dataset.searchUrl=searchUrl;
   radarBindFocusSearchLinks(searchUrl);
-  radarFocusHostPromise=null;
   if(p.dataset.shown!==full){
     p.removeAttribute('src');
     p.dataset.shown=full;
@@ -3202,10 +3270,7 @@ function openInlineSavedFocus(src, preview){
   }
   document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';
   l.classList.remove('show');
-  requestAnimationFrame(()=>{
-    l.classList.add('show');
-    if(!searchUrl) radarPrepareLocalSearch();
-  });
+  requestAnimationFrame(()=>l.classList.add('show'));
 }
 function renderSavedLinksIfVisible(){
   if(document.getElementById('savedLinksArea').classList.contains('show')) renderSavedLinks();
