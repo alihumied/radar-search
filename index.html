@@ -3811,7 +3811,7 @@ function applyOfficialJsonData(d,filename){
     return Boolean(v.poster)&&!hasPlayableSource;
   }).length;
   HX=[];
-  sourceVideos.forEach(v=>{const hls=[v.master,v.hlsBest].find(radarIsVideoHls)||'';if(!hls)return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
+  sourceVideos.forEach(v=>{const hls=radarPickHlsSource(v);if(!hls)return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:hxImgQuality(im.url||''),thumb:im.url||'',text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3956,8 +3956,18 @@ const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);c
 const RADAR_CONVERTER_URL='https://radar-hls-44zfandh.manus.space/';
 let radarConversionSession=null;
 function radarConversionKey(data,filename){return `radar-convert:${data.platform||'x'}:${String(filename||'session').trim().toLowerCase()}`}
-function radarIsVideoHls(url){return /^https:\/\/video\.twimg\.com\//i.test(String(url||''))&&!/\/(?:mp4a|aac|audio)(?:\/|$)/i.test(String(url||''))}
-function radarGetConvertibleVideos(data){return (data.videos||[]).map((v,i)=>{const hls=[v.master,v.hlsBest].find(radarIsVideoHls)||'';const width=Number(v.width||v.widthPx||0)||null,height=Number(v.height||v.heightPx||0)||null;return{id:String(v.id||i+1),label:`فيديو ${i+1}${width&&height?` · ${width}×${height}`:''}`,sourceUrl:hls,poster:v.poster||'',postUrl:v.postUrl||'',quality:width&&height?`${width}×${height}`:'أعلى جودة من HLS'}}).filter(v=>radarIsVideoHls(v.sourceUrl))}
+function radarIsXSubtitleHls(url){return /\/pl\/s\d+\//i.test(String(url||''))||/\/subtitles\//i.test(String(url||''))||/\.vtt(?:[?#]|$)/i.test(String(url||''))}
+function radarIsVideoHls(url){return /^https:\/\/video\.twimg\.com\//i.test(String(url||''))&&!/\/(?:mp4a|aac|audio)(?:\/|$)/i.test(String(url||''))&&!radarIsXSubtitleHls(url)}
+function radarIsXVariantHls(url){return /\/pl\/(?:avc1\/|hev1\/|hvc1\/)?\d+x\d+\//i.test(String(url||''))}
+function radarPickHlsSource(v){
+  const cands=[v&&v.master,v&&v.hlsBest].filter(u=>radarIsVideoHls(u));
+  return cands.find(u=>!radarIsXVariantHls(u))||cands[0]||'';
+}
+function radarPickAudioSource(v){
+  const a=String((v&&(v.audioHls||v.audioMp4))||'');
+  return a&&!radarIsXSubtitleHls(a)?a:'';
+}
+function radarGetConvertibleVideos(data){return (data.videos||[]).map((v,i)=>{const hls=radarPickHlsSource(v);const audio=radarPickAudioSource(v);const width=Number(v.width||v.widthPx||v.bestWidth||0)||null,height=Number(v.height||v.heightPx||v.bestHeight||0)||null;return{id:String(v.id||i+1),label:`فيديو ${i+1}${width&&height?` · ${width}×${height}`:''}`,sourceUrl:hls,audioUrl:audio,poster:v.poster||'',postUrl:v.postUrl||'',quality:width&&height?`${width}×${height}`:'أعلى جودة من HLS'+(audio?' · مع صوت':'')}}).filter(v=>radarIsVideoHls(v.sourceUrl))}
 async function radarPrepareConversionSession(data,filename){
   const videos=radarGetConvertibleVideos(data),panel=document.getElementById('radarConvertPanel');
   if(!videos.length){radarConversionSession=null;if(panel){panel.classList.remove('show');panel.innerHTML=''}return}
@@ -4007,7 +4017,10 @@ function radarOpenConverter(){
   radarConversionSession.activeVideoId=video.id;radarConversionSession.videoStates={...(radarConversionSession.videoStates||{}),[video.id]:{status:'preparing',progress:0,message:'فتح محول MP4'}};radarConversionSession.updatedAt=Date.now();idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender();
   const localWebm=video.sourceUrl==='radar-local-webm';
   if(localWebm&&!radarPendingWebmFile){alert('⚠️ أعيدي اختيار ملف WebM من أيقونة 🎬 لأن المتصفح لا يحتفظ بالملف بعد إغلاقه.');return}
-  const src=localWebm?`${RADAR_CONVERTER_URL}?mode=webm&radarSession=${encodeURIComponent(radarConversionSession.key)}`:`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
+  if(!localWebm&&radarIsXSubtitleHls(video.sourceUrl)){alert('⚠️ هذا رابط ترجمة (VTT) وليس فيديو.\nالمسار /pl/s0/ عند X خاص بالترجمة، لذلك فشل الدمج.\nامسح الصفحة من جديد حتى يُجلب رابط HLS الحقيقي.');return}
+  if(!localWebm&&!radarIsVideoHls(video.sourceUrl)){alert('⚠️ رابط HLS هذا ليس فيديو قابل للتحويل.');return}
+  const muxAudio=video.audioUrl&&radarIsXVariantHls(video.sourceUrl)&&!radarIsXSubtitleHls(video.audioUrl);
+  const src=localWebm?`${RADAR_CONVERTER_URL}?mode=webm&radarSession=${encodeURIComponent(radarConversionSession.key)}`:`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}${muxAudio?`&audio=${encodeURIComponent(video.audioUrl)}`:''}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
   const overlay=document.createElement('div');overlay.className='radar-convert-overlay';overlay.innerHTML=`<div class="radar-convert-frame"><button class="radar-convert-close" onclick="this.closest('.radar-convert-overlay').remove()">×</button><iframe src="${src}" allow="clipboard-write; fullscreen"></iframe></div>`;overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
 }
 window.addEventListener('message',async event=>{
