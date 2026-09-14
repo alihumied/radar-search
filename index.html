@@ -3807,11 +3807,16 @@ function applyOfficialJsonData(d,filename){
   const label=HXL[platform]||platform;
   const sourceVideos=(d.videos||[]);
   const posterOnlyVideos=sourceVideos.filter(v=>{
-    const hasPlayableSource=Boolean(v.hlsBest||v.master||v.videoMp4||v.audioMp4);
+    const hasPlayableSource=Boolean(radarPickHlsSource(v)||v.videoMp4||v.audioMp4);
     return Boolean(v.poster)&&!hasPlayableSource;
   }).length;
   HX=[];
-  sourceVideos.forEach(v=>{const hls=radarPickHlsSource(v);if(!hls)return;HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:hls,thumb:v.poster||'',text:'فيديو HLS '+label,author:label,date:v.firstSeen||'',platform})});
+  sourceVideos.forEach(v=>{
+    const hls=radarPickHlsSource(v);
+    const mp4=String(v.videoMp4||'');
+    if(!hls&&!mp4)return;
+    HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':'فيديو MP4 ')+label,author:label,date:v.firstSeen||'',platform});
+  });
   (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:hxImgQuality(im.url||''),thumb:im.url||'',text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
@@ -3837,7 +3842,9 @@ function applyOfficialJsonData(d,filename){
   const linked=HX.filter(z=>z.type==='video'&&z.postUrl).length;
   const memberCount=HX.filter(z=>z.type==='member').length;
   const commentCount=HX.filter(z=>z.type==='comment').length;
-  if(st)st.textContent=`✅ فيديو HLS ${HX.filter(z=>z.type==='video').length} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${posterOnlyVideos?` · ${posterOnlyVideos} معاينة فيديو فقط (لا مصدر MP4/HLS للتحويل)`:''}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
+  const hlsCount=HX.filter(z=>z.type==='video'&&z.hlsUrl).length;
+  const mp4Count=HX.filter(z=>z.type==='video'&&!z.hlsUrl&&z.directUrl).length;
+  if(st)st.textContent=`✅ فيديو HLS ${hlsCount}${mp4Count?` · MP4 ${mp4Count}`:''} (${linked} مرتبط بمنشور) · صور ${HX.filter(z=>z.type==='image').length}${posterOnlyVideos?` · ${posterOnlyVideos} معاينة بدون مصدر تحويل`:''}${memberCount?` · أعضاء ${memberCount}`:''}${commentCount?` · تعليقات ${commentCount}`:''}`;
   radarPrepareConversionSession(d,filename).then(()=>hxRender()).catch(err=>console.warn('radar: conversion session was not saved',err));
 }
 async function toggleSavedFilesView(){
