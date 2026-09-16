@@ -3496,17 +3496,13 @@ function hxn(v){return String(v||'').replace(/\\u0026/g,'&').replace(/&amp;/g,'&
 // ما إلها أي تأثير على باقي المنصات لأنه روابطهم أصلاً ما فيها باراميتر name=.
 function hxFbCdnUrl(url,size){
   let s=hxn(url);if(!s)return s;
-  const dim=String(size||2048);
-  const stp='stp=dst-jpg_s'+dim+'x'+dim;
-  if(/[?&]stp=/i.test(s)){
-    s=s.replace(/stp=dst-jpg_[sp]\d{2,4}x\d{2,4}/ig,stp);
-    s=s.replace(/stp=cpxg[^&]*/ig,stp);
-  }else{
-    s=s.replace(/\?/,'?'+stp+'&');
-    if(!/[?&]stp=/i.test(s)) s+=(s.includes('?')?'&':'?')+stp;
-  }
-  s=s.replace(/\/[sp]\d{2,4}x\d{2,4}\//g,'/s'+dim+'x'+dim+'/');
   s=s.replace(/_s\.(jpe?g|png|webp)(?=$|[?#])/i,'_n.$1');
+  const m=s.match(/stp=dst-jpg_([sp])(\d{2,4})x(\d{2,4})/i);
+  if(!m) return s;
+  const kind=m[1], max=Math.max(+m[2],+m[3]), dim=+(size||2048);
+  if(kind==='p'||max<dim){
+    s=s.replace(/stp=dst-jpg_[sp]\d{2,4}x\d{2,4}/ig,'stp=dst-jpg_s'+dim+'x'+dim);
+  }
   return s;
 }
 function hxSetTwimgName(url,name){let s=String(url||'');if(!s)return'';s=s.replace(/:(?:orig|large|medium|small|thumb|360x360|4096x4096)(?=$|[?#])/i,'');if(/[?&]name=/i.test(s))s=s.replace(/([?&])name=[^&]*/i,'$1name='+name);else s+=(s.includes('?')?'&':'?')+'name='+name;return s}function hxImgQuality(url){let s=hxn(url);if(!s)return'';if(/(?:pbs\.twimg\.com|pbs\.twitter\.com)/i.test(s))return hxSetTwimgName(s,'orig');if(/fbcdn\.net|scontent|cdninstagram/i.test(s))return hxFbCdnUrl(s,2048);return s}function hxThumbUrl(url){let s=hxn(url);if(!s||s.startsWith('data:')||s.startsWith('blob:'))return s;if(/(?:pbs\.twimg\.com|pbs\.twitter\.com)/i.test(s))return hxSetTwimgName(s,'small');if(/fbcdn\.net|scontent|cdninstagram/i.test(s))return hxFbCdnUrl(s,720);return s}
@@ -3951,10 +3947,17 @@ function applyOfficialJsonData(d,filename){
   sourceVideos.forEach(v=>{
     const hls=radarPickHlsSource(v);
     const mp4=String(v.videoMp4||'');
-    if(!hls&&!mp4)return;
+    if(!hls&&!mp4){
+      if(v.poster) HX.push({id:'v:'+(v.id||HX.length),type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:'',thumb:v.poster||'',text:'معاينة فيديو '+label,author:label,date:v.firstSeen||'',platform});
+      return;
+    }
     HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':'فيديو MP4 ')+label,author:label,date:v.firstSeen||'',platform});
   });
-  (d.images||[]).forEach((im,i)=>HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:hxImgQuality(im.url||''),thumb:im.url||'',text:'صورة '+label,author:label,date:im.firstSeen||'',platform}));
+  (d.images||[]).forEach((im,i)=>{
+    const u=String(im.url||'');
+    if(/emoji\.php|\/images\/emoji|sticker|t39\.30808-1|t1\.30497-1|t39\.1997|t15\.5256|rsrc\.php|static\.[a-z0-9]+\.fbcdn/i.test(u))return;
+    HX.push({id:'i:'+(im.id||i),type:'image',url:im.postUrl||im.url,postUrl:im.postUrl||'',directUrl:hxImgQuality(u),thumb:u,text:'صورة '+label,author:label,date:im.firstSeen||'',platform});
+  });
   // أعضاء جروب فيسبوك (من زر "استخراج أعضاء الجروب" باليوزرسكربت) — نفس شكل عنصر "member" اللي مستورد الـ HTML بيستخدمه أصلًا،
   // فبيظهروا وينبحثوا بنفس تبويب "👥 أعضاء" الموجود جاهز.
   (d.members||[]).forEach((m,i)=>{
@@ -4100,7 +4103,7 @@ const officialOldOpen=hxOpen;hxOpen=function(id){const x=HX.find(y=>y.id===id);c
 const RADAR_CONVERTER_URL='https://radar-hls-44zfandh.manus.space/';
 let radarConversionSession=null;
 function radarConversionKey(data,filename){return `radar-convert:${data.platform||'x'}:${String(filename||'session').trim().toLowerCase()}`}
-function radarIsXSubtitleHls(url){return /\/pl\/s\d+\//i.test(String(url||''))||/\/subtitles\//i.test(String(url||''))||/\.vtt(?:[?#]|$)/i.test(String(url||''))}
+function radarIsXSubtitleHls(url){return /\/subtitles\/|\.vtt(?:[?#]|$)|\/pl\/[^/]*subtitle/i.test(String(url||''))}
 function radarIsVideoHls(url){return /^https:\/\/video\.twimg\.com\//i.test(String(url||''))&&!/\/(?:mp4a|aac|audio)(?:\/|$)/i.test(String(url||''))&&!radarIsXSubtitleHls(url)}
 function radarIsXVariantHls(url){return /\/pl\/(?:avc1\/|hev1\/|hvc1\/)?\d+x\d+\//i.test(String(url||''))}
 function radarPickHlsSource(v){
