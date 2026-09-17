@@ -3797,7 +3797,9 @@ function radarDecorateVideoTiles(){
   if(HXtype!=='video'||!radarConversionSession)return;
   const videos=hxFiltered().slice(0,HXpage*HXSIZE);
   document.querySelectorAll('#htmlImportResultsList .hx-grid .saved-image-tile').forEach((tile,index)=>{
-    const video=videos[index];if(!video?.hlsUrl||!/^https:\/\/video\.twimg\.com\//i.test(video.hlsUrl))return;
+    const video=videos[index];if(!video)return;
+    const vid=String(video.id||'').replace(/^v:/,'');
+    if(!radarConversionSession.videos.some(v=>String(v.id)===vid))return;
     tile.querySelectorAll('.radar-video-convert-action').forEach(node=>node.remove());
     const safeId=esc(video.id),output=radarOutputForHxVideo(video.id),state=radarStateForHxVideo(video.id),selected=radarConversionSession.selectedId===String(video.id).replace(/^v:/,''),download=output?.downloadUrl?esc(new URL(output.downloadUrl,RADAR_CONVERTER_URL).href):'';
     const tone=state?.status==='failed'?'#f07474':output?'#4bdd98':selected?'#ffcf4a':'';
@@ -3947,10 +3949,7 @@ function applyOfficialJsonData(d,filename){
   sourceVideos.forEach(v=>{
     const hls=radarPickHlsSource(v);
     const mp4=String(v.videoMp4||'');
-    if(!hls&&!mp4){
-      if(v.poster) HX.push({id:'v:'+(v.id||HX.length),type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:'',hlsUrl:'',thumb:v.poster||'',text:'معاينة فيديو '+label,author:label,date:v.firstSeen||'',platform});
-      return;
-    }
+    if(!hls&&!mp4)return;
     HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':'فيديو MP4 ')+label,author:label,date:v.firstSeen||'',platform});
   });
   (d.images||[]).forEach((im,i)=>{
@@ -4114,7 +4113,18 @@ function radarPickAudioSource(v){
   const a=String((v&&(v.audioHls||v.audioMp4))||'');
   return a&&!radarIsXSubtitleHls(a)?a:'';
 }
-function radarGetConvertibleVideos(data){return (data.videos||[]).map((v,i)=>{const hls=radarPickHlsSource(v);const audio=radarPickAudioSource(v);const width=Number(v.width||v.widthPx||v.bestWidth||0)||null,height=Number(v.height||v.heightPx||v.bestHeight||0)||null;return{id:String(v.id||i+1),label:`فيديو ${i+1}${width&&height?` · ${width}×${height}`:''}`,sourceUrl:hls,audioUrl:audio,poster:v.poster||'',postUrl:v.postUrl||'',quality:width&&height?`${width}×${height}`:'أعلى جودة من HLS'+(audio?' · مع صوت':'')}}).filter(v=>radarIsVideoHls(v.sourceUrl))}
+function radarGetConvertibleVideos(data){
+  let n=0;
+  return (data.videos||[]).flatMap((v,i)=>{
+    const hls=radarPickHlsSource(v);
+    const mp4=String(v.videoMp4||'');
+    if(!hls&&!mp4)return [];
+    n++;
+    const width=Number(v.width||v.widthPx||v.bestWidth||0)||null,height=Number(v.height||v.heightPx||v.bestHeight||0)||null;
+    const dim=width&&height?`${width}×${height}`:'';
+    return [{id:String(v.id||i+1),label:`فيديو ${n}`,sourceUrl:hls||mp4,audioUrl:radarPickAudioSource(v),poster:v.poster||'',postUrl:v.postUrl||'',quality:dim||(hls?'HLS':'MP4'),kind:hls?'hls':'mp4'}];
+  });
+}
 async function radarPrepareConversionSession(data,filename){
   const videos=radarGetConvertibleVideos(data),panel=document.getElementById('radarConvertPanel');
   if(!videos.length){radarConversionSession=null;if(panel){panel.classList.remove('show');panel.innerHTML=''}return}
@@ -4149,7 +4159,7 @@ function radarRenderConversionPanel(){
   const savedOutput=outputUrl?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><a href="${esc(outputUrl)}" target="_blank" rel="noopener" class="toggle" style="display:flex;justify-content:center;border-color:#54d99b88;color:#baffde;text-decoration:none">⬇ تنزيل MP4</a><button class="toggle" style="cursor:pointer;border-color:#ffd76988;color:#ffe6a2;background:#d8a62a22" onclick="radarSaveOutputToVideos()">📌 حفظ في فيديو</button></div><div class="hint" style="margin-top:5px">${esc(selectedOutput.quality||'MP4 جاهز')} · الحفظ يبقيه داخل قائمة فيديوهات RADAR</div>`:'';
   const localWebm=selected?.sourceUrl==='radar-local-webm';
   const actions=localWebm?`<div class="radar-convert-actions"><button onclick="radarOpenConverter()">🎬 تحويل WebM إلى MP4 داخل RADAR</button><button onclick="toggleSavedVideosView()">📌 عرض فيديوهات RADAR</button></div>`:`<div class="radar-convert-actions"><button onclick="radarOpenConverter()">⚡ فتح محول MP4 داخل RADAR</button><button onclick="navigator.clipboard?.writeText(radarSelectedConversionVideo()?.sourceUrl||'').then(()=>alert('✅ تم نسخ رابط HLS')).catch(()=>alert('⚠️ تعذّر النسخ'))">🔗 نسخ رابط HLS</button></div>`;
-  panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">${localWebm?'ملف Quetta محفوظ في RADAR. افتحي المحول ثم اضغطي تحويل WebM إلى MP4.':'اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.'}</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)} · ${esc(v.quality)}</option>`).join('')}</select>${actions}${runInfo}${savedOutput}`;
+  panel.classList.add('show');panel.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="color:#8feaff;font-size:13px">⚡ تحويل MP4 محفوظ داخل RADAR</b><span style="font:10px 'JetBrains Mono';color:#8fa0bb">${esc(session.filename)}</span></div><div class="hint" style="margin:7px 0">${localWebm?'ملف Quetta محفوظ في RADAR. افتحي المحول ثم اضغطي تحويل WebM إلى MP4.':'اختاري فيديو. اختيارك وحالة التحويل محفوظان؛ عند الرجوع للملف لن تحتاجي ترفعيه من جديد.'}</div><select onchange="radarChooseConversionVideo(this.value)">${session.videos.map(v=>`<option value="${esc(v.id)}" ${v.id===selected?.id?'selected':''}>${esc(v.label)}${v.quality?` · ${esc(v.quality)}`:''}</option>`).join('')}</select>${actions}${runInfo}${savedOutput}`;
 }
 let radarPendingWebmFile=null;
 async function radarStartWebmConversion(file){
@@ -4164,7 +4174,8 @@ function radarOpenConverter(){
   radarConversionSession.activeVideoId=video.id;radarConversionSession.videoStates={...(radarConversionSession.videoStates||{}),[video.id]:{status:'preparing',progress:0,message:'فتح محول MP4'}};radarConversionSession.updatedAt=Date.now();idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender();
   const localWebm=video.sourceUrl==='radar-local-webm';
   if(localWebm&&!radarPendingWebmFile){alert('⚠️ أعيدي اختيار ملف WebM من أيقونة 🎬 لأن المتصفح لا يحتفظ بالملف بعد إغلاقه.');return}
-  if(!localWebm&&radarIsXSubtitleHls(video.sourceUrl)){alert('⚠️ هذا رابط ترجمة (VTT) وليس فيديو.\nالمسار /pl/s0/ عند X خاص بالترجمة، لذلك فشل الدمج.\nامسح الصفحة من جديد حتى يُجلب رابط HLS الحقيقي.');return}
+  if(!localWebm&&video.kind==='mp4'){window.open(video.sourceUrl,'_blank','noopener');return}
+  if(!localWebm&&radarIsXSubtitleHls(video.sourceUrl)){alert('⚠️ هذا رابط ترجمة وليس فيديو.');return}
   if(!localWebm&&!radarIsVideoHls(video.sourceUrl)){alert('⚠️ رابط HLS هذا ليس فيديو قابل للتحويل.');return}
   const muxAudio=video.audioUrl&&radarIsXVariantHls(video.sourceUrl)&&!radarIsXSubtitleHls(video.audioUrl);
   const src=localWebm?`${RADAR_CONVERTER_URL}?mode=webm&radarSession=${encodeURIComponent(radarConversionSession.key)}`:`${RADAR_CONVERTER_URL}?source=${encodeURIComponent(video.sourceUrl)}${muxAudio?`&audio=${encodeURIComponent(video.audioUrl)}`:''}&radarSession=${encodeURIComponent(radarConversionSession.key)}`;
