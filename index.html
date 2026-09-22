@@ -3124,51 +3124,96 @@ function radarSearchableImageUrl(raw){
 }
 function radarEngineSearchUrl(engine, imageUrl){
   const e=encodeURIComponent(imageUrl);
-  if(engine==='google') return `https://lens.google.com/uploadbyurl?url=${e}`;
+  if(engine==='google') return `https://www.google.com/searchbyimage?sbisrc=4chanx&image_url=${e}`;
   if(engine==='tineye') return `https://tineye.com/search?url=${e}`;
   return `https://yandex.com/images/search?rpt=imageview&url=${e}`;
 }
 function radarEngineUploadUrl(engine){
-  if(engine==='google') return 'https://lens.google.com/upload';
+  if(engine==='google') return 'https://www.google.com/searchbyimage';
   if(engine==='tineye') return 'https://tineye.com/';
   return 'https://yandex.com/images/search?rpt=imageview';
 }
-function radarOpenSearchTab(url){
+function radarOpenSearchTab(url, win){
+  if(win && !win.closed){ try{ win.location.href=url; return win; }catch(e){} }
   const w=window.open(url,'_blank','noopener');
   if(!w){ try{ location.href=url; }catch(e){} }
   return w;
 }
-async function radarResolveSearchImageUrl(){
+function radarProxyFetchUrl(u){
+  u=String(u||'').trim();
+  if(!/^https?:\/\//i.test(u)) return '';
+  const noProto=u.replace(/^https?:\/\//i,'');
+  return 'https://wsrv.nl/?url='+encodeURIComponent(noProto)+'&output=jpg&n=-1';
+}
+async function radarJpegBlob(blob){
+  if(!blob) return null;
+  if(blob.size<850000 && /jpe?g/i.test(blob.type||'')) return blob;
+  try{
+    const bmp=await createImageBitmap(blob);
+    const max=1600;
+    let w=bmp.width,h=bmp.height;
+    if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const c=document.createElement('canvas');
+    c.width=w; c.height=h;
+    c.getContext('2d').drawImage(bmp,0,0,w,h);
+    const out=await new Promise(res=>c.toBlob(res,'image/jpeg',0.88));
+    return out||blob;
+  }catch(e){ return blob; }
+}
+async function radarGetSearchBlob(){
   const l=document.getElementById('savedInlineFocus');
-  const raw=l?.dataset.searchUrl||'';
-  const http=radarSearchableImageUrl(raw)||radarHttpImageUrl(raw);
-  if(http) return http;
   const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
-  const selectedFull=selected?.getAttribute('data-full')||selected?.getAttribute('data-source')||'';
-  const selectedHttp=radarSearchableImageUrl(selectedFull)||radarHttpImageUrl(selectedFull);
-  if(selectedHttp) return selectedHttp;
   const id=l?.dataset.savedId||selected?.querySelector('.saved-image-thumb')?.getAttribute('data-id')||selected?.getAttribute('data-id')||'';
-  let blob=id?radarSavedBlobs.get(String(id)):null;
-  if(!blob) blob=await radarImageBlobFromFocus();
-  if(!blob && selected){
+  if(id && radarSavedBlobs.has(String(id))) return radarSavedBlobs.get(String(id));
+  let blob=await radarImageBlobFromFocus();
+  if(blob) return blob;
+  if(selected){
     const img=selected.querySelector('.saved-image-thumb');
     const src=img?.currentSrc||img?.src||'';
-    if(src) try{ blob=await (await fetch(src)).blob(); }catch(e){}
+    if(src) try{ return await (await fetch(src)).blob(); }catch(e){}
   }
-  if(!blob) return '';
-  return await radarHostTempImage(blob);
+  return null;
+}
+async function radarResolveSearchImageUrl(){
+  const blob=await radarGetSearchBlob();
+  if(blob){
+    const hosted=await radarHostTempImage(await radarJpegBlob(blob));
+    if(hosted) return radarProxyFetchUrl(hosted)||hosted;
+  }
+  const l=document.getElementById('savedInlineFocus');
+  const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
+  const raw=l?.dataset.searchUrl||selected?.getAttribute('data-full')||selected?.getAttribute('data-source')||'';
+  return radarSearchableImageUrl(raw)||radarHttpImageUrl(raw)||'';
 }
 async function radarOpenEngineForImage(engine, ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   const btn=ev?.currentTarget;
   const isToggle=btn?.classList?.contains('toggle');
   const old=(!isToggle && btn && (btn.textContent||''))||'';
+  const win=window.open('about:blank','radar-rev-'+engine);
   try{
     if(btn && !isToggle) btn.textContent='⏳';
-    const imgUrl=await radarResolveSearchImageUrl();
-    radarOpenSearchTab(imgUrl?radarEngineSearchUrl(engine,imgUrl):radarEngineUploadUrl(engine));
+    const blob=await radarGetSearchBlob();
+    let imgUrl='';
+    if(blob){
+      const hosted=await radarHostTempImage(await radarJpegBlob(blob));
+      if(hosted) imgUrl=radarProxyFetchUrl(hosted)||hosted;
+    }
+    if(!imgUrl){
+      const l=document.getElementById('savedInlineFocus');
+      const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
+      const raw=l?.dataset.searchUrl||selected?.getAttribute('data-full')||selected?.getAttribute('data-source')||'';
+      imgUrl=radarSearchableImageUrl(raw)||radarHttpImageUrl(raw)||'';
+    }
+    if(imgUrl){
+      radarOpenSearchTab(radarEngineSearchUrl(engine,imgUrl), win);
+    }else if(blob){
+      radarPostFileToEngine(engine, blob, 'radar-rev-'+engine);
+    }else{
+      radarOpenSearchTab(radarEngineUploadUrl(engine), win);
+    }
   }catch(e){
-    radarOpenSearchTab(radarEngineUploadUrl(engine));
+    radarOpenSearchTab(radarEngineUploadUrl(engine), win);
   }finally{
     if(btn&&old) btn.textContent=old;
   }
@@ -3210,14 +3255,6 @@ async function radarHostTempImage(blob){
   const file=new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
   const hosts=[
     async()=>{
-      const fd=new FormData(); fd.append('file',file);
-      const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST',body:fd});
-      const j=await r.json();
-      let u=j?.data?.url||'';
-      if(u) return u.replace('://tmpfiles.org/','://tmpfiles.org/dl/');
-      return '';
-    },
-    async()=>{
       const fd=new FormData();
       fd.append('reqtype','fileupload'); fd.append('time','24h'); fd.append('fileToUpload',file);
       const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST',body:fd});
@@ -3232,14 +3269,29 @@ async function radarHostTempImage(blob){
       return /^https?:\/\//i.test(t)?t:'';
     },
     async()=>{
+      const fd=new FormData(); fd.append('files[]',file);
+      const r=await fetch('https://uguu.se/upload?output=json',{method:'POST',body:fd});
+      const j=await r.json();
+      const u=j?.files?.[0]?.url||j?.url||'';
+      return /^https?:\/\//i.test(u)?u:'';
+    },
+    async()=>{
       const fd=new FormData(); fd.append('file',file);
       const r=await fetch('https://0x0.st',{method:'POST',body:fd});
       const t=(await r.text()).trim();
       return /^https?:\/\//i.test(t)?t:'';
+    },
+    async()=>{
+      const fd=new FormData(); fd.append('file',file);
+      const r=await fetch('https://tmpfiles.org/api/v1/upload',{method:'POST',body:fd});
+      const j=await r.json();
+      let u=j?.data?.url||'';
+      if(u) return u.replace('://tmpfiles.org/','://tmpfiles.org/dl/');
+      return '';
     }
   ];
   for(const h of hosts){
-    try{ const u=await h(); if(u) return u; }catch(e){}
+    try{ const u=await h(); if(/^https?:\/\//i.test(u)) return u; }catch(e){}
   }
   return '';
 }
@@ -3271,7 +3323,7 @@ function radarBindFocusSearchLinks(imageUrl){
     googleBtn.href=radarEngineHref('google', imageUrl);
   }
 }
-function radarPostFileToEngine(engine, blob){
+function radarPostFileToEngine(engine, blob, targetName){
   if(!blob) return false;
   const file=blob instanceof File?blob:new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
   const dt=new DataTransfer();
@@ -3279,16 +3331,24 @@ function radarPostFileToEngine(engine, blob){
   const form=document.createElement('form');
   form.method='POST';
   form.enctype='multipart/form-data';
-  form.target='_blank';
-  form.style.display='none';
+  form.target=targetName||'_blank';
+  form.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+  const hide=(name,val)=>{const i=document.createElement('input');i.type='hidden';i.name=name;i.value=val;form.appendChild(i)};
   const inp=document.createElement('input');
   inp.type='file';
   if(engine==='google'){
     form.action='https://www.google.com/searchbyimage/upload';
     inp.name='encoded_image';
+    hide('image_url','');
+    hide('sbisrc','Google Chrome');
+  }else if(engine==='tineye'){
+    form.action='https://tineye.com/search';
+    inp.name='image';
   }else{
-    form.action='https://yandex.com/images/search?rpt=imageview';
+    form.action='https://yandex.com/images/search';
     inp.name='upfile';
+    hide('rpt','imageview');
+    hide('format','html');
   }
   inp.files=dt.files;
   form.appendChild(inp);
