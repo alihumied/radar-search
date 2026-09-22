@@ -232,13 +232,13 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 
     <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
     <div class="toggles">
-      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarGalleryEngineClick('yandex',event)">
         <span style="font-size:16px;">📷</span><span>ياندكس</span>
       </a>
-      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarGalleryEngineClick('google',event)">
         <span style="font-size:16px;">📷</span><span>جوجل</span>
       </a>
-      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarGalleryEngineClick('tineye',event)">
         <span style="font-size:16px;">📷</span><span>TinEye</span>
       </a>
     </div>
@@ -3255,6 +3255,13 @@ async function radarHostTempImage(blob){
   const file=new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
   const hosts=[
     async()=>{
+      const fd=new FormData(); fd.append('image',file);
+      const r=await fetch('https://api.imgur.com/3/image',{method:'POST',headers:{Authorization:'Client-ID 546c25a59c58ad7'},body:fd});
+      const j=await r.json();
+      const u=j?.data?.link||'';
+      return /^https?:\/\//i.test(u)?u:'';
+    },
+    async()=>{
       const fd=new FormData();
       fd.append('reqtype','fileupload'); fd.append('time','24h'); fd.append('fileToUpload',file);
       const r=await fetch('https://litterbox.catbox.moe/resources/internals/api.php',{method:'POST',body:fd});
@@ -3265,19 +3272,6 @@ async function radarHostTempImage(blob){
       const fd=new FormData();
       fd.append('reqtype','fileupload'); fd.append('fileToUpload',file);
       const r=await fetch('https://catbox.moe/user/api.php',{method:'POST',body:fd});
-      const t=(await r.text()).trim();
-      return /^https?:\/\//i.test(t)?t:'';
-    },
-    async()=>{
-      const fd=new FormData(); fd.append('files[]',file);
-      const r=await fetch('https://uguu.se/upload?output=json',{method:'POST',body:fd});
-      const j=await r.json();
-      const u=j?.files?.[0]?.url||j?.url||'';
-      return /^https?:\/\//i.test(u)?u:'';
-    },
-    async()=>{
-      const fd=new FormData(); fd.append('file',file);
-      const r=await fetch('https://0x0.st',{method:'POST',body:fd});
       const t=(await r.text()).trim();
       return /^https?:\/\//i.test(t)?t:'';
     },
@@ -3364,7 +3358,7 @@ function radarPostFileToEngine(engine, blob, targetName){
 function radarFocusEngineClick(engine, ev){
   if(ev) ev.stopPropagation();
   const l=document.getElementById('savedInlineFocus');
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
+  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):(engine==='tineye'?null:document.getElementById('savedInlineFocusYandex'));
   const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
   if(imgUrl){
     if(btn) btn.href=radarEngineHref(engine, imgUrl);
@@ -3373,8 +3367,36 @@ function radarFocusEngineClick(engine, ev){
   if(ev) ev.preventDefault();
   const id=l?.dataset.savedId||'';
   const mapped=id?radarSavedBlobs.get(String(id)):null;
-  if(mapped && radarPostFileToEngine(engine, mapped)) return false;
-  radarImageBlobFromFocus().then(b=>{ if(b) radarPostFileToEngine(engine,b); });
+  const win=window.open('about:blank','radar-rev-'+engine);
+  (async()=>{
+    const blob=mapped||await radarImageBlobFromFocus();
+    const hosted=blob?await radarHostTempImage(await radarJpegBlob(blob)):'';
+    const url=hosted?radarEngineHref(engine, hosted):radarEngineUploadUrl(engine);
+    if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
+    else window.open(url,'_blank','noopener');
+  })();
+  return false;
+}
+function radarGalleryEngineClick(engine, ev){
+  const overlay=document.getElementById('savedInlineFocus');
+  if(overlay?.classList.contains('show')) return radarFocusEngineClick(engine, ev);
+  const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
+  if(!selected) return true;
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const http=radarHttpImageUrl(selected.getAttribute('data-full')||selected.getAttribute('data-source')||'');
+  if(http){
+    window.open(radarEngineHref(engine, http),'_blank','noopener');
+    return false;
+  }
+  const id=selected.querySelector('.saved-image-thumb')?.getAttribute('data-id')||selected.getAttribute('data-id')||'';
+  const blob=id?radarSavedBlobs.get(String(id)):null;
+  const win=window.open('about:blank','radar-rev-'+engine);
+  (async()=>{
+    const hosted=blob?await radarHostTempImage(await radarJpegBlob(blob)):'';
+    const url=hosted?radarEngineHref(engine, hosted):radarEngineUploadUrl(engine);
+    if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
+    else window.open(url,'_blank','noopener');
+  })();
   return false;
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
