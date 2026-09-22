@@ -3322,15 +3322,17 @@ function radarBindFocusSearchLinks(imageUrl){
   }
 }
 function radarPostFileToEngine(engine, blob, targetName){
-  if(!blob) return false;
+  if(!blob||typeof DataTransfer==='undefined') return false;
   const file=blob instanceof File?blob:new File([blob],'radar.jpg',{type:blob.type||'image/jpeg'});
   const dt=new DataTransfer();
   dt.items.add(file);
+  if(!dt.files||!dt.files.length) return false;
   const form=document.createElement('form');
   form.method='POST';
   form.enctype='multipart/form-data';
   form.target=targetName||'_blank';
-  form.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+  form.setAttribute('rel','noopener');
+  form.style.cssText='position:fixed;left:0;top:0;width:32px;height:32px;opacity:.02;z-index:2147483647;margin:0;padding:0;';
   const hide=(name,val)=>{const i=document.createElement('input');i.type='hidden';i.name=name;i.value=val;form.appendChild(i)};
   const inp=document.createElement('input');
   inp.type='file';
@@ -3347,6 +3349,7 @@ function radarPostFileToEngine(engine, blob, targetName){
     inp.name='upfile';
     hide('rpt','imageview');
     hide('format','html');
+    hide('request','{"blocks":[{"block":"b-page_type_search-by-image__link"}]}');
   }
   inp.files=dt.files;
   form.appendChild(inp);
@@ -3358,23 +3361,20 @@ function radarPostFileToEngine(engine, blob, targetName){
 function radarFocusEngineClick(engine, ev){
   if(ev) ev.stopPropagation();
   const l=document.getElementById('savedInlineFocus');
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):(engine==='tineye'?null:document.getElementById('savedInlineFocusYandex'));
+  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
+  const id=l?.dataset.savedId||'';
+  const blob=id?radarSavedBlobs.get(String(id)):null;
+  if(blob){
+    if(ev) ev.preventDefault();
+    radarPostFileToEngine(engine, blob);
+    return false;
+  }
   const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
   if(imgUrl){
     if(btn) btn.href=radarEngineHref(engine, imgUrl);
     return true;
   }
   if(ev) ev.preventDefault();
-  const id=l?.dataset.savedId||'';
-  const mapped=id?radarSavedBlobs.get(String(id)):null;
-  const win=window.open('about:blank','radar-rev-'+engine);
-  (async()=>{
-    const blob=mapped||await radarImageBlobFromFocus();
-    const hosted=blob?await radarHostTempImage(await radarJpegBlob(blob)):'';
-    const url=hosted?radarEngineHref(engine, hosted):radarEngineUploadUrl(engine);
-    if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
-    else window.open(url,'_blank','noopener');
-  })();
   return false;
 }
 function radarGalleryEngineClick(engine, ev){
@@ -3383,21 +3383,12 @@ function radarGalleryEngineClick(engine, ev){
   const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
   if(!selected) return true;
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
-  const http=radarHttpImageUrl(selected.getAttribute('data-full')||selected.getAttribute('data-source')||'');
-  if(http){
-    window.open(radarEngineHref(engine, http),'_blank','noopener');
-    return false;
-  }
   const id=selected.querySelector('.saved-image-thumb')?.getAttribute('data-id')||selected.getAttribute('data-id')||'';
   const blob=id?radarSavedBlobs.get(String(id)):null;
-  const win=window.open('about:blank','radar-rev-'+engine);
-  (async()=>{
-    const hosted=blob?await radarHostTempImage(await radarJpegBlob(blob)):'';
-    const url=hosted?radarEngineHref(engine, hosted):radarEngineUploadUrl(engine);
-    if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
-    else window.open(url,'_blank','noopener');
-  })();
-  return false;
+  if(blob){ radarPostFileToEngine(engine, blob); return false; }
+  const http=radarHttpImageUrl(selected.getAttribute('data-full')||selected.getAttribute('data-source')||'');
+  if(http){ window.open(radarEngineHref(engine, http),'_blank','noopener'); return false; }
+  return true;
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
