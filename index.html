@@ -232,13 +232,13 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 
     <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
     <div class="toggles">
-      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('yandex',event)">
+      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📷</span><span>ياندكس</span>
       </a>
-      <a href="https://lens.google.com/upload" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('google',event)">
+      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📷</span><span>جوجل</span>
       </a>
-      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('tineye',event)">
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
         <span style="font-size:16px;">📷</span><span>TinEye</span>
       </a>
     </div>
@@ -3304,10 +3304,14 @@ function radarHttpImageUrl(u){
   return u;
 }
 function radarEngineHref(engine, imageUrl){
-  const u=radarHttpImageUrl(imageUrl);
-  const encoded=u?encodeURIComponent(u):'';
-  if(engine==='google') return u?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
-  return u?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
+  let u=String(imageUrl||'').trim();
+  try{ if(typeof hxn==='function') u=hxn(u); }catch(e){}
+  try{ if(typeof hxImgQuality==='function' && /^https?:\/\//i.test(u)) u=hxImgQuality(u); }catch(e){}
+  const ok=/^https?:\/\//i.test(u);
+  const encoded=ok?encodeURIComponent(u):'';
+  if(engine==='google') return encoded?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
+  if(engine==='tineye') return encoded?('https://tineye.com/search?url='+encoded):'https://tineye.com/';
+  return encoded?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
 }
 function radarBindFocusSearchLinks(imageUrl){
   const yandexBtn=document.getElementById('savedInlineFocusYandex');
@@ -3358,7 +3362,20 @@ function radarPostFileToEngine(engine, blob, targetName){
   return true;
 }
 function radarFocusEngineClick(engine, ev){
-  return radarOpenEngineForImage(engine, ev);
+  if(ev) ev.stopPropagation();
+  const l=document.getElementById('savedInlineFocus');
+  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
+  const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
+  if(imgUrl){
+    if(btn) btn.href=radarEngineHref(engine, imgUrl);
+    return true;
+  }
+  if(ev) ev.preventDefault();
+  const id=l?.dataset.savedId||'';
+  const mapped=id?radarSavedBlobs.get(String(id)):null;
+  if(mapped && radarPostFileToEngine(engine, mapped)) return false;
+  radarImageBlobFromFocus().then(b=>{ if(b) radarPostFileToEngine(engine,b); });
+  return false;
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
@@ -3378,7 +3395,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
   const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\//i.test(full);
   l.style.pointerEvents='';
   l.dataset.savedId=savedId?String(savedId):'';
-  const searchUrl=isVid?'':(radarSearchableImageUrl(radarHighestImageUrl(full)||full)||radarSearchableImageUrl(radarHighestImageUrl(quick)||quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
+  const searchUrl=isVid?'':(radarHighestImageUrl(full)||radarHighestImageUrl(quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
   l.dataset.searchUrl=searchUrl;
   radarBindFocusSearchLinks(searchUrl);
   if(vid){
