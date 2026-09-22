@@ -232,13 +232,13 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 
     <div class="hint" style="margin-top:18px; margin-bottom:8px;">عندك سكرين شوت بجهازك؟ ارفعه مباشرة بالمحرك:</div>
     <div class="toggles">
-      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('yandex',event)">
         <span style="font-size:16px;">📷</span><span>ياندكس</span>
       </a>
-      <a href="https://images.google.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://lens.google.com/upload" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('google',event)">
         <span style="font-size:16px;">📷</span><span>جوجل</span>
       </a>
-      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;">
+      <a href="https://tineye.com/" target="_blank" rel="noopener" class="toggle" style="text-decoration:none;" onclick="return radarOpenEngineForImage('tineye',event)">
         <span style="font-size:16px;">📷</span><span>TinEye</span>
       </a>
     </div>
@@ -3130,12 +3130,49 @@ function radarEngineSearchUrl(engine, imageUrl){
 }
 function radarEngineUploadUrl(engine){
   if(engine==='google') return 'https://lens.google.com/upload';
+  if(engine==='tineye') return 'https://tineye.com/';
   return 'https://yandex.com/images/search?rpt=imageview';
 }
 function radarOpenSearchTab(url){
   const w=window.open(url,'_blank','noopener');
   if(!w){ try{ location.href=url; }catch(e){} }
   return w;
+}
+async function radarResolveSearchImageUrl(){
+  const l=document.getElementById('savedInlineFocus');
+  const raw=l?.dataset.searchUrl||'';
+  const http=radarSearchableImageUrl(raw)||radarHttpImageUrl(raw);
+  if(http) return http;
+  const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
+  const selectedFull=selected?.getAttribute('data-full')||selected?.getAttribute('data-source')||'';
+  const selectedHttp=radarSearchableImageUrl(selectedFull)||radarHttpImageUrl(selectedFull);
+  if(selectedHttp) return selectedHttp;
+  const id=l?.dataset.savedId||selected?.querySelector('.saved-image-thumb')?.getAttribute('data-id')||selected?.getAttribute('data-id')||'';
+  let blob=id?radarSavedBlobs.get(String(id)):null;
+  if(!blob) blob=await radarImageBlobFromFocus();
+  if(!blob && selected){
+    const img=selected.querySelector('.saved-image-thumb');
+    const src=img?.currentSrc||img?.src||'';
+    if(src) try{ blob=await (await fetch(src)).blob(); }catch(e){}
+  }
+  if(!blob) return '';
+  return await radarHostTempImage(blob);
+}
+async function radarOpenEngineForImage(engine, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const btn=ev?.currentTarget;
+  const isToggle=btn?.classList?.contains('toggle');
+  const old=(!isToggle && btn && (btn.textContent||''))||'';
+  try{
+    if(btn && !isToggle) btn.textContent='⏳';
+    const imgUrl=await radarResolveSearchImageUrl();
+    radarOpenSearchTab(imgUrl?radarEngineSearchUrl(engine,imgUrl):radarEngineUploadUrl(engine));
+  }catch(e){
+    radarOpenSearchTab(radarEngineUploadUrl(engine));
+  }finally{
+    if(btn&&old) btn.textContent=old;
+  }
+  return false;
 }
 async function radarImageBlobFromFocus(){
   const img=document.getElementById('savedInlineFocusImg');
@@ -3261,20 +3298,7 @@ function radarPostFileToEngine(engine, blob){
   return true;
 }
 function radarFocusEngineClick(engine, ev){
-  if(ev) ev.stopPropagation();
-  const l=document.getElementById('savedInlineFocus');
-  const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
-  const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
-  if(imgUrl){
-    if(btn) btn.href=radarEngineHref(engine, imgUrl);
-    return true;
-  }
-  if(ev) ev.preventDefault();
-  const id=l?.dataset.savedId||'';
-  const mapped=id?radarSavedBlobs.get(String(id)):null;
-  if(mapped && radarPostFileToEngine(engine, mapped)) return false;
-  radarImageBlobFromFocus().then(b=>{ if(b) radarPostFileToEngine(engine,b); });
-  return false;
+  return radarOpenEngineForImage(engine, ev);
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
@@ -3294,7 +3318,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
   const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\//i.test(full);
   l.style.pointerEvents='';
   l.dataset.savedId=savedId?String(savedId):'';
-  const searchUrl=isVid?'':(radarHighestImageUrl(full)||radarHighestImageUrl(quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
+  const searchUrl=isVid?'':(radarSearchableImageUrl(radarHighestImageUrl(full)||full)||radarSearchableImageUrl(radarHighestImageUrl(quick)||quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
   l.dataset.searchUrl=searchUrl;
   radarBindFocusSearchLinks(searchUrl);
   if(vid){
