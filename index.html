@@ -3455,7 +3455,6 @@ function radarFocusEngineClick(engine, ev){
   if(dataUrl||blob){
     if(ev) ev.preventDefault();
     const win=window.open('about:blank','radar-rev-'+engine);
-    try{ if(win&&win.document) win.document.write('<p style="font:16px sans-serif;padding:28px;direction:rtl">جاري البحث بالصورة…</p>'); }catch(e){}
     (async()=>{
       const hosted=blob?await radarHostTempImage(blob):'';
       if(hosted){
@@ -3497,7 +3496,6 @@ function radarGalleryEngineClick(engine, ev){
   const blob=id?radarSavedBlobs.get(String(id)):null;
   if(dataUrl||blob){
     const win=window.open('about:blank','radar-rev-'+engine);
-    try{ if(win&&win.document) win.document.write('<p style="font:16px sans-serif;padding:28px;direction:rtl">جاري البحث بالصورة…</p>'); }catch(e){}
     (async()=>{
       const hosted=blob?await radarHostTempImage(blob):'';
       if(hosted){
