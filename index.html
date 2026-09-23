@@ -1749,7 +1749,7 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
           const localBlob=getBlob?await getBlob(item):null;
           const blob=localBlob||await (async()=>{
             const src=getUrl(item);if(!src)throw 0;
-            const res=await fetch(src,{mode:'cors',referrerPolicy:'no-referrer',credentials:'omit'});if(!res.ok)throw 0;
+            const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
             return await res.blob();
           })();
           zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
@@ -3666,7 +3666,9 @@ async function saveZoomedImage(){
 }
 function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
 let radarFocusAlbum=[],radarFocusIndex=0;
-function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
+function radarDeadCdnVideoUrl(url){return /\/o1\/v\/t2\//i.test(String(url||''))}
+function radarUsableVideoUrl(url){const s=String(url||'');return radarDeadCdnVideoUrl(s)?'':s}
+function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?radarUsableVideoUrl(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
 function radarAlbumFromImport(){return (typeof hxFiltered==='function'?hxFiltered():[]).filter(x=>['image','video','reel','story'].includes(x.type)).map(radarFocusItemFromHx).filter(x=>x.full||x.preview)}
 function radarAlbumFromSavedTiles(){return [...document.querySelectorAll('#savedLinksList .saved-image-tile')].map(t=>{const img=t.querySelector('.saved-image-thumb');return {full:t.getAttribute('data-full')||'',preview:(img&&(img.currentSrc||img.src))||'',savedId:img?.getAttribute('data-id')||'',source:t.getAttribute('data-source')||''}}).filter(x=>x.full||x.preview)}
 function radarFocusUpdateNav(){
@@ -4041,7 +4043,7 @@ function hxPostTextHtml(x){
 }
 function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.slice(0,HXpage*HXSIZE),list=document.getElementById('htmlImportResultsList'),more=document.getElementById('hxMore');more.style.display=shown.length<all.length?'flex':'none';more.textContent=`عرض المزيد (${Math.min(HXSIZE,all.length-shown.length)})`;if(HXtype==='post'){list.innerHTML=shown.map(x=>`<article class="result-card" style="display:flex;align-items:flex-start;gap:12px;text-align:right;direction:rtl;">${x.thumb?`<img src="${esc(hxThumbUrl(x.thumb))}" style="width:76px;height:76px;object-fit:cover;border-radius:12px;flex:none;cursor:pointer;" onclick="openInlineSavedFocus('${esc(x.directUrl||x.thumb)}')" onerror="this.style.display='none'">`:''}<div style="min-width:0;flex:1;"><div style="font-size:14px;color:#45d9ff;font-weight:700;margin-bottom:4px;">${esc(x.author||'منشور محفوظ')}</div><div style="font-size:15px;line-height:1.9;white-space:normal;overflow-wrap:anywhere;">${hxPostTextHtml(x)||'(بدون نص)'}</div>${x.date?`<div style="font-size:11px;color:#8fa0bb;margin-top:8px;">${esc(x.date)}</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener" class="toggle" style="display:inline-flex;margin-top:10px;padding:6px 10px;color:#8feaff;border-color:#45d9ff88;text-decoration:none;">↗ فتح المنشور الأصلي</a>`:''}</div></article>`).join('')||'<div class="hint">لا توجد منشورات محفوظة.</div>';return}if(HXtype==='comment'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}">`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}${x.reaction?`<img class="hx-reaction" src="${esc(x.reaction)}" alt="">`:''}</div><div class="hx-date">${esc(x.date||'تاريخ غير محفوظ')}</div><div class="hx-text">${hxPostTextHtml(x)}</div></div></div>`).join('')||'<div class="hint">لا توجد تعليقات محفوظة.</div>';return}if(HXtype==='reactor'){list.innerHTML=shown.map(x=>`<div class="hx-comment">${x.thumb?`<div style="position:relative;width:36px;height:36px"><img src="${esc(x.thumb)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">${x.reaction?`<img src="${esc(x.reaction)}" style="position:absolute;bottom:-3px;left:-3px;width:16px;height:16px;border-radius:50%;background:#0b1526;border:1px solid #0b1526">`:''}</div>`:'<div></div>'}<div><div class="hx-name-row">${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}${hxPersonBtns(x)}</div><div class="hx-date">${x.text?esc(x.text):''}</div></div></div>`).join('')||'<div class="hint">لا يوجد متفاعلين محفوظين.</div>';return}if(HXtype==='member'){list.innerHTML=shown.map(x=>{const uidMatch=(x.url||'').match(/facebook\.com\/(\d+)\/?$/i);const uid=uidMatch?uidMatch[1]:'';const safeName=esc(jsAttrStr(x.author||''));const safeVal=esc(jsAttrStr(x.url||uid||''));return `<div class="hx-comment">${x.thumb?`<img src="${esc(x.thumb)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover">`:'<div></div>'}<div>${x.url?`<a class="hx-name" href="${esc(x.url)}" target="_blank">${esc(x.author||'اسم غير محفوظ')}</a>`:`<div class="hx-name">${esc(x.author||'اسم غير محفوظ')}</div>`}<div class="hx-date">${x.text?esc(x.text):''}</div>${x.url?`<div class="hint" style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:12px;direction:ltr;text-align:left;">${esc(x.url.replace(/^https?:\/\//i,''))} <button onclick="copyMetaChipValue(this,'${safeVal}');hxSearchThisPerson('${safeName}')" title="نسخ الرابط + بحث محلي بنفس الملف" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">📋</button><button onclick="hxSearchThisPerson('${safeName}')" title="بحث محلي عن هاد الشخص بباقي الملف (تعليقات/منشورات/متفاعلين)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🔎</button><button onclick="hxDeepSearch('${safeVal}')" title="بحث عميق بالمحرك الرئيسي (تحديد هوية + رابط حقيقي + اسم مستخرج)" style="background:none;border:none;color:inherit;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:.8;">🌐</button></div>`:''}</div></div>`}).join('')||'<div class="hint">لا يوجد أعضاء محفوظين.</div>';return}const icon={image:'🖼️',reel:'🎬',story:'⏱️',video:'📹'}[HXtype]||'🔗';const gridTileHtml=x=>{
   const vid=x.type==='video'||x.type==='reel';
-  const full=vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||'');
+  const full=vid?radarUsableVideoUrl(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||'');
   const rawThumb=x.thumb||(!vid?(x.directUrl||''):'');
   const badThumb=!rawThumb||/\.mp4(?:\?|$)|\/o1\/v\/t(?:2|16|50|51)\//i.test(rawThumb)||/video[.-][a-z0-9]*\.fbcdn\.net/i.test(rawThumb);
   const thumbSrc=badThumb?'':hxThumbUrl(rawThumb);
@@ -4200,7 +4202,11 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
     // بتبويب جديد (فتح رابط عادي مش خاضع لنفس قيد fetch)، وهيك مشغّل الفيديو الأصلي بالمتصفح
     // بيفتح وفيه زر تحميل/مشاركة حقيقي. هاد بس بيشتغل مع رابط mp4 صريح — روابط m3u8 (قائمة تشغيل
     // HLS متعددة الأجزاء) ما بتفتح كفيديو مباشر بالتنقل العادي، فبهاي الحالة نرجع لفتح رابط المنشور.
-    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'');
+    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'')&&!radarDeadCdnVideoUrl(src);
+    if(radarDeadCdnVideoUrl(src)){
+      if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
+      return {ok:false,openedPost:false};
+    }
     if(isDirectMp4){window.open(src,'_blank','noopener');return {ok:false,openedDirect:true}}
     if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
     return {ok:false,openedPost:false};
@@ -4216,13 +4222,13 @@ async function hxDownloadById(id){
 }
 async function hxFetchMediaBlob(src, kind){
   const u=String(src||'').trim();
-  if(!u||!/^https?:\/\//i.test(u)) return null;
+  if(!u||!/^https?:\/\//i.test(u)||radarDeadCdnVideoUrl(u)) return null;
   const urls=[u];
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
   }
-  const opts=[{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'},{mode:'cors',credentials:'omit'}];
+  const opts=[{mode:'cors',credentials:'omit'},{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'}];
   for(const url of urls){
     for(const opt of opts){
       try{
@@ -4239,10 +4245,12 @@ async function hxFetchMediaBlob(src, kind){
 }
 async function hxDownloadAll(){
   const images=HX.filter(x=>(x.type==='image'||x.type==='story')&&(x.directUrl||x.thumb||x.url));
-  const videos=HX.filter(x=>(x.type==='video'||x.type==='reel')&&x.directUrl);
+  const videos=HX.filter(x=>(x.type==='video'||x.type==='reel')&&radarUsableVideoUrl(x.directUrl));
+  const dead=HX.filter(x=>(x.type==='video'||x.type==='reel')&&radarDeadCdnVideoUrl(x.directUrl)).length;
   const hlsOnly=HX.filter(x=>(x.type==='video'||x.type==='reel')&&!x.directUrl&&x.hlsUrl).length;
   const items=[...images,...videos];
   if(!items.length){
+    if(dead)return alert(`فيديوهات إنستغرام المحفوظة (${dead}) روابطها منتهية (URL signature expired). اعمل مسح جديد بالسكربت ثم نزّل فورًا.`);
     return alert(hlsOnly?`الفيديوهات (${hlsOnly}) بصيغة HLS وتحتاج تحويل MP4 أولاً من لوحة التحويل، وما في صور بروابط مباشرة.`:'ما في صور أو فيديوهات MP4 قابلة للتنزيل في هذا الملف.');
   }
   const st=document.getElementById('htmlImportStatus');
@@ -4259,7 +4267,7 @@ async function hxDownloadAll(){
   });
   if(result.cancelled)return;
   if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر. جرّبي تحديث الصفحة أو روابط أحدث.';return}
-  st.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} عنصر${result.failed?` · تعذّر ${result.failed}`:''}${hlsOnly?` · ${hlsOnly} فيديو HLS يحتاج تحويل MP4`:''}`;
+  st.textContent=`✅ بدأ تنزيل ${result.archives} ملف ZIP فيه ${result.ok} عنصر${result.failed?` · تعذّر ${result.failed}`:''}${hlsOnly?` · ${hlsOnly} فيديو HLS يحتاج تحويل MP4`:''}${dead?` · ${dead} فيديو إنستغرام رابطه منتهي (t2) ويلزمه مسح جديد`:''}`;
 }
 
 
@@ -4283,10 +4291,10 @@ function applyOfficialJsonData(d,filename){
   });
   sourceVideos.forEach(v=>{
     const hls=radarPickHlsSource(v);
-    const mp4=String(v.videoMp4||'');
-    if(/\/o1\/v\/t2\//i.test(mp4)&&!/\.mp4/i.test(mp4)&&!hls)return;
-    if(!hls&&!mp4)return;
-    HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':'فيديو MP4 ')+label,author:label,date:v.firstSeen||'',platform});
+    const rawMp4=String(v.videoMp4||'');
+    const mp4=radarDeadCdnVideoUrl(rawMp4)?'':rawMp4;
+    if(!hls&&!mp4&&!radarDeadCdnVideoUrl(rawMp4))return;
+    HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':(mp4?'فيديو MP4 ':'فيديو '))+label,author:label,date:v.firstSeen||'',platform});
   });
   (d.images||[]).forEach((im,i)=>{
     const u=String(im.url||'');
@@ -4459,7 +4467,7 @@ function radarGetConvertibleVideos(data){
   let n=0;
   return (data.videos||[]).flatMap((v,i)=>{
     const hls=radarPickHlsSource(v);
-    const mp4=String(v.videoMp4||'');
+    const mp4=radarDeadCdnVideoUrl(v.videoMp4)?'':String(v.videoMp4||'');
     if(!hls&&!mp4)return [];
     n++;
     const width=Number(v.width||v.widthPx||v.bestWidth||0)||null,height=Number(v.height||v.heightPx||v.bestHeight||0)||null;
