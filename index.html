@@ -1599,6 +1599,24 @@ async function urlToBlobIfPossible(url){
   }catch(e){ return null; }
 }
 const radarSavedBlobs=new Map();
+const radarSavedDataUrls=new Map();
+async function radarJpegDataUrl(blob){
+  if(!blob) return '';
+  try{
+    const bmp=await createImageBitmap(blob);
+    const max=900;
+    let w=bmp.width,h=bmp.height;
+    if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const c=document.createElement('canvas');
+    c.width=w; c.height=h;
+    c.getContext('2d').drawImage(bmp,0,0,w,h);
+    return c.toDataURL('image/jpeg',0.72);
+  }catch(e){
+    try{
+      return await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result||''); r.onerror=()=>res(''); r.readAsDataURL(blob); });
+    }catch(e2){ return ''; }
+  }
+}
 async function idbGetAllImages(){
   try{
     const db = await idbOpen();
@@ -1612,8 +1630,12 @@ async function idbGetAllImages(){
     // عرض مؤقت (object URL) صالح للعرض المباشر بـ<img src>. السجلات القديمة (رابط نص بس، من قبل
     // هالتحديث) بتضل تعتمد على x.imageUrl متل ما كانت.
     radarSavedBlobs.clear();
+    radarSavedDataUrls.clear();
     return rows.map(x=>{
-      if(x.id!=null && x.blob) radarSavedBlobs.set(String(x.id), x.blob);
+      if(x.id!=null && x.blob){
+        radarSavedBlobs.set(String(x.id), x.blob);
+        radarJpegDataUrl(x.blob).then(u=>{ if(u) radarSavedDataUrls.set(String(x.id), u); });
+      }
       return {...x, displayUrl: x.blob?URL.createObjectURL(x.blob):x.imageUrl};
     });
   }catch(e){ return []; }
@@ -3298,14 +3320,11 @@ function radarHttpImageUrl(u){
   return u;
 }
 function radarEngineHref(engine, imageUrl){
-  let u=String(imageUrl||'').trim();
-  try{ if(typeof hxn==='function') u=hxn(u); }catch(e){}
-  try{ if(typeof hxImgQuality==='function' && /^https?:\/\//i.test(u)) u=hxImgQuality(u); }catch(e){}
-  const ok=/^https?:\/\//i.test(u);
-  const encoded=ok?encodeURIComponent(u):'';
-  if(engine==='google') return encoded?('https://lens.google.com/uploadbyurl?url='+encoded):'https://lens.google.com/upload';
-  if(engine==='tineye') return encoded?('https://tineye.com/search?url='+encoded):'https://tineye.com/';
-  return encoded?('https://yandex.com/images/search?rpt=imageview&url='+encoded):'https://yandex.com/images/search?rpt=imageview';
+  const u=String(imageUrl||'').trim();
+  const encoded=/^https?:\/\//i.test(u)?encodeURIComponent(u):'';
+  if(engine==='google') return encoded?`https://lens.google.com/uploadbyurl?url=${encoded}`:'https://lens.google.com/upload';
+  if(engine==='tineye') return encoded?`https://tineye.com/search?url=${encoded}`:'https://tineye.com/';
+  return encoded?`https://yandex.com/images/search?rpt=imageview&url=${encoded}`:'https://yandex.com/images/search?rpt=imageview';
 }
 function radarBindFocusSearchLinks(imageUrl){
   const yandexBtn=document.getElementById('savedInlineFocusYandex');
@@ -3358,18 +3377,101 @@ function radarPostFileToEngine(engine, blob, targetName){
   setTimeout(()=>form.remove(),4000);
   return true;
 }
+function radarSavedHttpUrl(){
+  const l=document.getElementById('savedInlineFocus');
+  const selected=document.querySelector('#savedLinksList .saved-image-tile.selected');
+  const it=(typeof radarFocusAlbum!=='undefined'&&radarFocusAlbum[radarFocusIndex])||{};
+  const cands=[l?.dataset.searchUrl,it.full,it.source,selected?.getAttribute('data-full'),selected?.getAttribute('data-source')];
+  for(const c of cands){ const u=radarHttpImageUrl(c); if(u) return u; }
+  return '';
+}
+function radarPostUrlToEngine(engine, src, targetName){
+  if(!src) return false;
+  const form=document.createElement('form');
+  form.method='POST';
+  form.target=targetName||'_blank';
+  form.setAttribute('rel','noopener');
+  form.style.cssText='position:fixed;left:0;top:0;width:24px;height:24px;opacity:.01;z-index:2147483647;margin:0';
+  const hide=(n,v)=>{const i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;form.appendChild(i)};
+  if(engine==='google'){
+    form.action='https://www.google.com/searchbyimage';
+    hide('image_url',src);
+    hide('sbisrc','4chanx');
+  }else if(engine==='tineye'){
+    window.open('https://tineye.com/search?url='+encodeURIComponent(src),'_blank','noopener');
+    return true;
+  }else{
+    form.action='https://yandex.com/images/search';
+    hide('rpt','imageview');
+    hide('url',src);
+  }
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(()=>form.remove(),4000);
+  return true;
+}
+function radarSubmitUrlInWindow(win, engine, src){
+  const action=engine==='google'?'https://www.google.com/searchbyimage':'https://yandex.com/images/search';
+  try{
+    const doc=win.document;
+    doc.open();
+    doc.write('<!doctype html><meta charset="utf-8"><form id="f" method="POST" action="'+action+'"></form>');
+    doc.close();
+    const form=doc.getElementById('f');
+    const add=(n,v)=>{const i=doc.createElement('input');i.type='hidden';i.name=n;i.value=v;form.appendChild(i)};
+    if(engine==='google'){ add('image_url',src); add('sbisrc','4chanx'); }
+    else { add('rpt','imageview'); add('url',src); }
+    form.submit();
+    return true;
+  }catch(e){
+    return radarPostUrlToEngine(engine, src);
+  }
+}
+async function radarOpenEngineFromBlob(engine, blob, win){
+  const dataUrl=await radarJpegDataUrl(blob);
+  if(engine==='google'){
+    const hosted=await radarHostTempImage(blob);
+    const url=hosted?radarEngineHref('google', hosted):(dataUrl?'':radarEngineUploadUrl('google'));
+    if(hosted){
+      if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
+      else window.open(url,'_blank','noopener');
+      return;
+    }
+  }
+  if(dataUrl){
+    if(win&&!win.closed) radarSubmitUrlInWindow(win, engine, dataUrl);
+    else radarPostUrlToEngine(engine, dataUrl);
+  }else if(win&&!win.closed){
+    try{ win.location.href=radarEngineUploadUrl(engine); }catch(e){}
+  }
+}
 function radarFocusEngineClick(engine, ev){
   if(ev) ev.stopPropagation();
   const l=document.getElementById('savedInlineFocus');
   const btn=engine==='google'?document.getElementById('savedInlineFocusGoogle'):document.getElementById('savedInlineFocusYandex');
   const id=l?.dataset.savedId||'';
+  const dataUrl=id?radarSavedDataUrls.get(String(id)):'';
   const blob=id?radarSavedBlobs.get(String(id)):null;
-  if(blob){
+  if(dataUrl||blob){
     if(ev) ev.preventDefault();
-    radarPostFileToEngine(engine, blob);
+    if(dataUrl && engine!=='google'){ radarPostUrlToEngine('yandex', dataUrl); return false; }
+    const win=window.open('about:blank','radar-rev-'+engine);
+    try{ if(win&&win.document) win.document.write('<p style="font:16px sans-serif;padding:28px;direction:rtl">جاري البحث بالصورة…</p>'); }catch(e){}
+    if(dataUrl && engine==='google'){
+      (async()=>{
+        const hosted=blob?await radarHostTempImage(blob):'';
+        if(hosted){
+          const url=radarEngineHref('google', hosted);
+          if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
+        }else if(win&&!win.closed) radarSubmitUrlInWindow(win,'google',dataUrl);
+        else radarPostUrlToEngine('google', dataUrl);
+      })();
+      return false;
+    }
+    radarOpenEngineFromBlob(engine, blob, win);
     return false;
   }
-  const imgUrl=radarHttpImageUrl(l?.dataset.searchUrl||'');
+  const imgUrl=radarSavedHttpUrl();
   if(imgUrl){
     if(btn) btn.href=radarEngineHref(engine, imgUrl);
     return true;
@@ -3384,9 +3486,31 @@ function radarGalleryEngineClick(engine, ev){
   if(!selected) return true;
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   const id=selected.querySelector('.saved-image-thumb')?.getAttribute('data-id')||selected.getAttribute('data-id')||'';
+  if(overlay){
+    overlay.dataset.savedId=id||'';
+    overlay.dataset.searchUrl=selected.getAttribute('data-full')||selected.getAttribute('data-source')||'';
+  }
+  const dataUrl=id?radarSavedDataUrls.get(String(id)):'';
   const blob=id?radarSavedBlobs.get(String(id)):null;
-  if(blob){ radarPostFileToEngine(engine, blob); return false; }
-  const http=radarHttpImageUrl(selected.getAttribute('data-full')||selected.getAttribute('data-source')||'');
+  if(dataUrl||blob){
+    if(dataUrl && engine!=='google'){ radarPostUrlToEngine('yandex', dataUrl); return false; }
+    const win=window.open('about:blank','radar-rev-'+engine);
+    try{ if(win&&win.document) win.document.write('<p style="font:16px sans-serif;padding:28px;direction:rtl">جاري البحث بالصورة…</p>'); }catch(e){}
+    if(dataUrl && engine==='google'){
+      (async()=>{
+        const hosted=blob?await radarHostTempImage(blob):'';
+        if(hosted){
+          const url=radarEngineHref('google', hosted);
+          if(win&&!win.closed){ try{ win.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
+        }else if(win&&!win.closed) radarSubmitUrlInWindow(win,'google',dataUrl);
+        else radarPostUrlToEngine('google', dataUrl);
+      })();
+      return false;
+    }
+    radarOpenEngineFromBlob(engine, blob, win);
+    return false;
+  }
+  const http=radarSavedHttpUrl();
   if(http){ window.open(radarEngineHref(engine, http),'_blank','noopener'); return false; }
   return true;
 }
