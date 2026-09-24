@@ -4046,7 +4046,7 @@ function hxRender(){hxBindProfileLongPress();const all=hxFiltered(),shown=all.sl
   const badThumb=!rawThumb||/\.mp4(?:\?|$)|\/o1\/v\/t(?:2|16|50|51)\//i.test(rawThumb)||/video[.-][a-z0-9]*\.fbcdn\.net/i.test(rawThumb);
   const thumbSrc=badThumb?'':hxThumbUrl(rawThumb);
   const canDownload=vid?!!(x.directUrl||x.hlsUrl):!!(x.directUrl||x.thumb||x.url);
-  return `<div class="saved-image-tile" data-id="${esc(x.id)}" data-full="${esc(full)}" data-hasurl="${x.url?1:0}" data-candl="${canDownload?1:0}" data-kind="${esc(x.type)}">${thumbSrc?`<img class="saved-image-thumb" src="${esc(thumbSrc)}" alt="" width="120" height="160" loading="lazy" decoding="async" fetchpriority="low" draggable="false" onerror="this.remove()">`:`<div class="saved-image-thumb" style="background:#101820"></div>`}${vid?`<span class="radar-vid-badge" aria-hidden="true">▶</span>`:''}</div>`;
+  return `<div class="saved-image-tile" data-id="${esc(x.id)}" data-full="${esc(full)}" data-hasurl="${x.url?1:0}" data-candl="${canDownload?1:0}" data-kind="${esc(x.type)}">${thumbSrc?`<img class="saved-image-thumb" src="${esc(thumbSrc)}" alt="" width="120" height="160" loading="lazy" decoding="async" fetchpriority="low" draggable="false" referrerpolicy="no-referrer" onerror="this.remove()">`:`<div class="saved-image-thumb" style="background:#101820"></div>`}${vid?`<span class="radar-vid-badge" aria-hidden="true">▶</span>`:''}</div>`;
 }
   // مهم للأداء: ما نعيد بناء الشبكة كلها من الصفر كل مرة (كان هذا سبب البطء التراكمي أثناء التمرير
   // — كل تحميل إضافي كان يعيد رسم كل العناصر السابقة كمان). لو نفس القائمة (نفس النوع/الفلتر/المنصة)
@@ -4228,6 +4228,7 @@ async function hxFetchMediaBlob(src, kind){
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
   }else if(/cdninstagram|fbcdn\.net|instagram\.com/i.test(u)){
     urls.push('https://corsproxy.org/?'+encodeURIComponent(u));
+    urls.push('https://corsproxy.org/?'+u);
   }
   const opts=kind==='video'
     ?[{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'},{mode:'cors',credentials:'omit'}]
