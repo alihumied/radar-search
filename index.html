@@ -4227,8 +4227,8 @@ async function hxFetchMediaBlob(src, kind){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
   }else if(/cdninstagram|fbcdn\.net|instagram\.com/i.test(u)){
-    urls.push('https://corsproxy.org/?'+encodeURIComponent(u));
-    urls.push('https://corsproxy.org/?'+u);
+    urls.push('https://cors.eu.org/'+encodeURIComponent(u));
+    urls.push('https://cors.eu.org/'+u);
   }
   const opts=kind==='video'
     ?[{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'},{mode:'cors',credentials:'omit'}]
@@ -4296,7 +4296,7 @@ function applyOfficialJsonData(d,filename){
     const mp4=String(v.videoMp4||'');
     if(/\/o1\/v\/t2\//i.test(mp4)&&!/\.mp4/i.test(mp4)&&!hls)return;
     if(!hls&&!mp4)return;
-    HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:hls?'':mp4,hlsUrl:hls,thumb:v.poster||'',text:(hls?'فيديو HLS ':'فيديو MP4 ')+label,author:label,date:v.firstSeen||'',platform});
+    HX.push({id:'v:'+v.id,type:'video',url:v.postUrl||'',postUrl:v.postUrl||'',directUrl:mp4,hlsUrl:mp4?'':hls,thumb:v.poster||'',text:(mp4?'فيديو MP4 ':'فيديو HLS ')+label,author:label,date:v.firstSeen||'',platform});
   });
   (d.images||[]).forEach((im,i)=>{
     const u=String(im.url||'');
