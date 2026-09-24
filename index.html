@@ -1726,7 +1726,7 @@ const RADAR_ZIP_ARCHIVE_CONCURRENCY=2;
 const RADAR_ZIP_DOWNLOAD_STAGGER_MS=220;
 const radarZipPause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function radarZipArchiveWorkers(){return Number(navigator.deviceMemory||4)<=2?1:RADAR_ZIP_ARCHIVE_CONCURRENCY}
-async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName,getBlob}){
+async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName,getBlob,getSidecar}){
   if(!items.length)return {cancelled:false,ok:0,failed:0,archives:0};
   if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return {cancelled:true,ok:0,failed:0,archives:0}}
   const totalBatches=Math.min(RADAR_ZIP_MAX_ARCHIVES,Math.ceil(items.length/RADAR_ZIP_MIN_ITEMS_PER_ARCHIVE));
@@ -1753,6 +1753,12 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
             return await res.blob();
           })();
           zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
+          if(typeof getSidecar==='function'){
+            try{
+              const side=await getSidecar(item,absoluteIndex);
+              if(side?.blob&&side?.name) zip.file(side.name,side.blob,{compression:'STORE'});
+            }catch(e){}
+          }
           ok++;batchOk++;
         }catch(e){failed++}
         done++;
@@ -4266,7 +4272,18 @@ async function hxDownloadAll(){
       const src=x.type==='image'||x.type==='story'?hxImgQuality(x.directUrl||x.thumb||x.url):x.directUrl;
       return await hxFetchMediaBlob(src, x.type==='video'||x.type==='reel'?'video':'image');
     },
-    getEntryName:(x,index)=>`radar-${HXplatform}-${x.type==='video'||x.type==='reel'?'video':'image'}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='video'||x.type==='reel'?'mp4':'jpg'}`
+    getEntryName:(x,index)=>`radar-${HXplatform}-${x.type==='video'||x.type==='reel'?'video':'image'}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='video'||x.type==='reel'?'mp4':'jpg'}`,
+    getSidecar:async (x,index)=>{
+      if(x.type!=='video'&&x.type!=='reel') return null;
+      const thumb=String(x.thumb||'');
+      if(!thumb) return null;
+      let blob=null;
+      if(/^data:image\//i.test(thumb)){
+        try{const res=await fetch(thumb); blob=await res.blob()}catch(e){blob=null}
+      }else if(/^https?:/i.test(thumb)) blob=await hxFetchMediaBlob(hxThumbUrl(thumb).startsWith('http')?thumb:'','image');
+      if(!blob||blob.size<400) return null;
+      return {name:`radar-${HXplatform}-video-${String(index+1).padStart(4,'0')}.jpg`,blob};
+    }
   });
   if(result.cancelled)return;
   if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر. جرّبي تحديث الصفحة أو روابط أحدث.';return}
