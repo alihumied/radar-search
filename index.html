@@ -4687,7 +4687,7 @@ async function radarStartWebmConversion(file){
   radarConversionSession={key,filename:file.name||'quetta-recording.webm',platform:'tiktok',videos:[{id:'quetta-webm',label:'تسجيل Quetta WebM',quality:'WebM → MP4 متوافق',poster:'',postUrl:'',sourceUrl:'radar-local-webm'}],selectedId:'quetta-webm',activeVideoId:'quetta-webm',updatedAt:Date.now(),lastOutput:null,outputs:{},videoStates:{'quetta-webm':{status:'preparing',progress:0,message:'ملف WebM جاهز للتحويل'}}};
   await idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();radarOpenConverter();
 }
-function radarOpenConverter(){
+async function radarOpenConverter(){
   const video=radarSelectedConversionVideo();if(!video)return alert('اختاري فيديو أولًا.');
   radarConversionSession.activeVideoId=video.id;radarConversionSession.videoStates={...(radarConversionSession.videoStates||{}),[video.id]:{status:'preparing',progress:0,message:'فتح محول MP4'}};radarConversionSession.updatedAt=Date.now();idbPutConversionSession(radarConversionSession);radarRenderConversionPanel();hxRender();
   const localWebm=video.sourceUrl==='radar-local-webm';
