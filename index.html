@@ -1726,6 +1726,20 @@ const RADAR_ZIP_ARCHIVE_CONCURRENCY=2;
 const RADAR_ZIP_DOWNLOAD_STAGGER_MS=220;
 const radarZipPause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function radarZipArchiveWorkers(){return Number(navigator.deviceMemory||4)<=2?1:RADAR_ZIP_ARCHIVE_CONCURRENCY}
+function radarBytesText(blob, n){
+  return blob.slice(0,n).arrayBuffer().then(b=>String.fromCharCode(...new Uint8Array(b)));
+}
+async function radarBlobOk(blob, kind){
+  if(!blob||blob.size<(kind==='video'?20000:500)) return false;
+  const type=String(blob.type||'').toLowerCase();
+  if(type.startsWith('text/')||type.includes('html')||type.includes('json')) return false;
+  let head='';
+  try{head=await radarBytesText(blob,16)}catch(e){return false}
+  if(/^\s*</.test(head)||head.startsWith('{')||head.startsWith('[')) return false;
+  if(kind==='video') return head.includes('ftyp')||head.startsWith('RIFF')||head.startsWith('\x1aE');
+  if(type.startsWith('image/')) return true;
+  return head.charCodeAt(0)===0xFF||head.startsWith('\x89P')||head.startsWith('RIFF')||head.startsWith('GIF');
+}
 async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getUrl,getEntryName,getBlob,getSidecar}){
   if(!items.length)return {cancelled:false,ok:0,failed:0,archives:0};
   if(typeof JSZip==='undefined'){alert('⚠️ مكتبة الضغط ما تحمّلت — تأكدي من الإنترنت وحاولي تحديث الصفحة.');return {cancelled:true,ok:0,failed:0,archives:0}}
@@ -1752,6 +1766,8 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
             const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
             return await res.blob();
           })();
+          const kind=/video|reel/i.test(String(item?.type||''))?'video':'image';
+          if(!(localBlob&&localBlob.size>500)&&!(await radarBlobOk(blob,kind))) throw 0;
           zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
           if(typeof getSidecar==='function'){
             try{
@@ -1768,7 +1784,8 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
     await Promise.all(Array.from({length:Math.min(RADAR_ZIP_CONCURRENCY,group.length)},()=>worker()));
     if(!batchOk)return;
     if(statusEl)statusEl.textContent=`⏳ ${label}: إنشاء الملف ${batch+1}/${totalBatches} (${batchOk} عنصرًا)...`;
-    const content=await zip.generateAsync({type:'blob',compression:'STORE',streamFiles:true});
+    const raw=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const content=new Blob([raw],{type:'application/zip'});
     const previousDownload=downloadQueue;let releaseDownload;
     downloadQueue=new Promise(resolve=>{releaseDownload=resolve});
     await previousDownload;
@@ -1776,7 +1793,7 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
     a.href=url;a.download=`${archivePrefix}-part-${String(batch+1).padStart(2,'0')}-of-${String(totalBatches).padStart(2,'0')}.zip`;
     document.body.appendChild(a);a.click();a.remove();archives++;
     if(statusEl)statusEl.textContent=`⬇️ ${label}: بدأ تنزيل الملف ${batch+1}/${totalBatches} · ${batchOk} عنصرًا`;
-    setTimeout(()=>URL.revokeObjectURL(url),120000);
+    setTimeout(()=>URL.revokeObjectURL(url),900000);
     await radarZipPause(RADAR_ZIP_DOWNLOAD_STAGGER_MS);releaseDownload();
   }
   async function archiveWorker(){while(true){const batch=nextBatch++;if(batch>=totalBatches)return;await buildBatch(batch)}}
@@ -4246,8 +4263,7 @@ async function hxFetchMediaBlob(src, kind){
         const res=await fetch(url,opt);
         if(!res.ok) continue;
         const blob=await res.blob();
-        const type=String(blob.type||'').toLowerCase();
-        if(kind==='video'&&(type.startsWith('text/')||type.includes('html')||type.includes('json'))) continue;
+        if(!(await radarBlobOk(blob, kind))) continue;
         if(blob&&blob.size>(kind==='video'?8000:400)) return blob;
       }catch(e){}
     }
