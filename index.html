@@ -3604,6 +3604,27 @@ function radarGalleryEngineClick(engine, ev){
   if(http){ window.open(radarEngineHref(engine, http),'_blank','noopener'); return false; }
   return true;
 }
+function radarXStatusId(url){return (String(url||'').match(/\/status\/(\d{8,})/)||[])[1]||''}
+function radarXBestMp4(text, mediaId){
+  const urls=[...String(text||'').matchAll(/https:\/\/video\.twimg\.com\/[^"\\\s]+/g)].map(m=>m[0].replace(/\\\//g,'/').replace(/\\u0026/g,'&'));
+  let mp4s=urls.filter(u=>/\.mp4(?:\?|$)/i.test(u)&&!/\/aud\/|\/mp4a\/|\/aac\//i.test(u));
+  if(mediaId){const own=mp4s.filter(u=>u.includes('/'+mediaId+'/')); if(own.length) mp4s=own}
+  mp4s.sort((a,b)=>{const da=a.match(/(\d{3,4})x(\d{3,4})/)||[], db=b.match(/(\d{3,4})x(\d{3,4})/)||[]; return ((+db[1]||0)*(+db[2]||0))-((+da[1]||0)*(+da[2]||0))});
+  return mp4s[0]||'';
+}
+async function radarXDirectMp4(statusId, mediaId){
+  if(!statusId) return '';
+  const api='https://api.fxtwitter.com/status/'+statusId;
+  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(api), api]){
+    try{
+      const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit'});
+      if(!res.ok) continue;
+      const mp4=radarXBestMp4(await res.text(), mediaId);
+      if(mp4) return mp4;
+    }catch(e){}
+  }
+  return '';
+}
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
   if(!l||!p)return;
@@ -3635,9 +3656,25 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         vid.dataset.shown=full;
         vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
         vid.poster=quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'';
-        vid.src=full;
-        vid.load();
-        vid.play().catch(()=>{});
+        const playSrc=async()=>{
+          let srcUrl=full;
+          if(/\.m3u8(?:\?|$)/i.test(srcUrl)){
+            const mp4=await radarXDirectMp4(radarXStatusId(it.source||''),(srcUrl.match(/(?:amplify_video|ext_tw_video|tweet_video)\/(\d{8,})/)||[])[1]||'');
+            if(mp4){
+              srcUrl=mp4;
+              it.full=mp4;
+              const hx=typeof HX!=='undefined'&&HX.find(y=>y.id===(it.savedId||savedId));
+              if(hx){hx.directUrl=mp4; hx.hlsUrl=''}
+            }
+          }
+          if(vid.dataset.shown!==full) return;
+          if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
+          vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
+          vid.src=srcUrl;
+          vid.load();
+          vid.play().catch(()=>{});
+        };
+        playSrc();
       }
     }else{
       try{vid.pause()}catch(e){}
@@ -4305,8 +4342,12 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
 async function hxDownloadById(id){
   const x=HX.find(y=>y.id===id);if(!x)return;
   const isImg=x.type==='image';
-  const src=isImg?hxImgQuality(x.directUrl||x.thumb||x.url):(x.directUrl||'');
-  if(!src){alert('ما في رابط تنزيل مباشر لهاد العنصر (اضغطي ▶ لفتحه بدل هيك).');return}
+  let src=isImg?hxImgQuality(x.directUrl||x.thumb||x.url):(x.directUrl||x.hlsUrl||'');
+  if(!isImg&&/\.m3u8(?:\?|$)/i.test(src)){
+    const mp4=await radarXDirectMp4(radarXStatusId(x.postUrl||x.url||''),(src.match(/(?:amplify_video|ext_tw_video|tweet_video)\/(\d{8,})/)||[])[1]||'');
+    if(mp4){x.directUrl=mp4; x.hlsUrl=''; src=mp4}
+  }
+  if(!src||/\.m3u8(?:\?|$)/i.test(src)){alert('ما في MP4 مباشر لهذا الفيديو.');return}
   const r=await hxDownloadToDevice(src,isImg?'jpg':'mp4',HXplatform,x.postUrl);
   if(!r.ok&&!r.openedPost&&!r.openedDirect)alert('⚠️ تعذّر التنزيل ولا يوجد رابط بديل لفتحه.');
 }
