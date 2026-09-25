@@ -1729,6 +1729,68 @@ function radarZipArchiveWorkers(){return Number(navigator.deviceMemory||4)<=2?1:
 function radarBytesText(blob, n){
   return blob.slice(0,n).arrayBuffer().then(b=>String.fromCharCode(...new Uint8Array(b)));
 }
+function radarU32(u,i){return (((u[i]<<24)>>>0)+(u[i+1]<<16)+(u[i+2]<<8)+u[i+3])>>>0}
+function radarSetU32(u,i,v){u[i]=(v>>>24)&255;u[i+1]=(v>>>16)&255;u[i+2]=(v>>>8)&255;u[i+3]=v&255}
+function radarPatchMoov(moov,delta){
+  const walk=(start,end)=>{
+    let o=start;
+    while(o+8<=end){
+      const size=radarU32(moov,o);
+      const type=String.fromCharCode(moov[o+4],moov[o+5],moov[o+6],moov[o+7]);
+      if(size<8||o+size>end) return;
+      if(type==='stco'){
+        const count=radarU32(moov,o+12);
+        let p=o+16;
+        for(let i=0;i<count&&p+4<=o+size;i++,p+=4) radarSetU32(moov,p,(radarU32(moov,p)+delta)>>>0);
+      }else if(type==='co64'){
+        const count=radarU32(moov,o+12);
+        let p=o+16;
+        for(let i=0;i<count&&p+8<=o+size;i++,p+=8){
+          const big=radarU32(moov,p)*4294967296+radarU32(moov,p+4)+delta;
+          radarSetU32(moov,p,Math.floor(big/4294967296));
+          radarSetU32(moov,p+4,big>>>0);
+        }
+      }else if(/^(moov|trak|mdia|minf|stbl|edts|udta)$/.test(type)) walk(o+8,o+size);
+      o+=size;
+    }
+  };
+  walk(8,moov.length);
+}
+async function radarMp4FastStart(blob){
+  if(!blob||blob.size<32||blob.size>120*1024*1024) return blob;
+  let u;
+  try{u=new Uint8Array(await blob.arrayBuffer())}catch(e){return blob}
+  const boxes=[];
+  let o=0;
+  while(o+8<=u.length){
+    let size=radarU32(u,o);
+    const type=String.fromCharCode(u[o+4],u[o+5],u[o+6],u[o+7]);
+    if(size===1||size<8||o+size>u.length) return blob;
+    if(size===0) size=u.length-o;
+    boxes.push({type,start:o,size});
+    o+=size;
+  }
+  if(o!==u.length) return blob;
+  const moovI=boxes.findIndex(b=>b.type==='moov');
+  const mdatI=boxes.findIndex(b=>b.type==='mdat');
+  if(moovI<0||mdatI<0||moovI<mdatI) return blob;
+  if(boxes.some(b=>b.type==='moof'||b.type==='sidx')) return blob;
+  const moovBox=boxes[moovI], mdatBox=boxes[mdatI];
+  const before=boxes.filter(b=>b.start<mdatBox.start&&b!==moovBox);
+  const after=boxes.filter(b=>b.start>moovBox.start&&b!==mdatBox);
+  const headSize=before.reduce((n,b)=>n+b.size,0)+moovBox.size;
+  const delta=headSize-mdatBox.start;
+  const moov=u.slice(moovBox.start,moovBox.start+moovBox.size);
+  radarPatchMoov(moov,delta);
+  const out=new Uint8Array(u.length);
+  let w=0;
+  const copy=b=>{out.set(u.subarray(b.start,b.start+b.size),w);w+=b.size};
+  before.forEach(copy);
+  out.set(moov,w);w+=moov.length;
+  copy(mdatBox);
+  after.forEach(copy);
+  return new Blob([out],{type:'video/mp4'});
+}
 async function radarBlobOk(blob, kind){
   if(!blob||blob.size<(kind==='video'?20000:500)) return false;
   const type=String(blob.type||'').toLowerCase();
@@ -1768,7 +1830,8 @@ async function radarDownloadBatchedZips(items,{statusEl,label,archivePrefix,getU
           })();
           const kind=/video|reel/i.test(String(item?.type||''))?'video':'image';
           if(!(localBlob&&localBlob.size>500)&&!(await radarBlobOk(blob,kind))) throw 0;
-          zip.file(getEntryName(item,absoluteIndex,blob),blob,{compression:'STORE'});
+          const fileBlob=kind==='video'?await radarMp4FastStart(blob):blob;
+          zip.file(getEntryName(item,absoluteIndex,fileBlob),fileBlob,{compression:'STORE'});
           if(typeof getSidecar==='function'){
             try{
               const side=await getSidecar(item,absoluteIndex);
@@ -4214,7 +4277,9 @@ async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById(
 async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
   try{
     const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
-    const blob=await res.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');
+    let blob=await res.blob();
+    if(/\bmp4\b|video/i.test(ext||'')||/\.mp4(?:\?|$)/i.test(src||'')) blob=await radarMp4FastStart(blob);
+    const u=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=u;a.download=`radar-${label||'media'}-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
     return {ok:true};
