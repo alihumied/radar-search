@@ -4340,6 +4340,10 @@ async function hxFetchMediaBlob(src, kind){
   }
   return null;
 }
+function radarZipMediaBase(x,index){
+  const kind=x.type==='video'||x.type==='reel'?'video':'image';
+  return `radar-${HXplatform}-${kind}-${String(index+1).padStart(4,'0')}-${String(x.id||'').replace(/[^a-z0-9]/gi,'_').slice(0,40)}`;
+}
 async function hxDownloadAll(){
   const images=HX.filter(x=>(x.type==='image'||x.type==='story')&&(x.directUrl||x.thumb||x.url));
   const videos=HX.filter(x=>(x.type==='video'||x.type==='reel')&&x.directUrl);
@@ -4358,18 +4362,7 @@ async function hxDownloadAll(){
       const src=x.type==='image'||x.type==='story'?hxImgQuality(x.directUrl||x.thumb||x.url):x.directUrl;
       return await hxFetchMediaBlob(src, x.type==='video'||x.type==='reel'?'video':'image');
     },
-    getEntryName:(x,index)=>`radar-${HXplatform}-${x.type==='video'||x.type==='reel'?'video':'image'}-${String(index+1).padStart(4,'0')}-${String(x.id).replace(/[^a-z0-9]/gi,'_').slice(0,40)}.${x.type==='video'||x.type==='reel'?'mp4':'jpg'}`,
-    getSidecar:async (x,index)=>{
-      if(x.type!=='video'&&x.type!=='reel') return null;
-      const thumb=String(x.thumb||'');
-      if(!thumb) return null;
-      let blob=null;
-      if(/^data:image\//i.test(thumb)){
-        try{const res=await fetch(thumb); blob=await res.blob()}catch(e){blob=null}
-      }else if(/^https?:/i.test(thumb)) blob=await hxFetchMediaBlob(hxThumbUrl(thumb).startsWith('http')?thumb:'','image');
-      if(!blob||blob.size<400) return null;
-      return {name:`radar-${HXplatform}-video-${String(index+1).padStart(4,'0')}.jpg`,blob};
-    }
+    getEntryName:(x,index)=>`${radarZipMediaBase(x,index)}.${x.type==='video'||x.type==='reel'?'mp4':'jpg'}`
   });
   if(result.cancelled)return;
   if(!result.ok){st.textContent='⚠️ ما قدرنا نجمّع ولا عنصر. جرّبي تحديث الصفحة أو روابط أحدث.';return}
