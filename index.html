@@ -3633,6 +3633,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       if(vid.dataset.shown!==full){
         try{vid.pause()}catch(e){}
         vid.dataset.shown=full;
+        vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
         vid.poster=quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'';
         vid.src=full;
         vid.load();
@@ -4256,7 +4257,7 @@ async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById(
   }
   if(st)st.textContent='⏳ جارٍ تنزيل الفيديو وحفظه بمعرض 📌 فيديو...';
   try{
-    const res=await fetch(x.directUrl,{mode:'cors'});if(!res.ok)throw 0;
+    const res=await fetch(x.directUrl,/^https:\/\/video\.twimg\.com\//i.test(x.directUrl)?{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'}:{mode:'cors'});if(!res.ok)throw 0;
     const blob=await res.blob();
     const poster=x.thumb?await(async()=>{
       try{
@@ -4275,8 +4276,9 @@ async function hxShot(e){const f=e.target.files?.[0],st=document.getElementById(
 
 /* تنزيل مباشر لجهاز المستخدم (وليس حفظ داخل تطبيق RADAR فقط). يجرّب fetch->blob؛ إذا فشل (رابط منتهي/CORS) بدل ما نفتح الرابط الخام (رح يعطي 403 غالبًا مع فيديو تويتر) نفتح رابط المنشور الأصلي إذا متوفر. */
 async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
+  const xvid=/^https:\/\/video\.twimg\.com\//i.test(src||'');
   try{
-    const res=await fetch(src,{mode:'cors'});if(!res.ok)throw 0;
+    const res=await fetch(src,xvid?{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'}:{mode:'cors'});if(!res.ok)throw 0;
     let blob=await res.blob();
     if(/\bmp4\b|video/i.test(ext||'')||/\.mp4(?:\?|$)/i.test(src||'')) blob=await radarMp4FastStart(blob);
     const u=URL.createObjectURL(blob),a=document.createElement('a');
@@ -4290,7 +4292,7 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
     // بيفتح وفيه زر تحميل/مشاركة حقيقي. هاد بس بيشتغل مع رابط mp4 صريح — روابط m3u8 (قائمة تشغيل
     // HLS متعددة الأجزاء) ما بتفتح كفيديو مباشر بالتنقل العادي، فبهاي الحالة نرجع لفتح رابط المنشور.
     const deadT2=/\/o1\/v\/t2\//i.test(src||'')&&!/\.mp4(?:\?|$)/i.test(src||'');
-    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'')&&!deadT2;
+    const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'')&&!deadT2&&!xvid;
     if(deadT2){
       if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
       return {ok:false,openedPost:false};
