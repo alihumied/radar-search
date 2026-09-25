@@ -4315,9 +4315,8 @@ async function hxFetchMediaBlob(src, kind){
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
-  }else if(/cdninstagram|fbcdn\.net|instagram\.com/i.test(u)){
-    urls.push('https://corsmirror.onrender.com/v1/cors?url='+encodeURIComponent(u));
-    urls.push('https://cors.eu.org/'+u);
+  }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com/i.test(u)){
+    urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
   const opts=kind==='video'
     ?[{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'},{mode:'cors',credentials:'omit'}]
@@ -4328,6 +4327,12 @@ async function hxFetchMediaBlob(src, kind){
         const res=await fetch(url,opt);
         if(!res.ok) continue;
         const blob=await res.blob();
+        if(kind==='video'){
+          const probe=new Uint8Array(await blob.slice(40,4040).arrayBuffer());
+          let bad=0;
+          for(let i=0;i<probe.length-2;i++) if(probe[i]===239&&probe[i+1]===191&&probe[i+2]===189) bad++;
+          if(bad>6) continue;
+        }
         if(!(await radarBlobOk(blob, kind))) continue;
         if(blob&&blob.size>(kind==='video'?8000:400)) return blob;
       }catch(e){}
