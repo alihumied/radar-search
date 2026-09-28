@@ -4397,6 +4397,21 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
     return {ok:true};
   }catch(e){
+    if(/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4/i.test(src||'')&&!/corsmirror\.com/i.test(src||'')){
+      try{
+        const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(src),{referrerPolicy:'no-referrer',credentials:'omit'});
+        if(res.ok){
+          let blob=await res.blob();
+          if(blob.size>80000){
+            if(/\bmp4\b|video/i.test(ext||'')) blob=await radarMp4FastStart(blob);
+            const u=URL.createObjectURL(blob),a=document.createElement('a');
+            a.href=u;a.download=`radar-${label||'tiktok'}-${Date.now()}.mp4`;
+            document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000);
+            return {ok:true};
+          }
+        }
+      }catch(e2){}
+    }
     // فشل fetch غالبًا بسبب قيود CORS من سيرفر الفيديو (رافض طلبات من موقع تاني غير x.com) —
     // هاد قيد أمان من طرف السيرفر، ما فيه حل برمجي له. البديل: نفتح رابط الفيديو المباشر نفسه
     // بتبويب جديد (فتح رابط عادي مش خاضع لنفس قيد fetch)، وهيك مشغّل الفيديو الأصلي بالمتصفح
