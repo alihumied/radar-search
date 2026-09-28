@@ -3700,24 +3700,15 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
           if(tt){
-            const ttId=(String(it.source||'').match(/\/video\/(\d+)/)||[])[1]||(String(it.savedId||savedId||'').match(/(\d{8,})/)||[])[1]||'';
-            vid.removeAttribute('src');
+            radarHideTikTokEmbed();
+            vid.classList.add('is-on');
+            vid.style.display='block';
             const play=await radarTikTokPlayUrl(srcUrl);
             if(vid.dataset.shown!==full) return;
-            if(play){
-              radarHideTikTokEmbed();
-              vid.classList.add('is-on');
-              vid.style.display='block';
-              vid.src=play;
-              vid.load();
-              vid.play().catch(()=>{});
-              return;
-            }
-            if(ttId){
-              vid.classList.remove('is-on');
-              vid.style.display='none';
-              radarShowTikTokEmbed(ttId);
-            }
+            vid.referrerPolicy='no-referrer';
+            vid.src=play||srcUrl;
+            vid.load();
+            vid.play().catch(()=>{});
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
@@ -3780,7 +3771,21 @@ async function downloadZoomedImage(){
   try{
     const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\//i.test(it.full||'');
     if(isVid){
-      const url=it.full||p?.src||'';
+      const url=it.full||'';
+      const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(url+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
+      if(tt){
+        const play=await radarTikTokPlayUrl(url);
+        if(play){
+          const a=document.createElement('a');
+          a.href=play;a.download='tiktok-'+Date.now()+'.mp4';
+          document.body.appendChild(a);a.click();a.remove();
+          if(navigator.vibrate)navigator.vibrate(30);
+          setBtn('✅');
+          return;
+        }
+        setBtn('⬇ تحميل');
+        return;
+      }
       let r={ok:false};
       if(url&&typeof hxDownloadToDevice==='function') r=await hxDownloadToDevice(url,'mp4',HXplatform||'ig',it.source);
       if(!r.ok&&url&&/^https?:/i.test(url)&&!/^https:\/\/video\.twimg\.com\//i.test(url)){window.open(url,'_blank','noopener');r={ok:false,openedDirect:true}}
