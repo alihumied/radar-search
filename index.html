@@ -3698,17 +3698,18 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           }
           if(vid.dataset.shown!==full) return;
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
-          const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4/i.test(srcUrl);
-          vid.dataset.ttRaw=srcUrl;
-          vid.dataset.ttAlt='';
-          vid.referrerPolicy=tt||/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
-          vid.onerror=function(){
-            if(!tt||vid.dataset.ttAlt==='1') return;
-            vid.dataset.ttAlt='1';
-            vid.referrerPolicy='no-referrer';
-            vid.src='https://corsmirror.com/v1?url='+encodeURIComponent(vid.dataset.ttRaw||srcUrl);
-            try{vid.load();vid.play().catch(()=>{})}catch(e){}
-          };
+          const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
+          if(tt){
+            vid.removeAttribute('src');
+            const play=await radarTikTokPlayUrl(srcUrl);
+            if(vid.dataset.shown!==full) return;
+            if(!play) return;
+            vid.src=play;
+            vid.load();
+            vid.play().catch(()=>{});
+            return;
+          }
+          vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
           vid.src=srcUrl;
           vid.load();
           vid.play().catch(()=>{});
@@ -3851,6 +3852,28 @@ function radarShowTikTokEmbed(id){
   frame.src='https://www.tiktok.com/player/v1/'+id+'?autoplay=1&loop=1&music_info=0&description=0&rel=0';
   frame.classList.add('is-on');
   frame.style.display='block';
+}
+const radarTtPlayCache=new Map();
+async function radarTikTokPlayUrl(url){
+  const src=String(url||'');
+  if(!src) return '';
+  if(radarTtPlayCache.has(src)) return radarTtPlayCache.get(src);
+  const tries=[src];
+  if(!/corsmirror\.com/i.test(src)) tries.push('https://corsmirror.com/v1?url='+encodeURIComponent(src));
+  for(const u of tries){
+    try{
+      const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit'});
+      if(!res.ok) continue;
+      let blob=await res.blob();
+      if(!blob||blob.size<80000) continue;
+      if(!/video/i.test(blob.type||'')) blob=new Blob([await blob.arrayBuffer()],{type:'video/mp4'});
+      try{ if(typeof radarMp4FastStart==='function') blob=await radarMp4FastStart(blob); }catch(e){}
+      const out=URL.createObjectURL(blob);
+      radarTtPlayCache.set(src,out);
+      return out;
+    }catch(e){}
+  }
+  return '';
 }
 let radarFocusAlbum=[],radarFocusIndex=0;
 function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
