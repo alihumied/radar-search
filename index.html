@@ -3700,13 +3700,24 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
           if(tt){
+            const ttId=(String(it.source||'').match(/\/video\/(\d+)/)||[])[1]||(String(it.savedId||savedId||'').match(/(\d{8,})/)||[])[1]||'';
             vid.removeAttribute('src');
             const play=await radarTikTokPlayUrl(srcUrl);
             if(vid.dataset.shown!==full) return;
-            if(!play) return;
-            vid.src=play;
-            vid.load();
-            vid.play().catch(()=>{});
+            if(play){
+              radarHideTikTokEmbed();
+              vid.classList.add('is-on');
+              vid.style.display='block';
+              vid.src=play;
+              vid.load();
+              vid.play().catch(()=>{});
+              return;
+            }
+            if(ttId){
+              vid.classList.remove('is-on');
+              vid.style.display='none';
+              radarShowTikTokEmbed(ttId);
+            }
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
@@ -3864,9 +3875,11 @@ async function radarTikTokPlayUrl(url){
     try{
       const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit'});
       if(!res.ok) continue;
+      const head=await res.clone().arrayBuffer().then(b=>new Uint8Array(b.slice(0,32))).catch(()=>null);
       let blob=await res.blob();
       if(!blob||blob.size<80000) continue;
-      if(!/video/i.test(blob.type||'')) blob=new Blob([await blob.arrayBuffer()],{type:'video/mp4'});
+      const mark=head?String.fromCharCode(...head.slice(0,16)):'';
+      if(!mark.includes('ftyp')&&!/video/i.test(res.headers.get('content-type')||blob.type||'')) continue;
       try{ if(typeof radarMp4FastStart==='function') blob=await radarMp4FastStart(blob); }catch(e){}
       const out=URL.createObjectURL(blob);
       radarTtPlayCache.set(src,out);
