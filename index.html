@@ -3676,16 +3676,6 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
   radarBindFocusSearchLinks(searchUrl);
   if(vid){
     if(isVid&&full){
-      const ttId=(String(it.source||'').match(/tiktok\.com\/(?:@[^/]+\/)?video\/(\d+)/i)||[])[1]||((typeof HXplatform!=='undefined'&&HXplatform==='tiktok')?(String(it.savedId||savedId||'').match(/(\d{8,})/)||[])[1]:'');
-      if(ttId){
-        p.style.display='none';
-        try{vid.pause()}catch(e){}
-        vid.classList.remove('is-on');
-        vid.style.display='none';
-        vid.removeAttribute('src');
-        vid.dataset.shown='tt:'+ttId;
-        radarShowTikTokEmbed(ttId);
-      }else{
       radarHideTikTokEmbed();
       p.style.display='none';
       vid.classList.add('is-on');
@@ -3724,7 +3714,6 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           vid.play().catch(()=>{});
         };
         playSrc();
-      }
       }
     }else{
       radarHideTikTokEmbed();
