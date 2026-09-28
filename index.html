@@ -3695,8 +3695,17 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           }
           if(vid.dataset.shown!==full) return;
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
-          if(/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4/i.test(srcUrl)&&!/corsmirror\.com/i.test(srcUrl)) srcUrl='https://corsmirror.com/v1?url='+encodeURIComponent(srcUrl);
-          vid.referrerPolicy='no-referrer';
+          const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4/i.test(srcUrl);
+          vid.dataset.ttRaw=srcUrl;
+          vid.dataset.ttAlt='';
+          vid.referrerPolicy=tt||/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
+          vid.onerror=function(){
+            if(!tt||vid.dataset.ttAlt==='1') return;
+            vid.dataset.ttAlt='1';
+            vid.referrerPolicy='no-referrer';
+            vid.src='https://corsmirror.com/v1?url='+encodeURIComponent(vid.dataset.ttRaw||srcUrl);
+            try{vid.load();vid.play().catch(()=>{})}catch(e){}
+          };
           vid.src=srcUrl;
           vid.load();
           vid.play().catch(()=>{});
