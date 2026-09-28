@@ -174,7 +174,9 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .saved-image-tile[data-kind="video"],.saved-image-tile[data-kind="reel"]{background:#101820}
 .saved-image-tile[data-kind="video"] .saved-image-thumb,.saved-image-tile[data-kind="reel"] .saved-image-thumb{background:#101820}
 #savedInlineFocusVid{display:none;max-width:90vw;max-height:78vh;border-radius:16px;background:#000;box-shadow:0 28px 85px #000d}
+#savedInlineFocusTt{display:none;width:min(92vw,440px);height:min(78vh,760px);border:0;border-radius:16px;background:#000;box-shadow:0 28px 85px #000d}
 .saved-inline-focus.show #savedInlineFocusVid.is-on{display:block}
+.saved-inline-focus.show #savedInlineFocusTt.is-on{display:block}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -3674,6 +3676,17 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
   radarBindFocusSearchLinks(searchUrl);
   if(vid){
     if(isVid&&full){
+      const ttId=(String(it.source||'').match(/tiktok\.com\/(?:@[^/]+\/)?video\/(\d+)/i)||[])[1]||((typeof HXplatform!=='undefined'&&HXplatform==='tiktok')?(String(it.savedId||savedId||'').match(/(\d{8,})/)||[])[1]:'');
+      if(ttId){
+        p.style.display='none';
+        try{vid.pause()}catch(e){}
+        vid.classList.remove('is-on');
+        vid.style.display='none';
+        vid.removeAttribute('src');
+        vid.dataset.shown='tt:'+ttId;
+        radarShowTikTokEmbed(ttId);
+      }else{
+      radarHideTikTokEmbed();
       p.style.display='none';
       vid.classList.add('is-on');
       vid.style.display='block';
@@ -3712,7 +3725,9 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         };
         playSrc();
       }
+      }
     }else{
+      radarHideTikTokEmbed();
       try{vid.pause()}catch(e){}
       vid.classList.remove('is-on');
       vid.style.display='none';
@@ -3824,7 +3839,30 @@ async function saveZoomedImage(){
     }
   }
 }
-function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
+function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';radarHideTikTokEmbed();if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
+function radarHideTikTokEmbed(){
+  const frame=document.getElementById('savedInlineFocusTt');
+  if(!frame)return;
+  frame.classList.remove('is-on');
+  frame.style.display='none';
+  frame.src='about:blank';
+}
+function radarShowTikTokEmbed(id){
+  const vid=document.getElementById('savedInlineFocusVid');
+  if(!vid||!id)return;
+  let frame=document.getElementById('savedInlineFocusTt');
+  if(!frame){
+    frame=document.createElement('iframe');
+    frame.id='savedInlineFocusTt';
+    frame.setAttribute('allow','autoplay; fullscreen; encrypted-media');
+    frame.setAttribute('allowfullscreen','true');
+    frame.referrerPolicy='strict-origin-when-cross-origin';
+    vid.parentNode.insertBefore(frame, vid);
+  }
+  frame.src='https://www.tiktok.com/player/v1/'+id+'?autoplay=1&loop=1&music_info=0&description=0&rel=0';
+  frame.classList.add('is-on');
+  frame.style.display='block';
+}
 let radarFocusAlbum=[],radarFocusIndex=0;
 function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
 function radarAlbumFromImport(){return (typeof hxFiltered==='function'?hxFiltered():[]).filter(x=>['image','video','reel','story'].includes(x.type)).map(radarFocusItemFromHx).filter(x=>x.full||x.preview)}
