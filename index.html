@@ -3688,8 +3688,9 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         const ttNow=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(full+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
         if(ttNow){
           try{vid.pause()}catch(e){}
-          vid.removeAttribute('src');
-          try{vid.load()}catch(e){}
+          vid.style.display='none';
+          p.style.display='';
+          if(quick&&!/\.mp4|\/video\/tos\//i.test(quick)) p.src=quick;
         }
         const playGen=String(savedId||'')+'|'+full;
         vid.dataset.ttGen=playGen;
@@ -3713,10 +3714,12 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             vid.style.display='block';
             const play=await radarTikTokPlayUrl(srcUrl);
             if(vid.dataset.shown!==full||vid.dataset.ttGen!==playGen) return;
+            if(!play) return;
+            p.style.display='none';
+            vid.classList.add('is-on');
+            vid.style.display='block';
             vid.referrerPolicy='no-referrer';
-            vid.src=play||srcUrl;
-            try{vid.currentTime=0}catch(e){}
-            vid.load();
+            vid.src=play;
             vid.play().catch(()=>{});
             return;
           }
