@@ -3668,7 +3668,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
     radarFocusIndex=0;
   }
   const it=radarFocusAlbum[radarFocusIndex]||{};
-  const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\//i.test(full);
+  const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\/|tiktokcdn|\/video\/tos\/|mime_type=video_mp4/i.test(full);
   l.style.pointerEvents='';
   l.dataset.savedId=savedId?String(savedId):'';
   const searchUrl=isVid?'':(radarHighestImageUrl(full)||radarHighestImageUrl(quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
@@ -3685,8 +3685,6 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         vid.dataset.shown=full;
         vid.referrerPolicy=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
         vid.poster=quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'';
-        const playGen=String(savedId||'')+'|'+full;
-        vid.dataset.ttGen=playGen;
         const playSrc=async()=>{
           let srcUrl=full;
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)||/^https:\/\/video\.twimg\.com\//i.test(srcUrl)){
@@ -3702,11 +3700,12 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
           if(tt){
-            const play=await radarTikTokPlayUrl(srcUrl);
-            if(vid.dataset.shown!==full||vid.dataset.ttGen!==playGen) return;
-            p.style.setProperty('display','none','important');
+            radarHideTikTokEmbed();
+            p.style.display='none';
             vid.classList.add('is-on');
             vid.style.display='block';
+            const play=await radarTikTokPlayUrl(srcUrl);
+            if(vid.dataset.shown!==full) return;
             vid.referrerPolicy='no-referrer';
             vid.src=play||srcUrl;
             vid.load();
@@ -3847,7 +3846,7 @@ async function saveZoomedImage(){
     }
   }
 }
-function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';radarHideTikTokEmbed();if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');try{v.load()}catch(e){}v.dataset.shown='';v.dataset.ttGen=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
+function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';radarHideTikTokEmbed();if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
 function radarHideTikTokEmbed(){
   const frame=document.getElementById('savedInlineFocusTt');
   if(!frame)return;
