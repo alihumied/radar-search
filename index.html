@@ -3888,15 +3888,16 @@ function radarTikTokVideoId(src, post, savedId){
   if(fromId) return fromId;
   return (String(src||'').match(/\/video\/(\d{8,})/)||[])[1]||'';
 }
-async function radarTikTokPlayUrl(url){
+async function radarTikTokPlayUrl(url, opt){
   const src=String(url||'');
   if(!src||!/^https?:/i.test(src)) return '';
   if(radarTtPlayCache.has(src)) return radarTtPlayCache.get(src);
+  const ms=(opt&&opt.ms)||8000;
   const tries=[src];
-  if(!/corsmirror\.com/i.test(src)) tries.push('https://corsmirror.com/v1?url='+encodeURIComponent(src));
+  if(!(opt&&opt.noMirror)&&!/corsmirror\.com/i.test(src)) tries.push('https://corsmirror.com/v1?url='+encodeURIComponent(src));
   for(const u of tries){
     try{
-      const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit',signal:AbortSignal.timeout(10000)});
+      const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit',signal:AbortSignal.timeout(ms)});
       if(!res.ok) continue;
       const head=await res.clone().arrayBuffer().then(b=>new Uint8Array(b.slice(0,32))).catch(()=>null);
       let blob=await res.blob();
@@ -3911,22 +3912,36 @@ async function radarTikTokPlayUrl(url){
   }
   return '';
 }
+function radarFirstPlay(list){
+  return new Promise(resolve=>{
+    let pending=list.length, got=false;
+    if(!pending) return resolve('');
+    list.forEach(p=>Promise.resolve(p).then(v=>{
+      if(got) return;
+      if(v){got=true;resolve(v);return}
+      if(--pending===0) resolve('');
+    }).catch(()=>{ if(!got && --pending===0) resolve('') }));
+  });
+}
 async function radarTikTokOpenFile(src, post, savedId){
-  const direct=await radarTikTokPlayUrl(src);
-  if(direct) return direct;
   const id=radarTikTokVideoId(src, post, savedId);
-  if(!id) return '';
-  const key='ttpage:'+id;
-  if(radarTtPlayCache.has(key)) return radarTtPlayCache.get(key);
-  const page=/\/video\/\d{8,}/.test(String(post||''))?String(post).split('?')[0]:('https://www.tiktok.com/@_/video/'+id);
-  try{
-    const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(12000)});
-    const j=await res.json();
-    const mp4=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
-    const play=mp4?await radarTikTokPlayUrl(mp4):'';
-    if(play) radarTtPlayCache.set(key, play);
-    return play||'';
-  }catch(e){return ''}
+  const key=id?('ttpage:'+id):'';
+  if(key&&radarTtPlayCache.has(key)) return radarTtPlayCache.get(key);
+  if(src&&radarTtPlayCache.has(src)) return radarTtPlayCache.get(src);
+  const direct=src?radarTikTokPlayUrl(src,{ms:3500,noMirror:true}):Promise.resolve('');
+  const pub=(async()=>{
+    if(!id) return '';
+    const page=/\/video\/\d{8,}/.test(String(post||''))?String(post).split('?')[0]:('https://www.tiktok.com/@_/video/'+id);
+    try{
+      const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(8000)});
+      const j=await res.json();
+      const mp4=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
+      return mp4?await radarTikTokPlayUrl(mp4,{ms:12000,noMirror:true}):'';
+    }catch(e){return ''}
+  })();
+  const play=await radarFirstPlay([direct,pub]);
+  if(play&&key) radarTtPlayCache.set(key, play);
+  return play||'';
 }
 let radarFocusAlbum=[],radarFocusIndex=0;
 function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
@@ -4565,8 +4580,14 @@ async function hxDownloadAll(){
     archivePrefix:`radar-${HXplatform}-${Date.now()}`,
     getUrl:x=>x.type==='image'||x.type==='story'?hxImgQuality(x.directUrl||x.thumb||x.url):x.directUrl,
     getBlob:async x=>{
-      const src=x.type==='image'||x.type==='story'?hxImgQuality(x.directUrl||x.thumb||x.url):x.directUrl;
-      return await hxFetchMediaBlob(src, x.type==='video'||x.type==='reel'?'video':'image');
+      const vid=x.type==='video'||x.type==='reel';
+      const src=vid?x.directUrl:hxImgQuality(x.directUrl||x.thumb||x.url);
+      if(vid&&(HXplatform==='tiktok'||/tiktok\.com\/@|tiktokcdn|\/video\/tos\//i.test((x.postUrl||'')+' '+(src||'')))){
+        const play=await radarTikTokOpenFile(src, x.postUrl||x.url, x.id);
+        if(!play) return null;
+        try{const res=await fetch(play); if(!res.ok) return null; return await res.blob()}catch(e){return null}
+      }
+      return await hxFetchMediaBlob(src, vid?'video':'image');
     },
     getEntryName:(x,index)=>`${radarZipMediaBase(x,index)}.${x.type==='video'||x.type==='reel'?'mp4':'jpg'}`
   });
