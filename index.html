@@ -3681,9 +3681,10 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       const switching=vid.dataset.shown!==full;
       if(switching&&ttNow){
         try{vid.pause()}catch(e){}
-        vid.classList.remove('is-on');
-        vid.style.display='none';
+        vid.classList.add('is-on');
+        vid.style.display='block';
         p.style.display='none';
+        vid.removeAttribute('poster');
       }else{
         p.style.display='none';
         vid.classList.add('is-on');
@@ -3710,7 +3711,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
           if(tt){
-            const play=await radarTikTokOpenFile(srcUrl, it.source, it.savedId||savedId);
+            const play=await radarTikTokStreamUrl(srcUrl, it.source, it.savedId||savedId);
             if(vid.dataset.shown!==full||!play) return;
             p.style.display='none';
             vid.classList.add('is-on');
@@ -3719,8 +3720,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             vid.removeAttribute('poster');
             vid.preload='auto';
             vid.referrerPolicy='no-referrer';
-            vid.src=play;
-            vid.load();
+            if(vid.src!==play){vid.src=play;vid.load()}
             vid.play().catch(()=>{});
             return;
           }
@@ -3928,7 +3928,7 @@ async function radarTikTokStreamUrl(src, post, savedId){
   try{
     const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(8000)});
     const j=await res.json();
-    const mp4=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
+    const mp4=(j&&j.data&&(j.data.play||j.data.hdplay))||'';
     if(mp4&&key) radarTtSrcCache.set(key, mp4);
     return mp4||'';
   }catch(e){return ''}
