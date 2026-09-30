@@ -3668,7 +3668,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
     radarFocusIndex=0;
   }
   const it=radarFocusAlbum[radarFocusIndex]||{};
-  const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\/|tiktokcdn|\/video\/tos\/|mime_type=video_mp4/i.test(full);
+  const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4/i.test(full);
   l.style.pointerEvents='';
   l.dataset.savedId=savedId?String(savedId):'';
   const searchUrl=isVid?'':(radarHighestImageUrl(full)||radarHighestImageUrl(quick)||radarHttpImageUrl(full)||radarHttpImageUrl(quick)||'');
