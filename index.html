@@ -3710,33 +3710,18 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
           if(tt){
-            const token=full;
-            const start=u=>{
-              if(vid.dataset.shown!==token||!u) return;
-              p.style.display='none';
-              vid.classList.add('is-on');
-              vid.style.display='block';
-              vid.poster='';
-              vid.removeAttribute('poster');
-              vid.preload='auto';
-              vid.referrerPolicy='no-referrer';
-              vid.src=u;
-              vid.load();
-              vid.play().catch(()=>{});
-            };
-            const play=await radarTikTokStreamUrl(srcUrl, it.source, it.savedId||savedId);
-            if(vid.dataset.shown!==token) return;
-            if(play){
-              vid.onerror=async()=>{
-                if(vid.dataset.shown!==token) return;
-                vid.onerror=null;
-                const blob=await radarTikTokPlayUrl(play,{ms:12000,noMirror:true});
-                if(blob) start(blob);
-              };
-              start(play);
-              return;
-            }
-            start(await radarTikTokOpenFile(srcUrl, it.source, it.savedId||savedId));
+            const play=await radarTikTokOpenFile(srcUrl, it.source, it.savedId||savedId);
+            if(vid.dataset.shown!==full||!play) return;
+            p.style.display='none';
+            vid.classList.add('is-on');
+            vid.style.display='block';
+            vid.poster='';
+            vid.removeAttribute('poster');
+            vid.preload='auto';
+            vid.referrerPolicy='no-referrer';
+            vid.src=play;
+            vid.load();
+            vid.play().catch(()=>{});
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
@@ -3964,20 +3949,17 @@ async function radarTikTokOpenFile(src, post, savedId){
   const key=id?('ttpage:'+id):'';
   if(key&&radarTtPlayCache.has(key)) return radarTtPlayCache.get(key);
   if(src&&radarTtPlayCache.has(src)) return radarTtPlayCache.get(src);
-  const direct=src?radarTikTokPlayUrl(src,{ms:3500,noMirror:true}):Promise.resolve('');
-  const pub=(async()=>{
-    if(!id) return '';
-    const page=/\/video\/\d{8,}/.test(String(post||''))?String(post).split('?')[0]:('https://www.tiktok.com/@_/video/'+id);
-    try{
-      const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(8000)});
-      const j=await res.json();
-      const mp4=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
-      return mp4?await radarTikTokPlayUrl(mp4,{ms:12000,noMirror:true}):'';
-    }catch(e){return ''}
-  })();
-  const play=await radarFirstPlay([direct,pub]);
-  if(play&&key) radarTtPlayCache.set(key, play);
-  return play||'';
+  if(!id) return src?radarTikTokPlayUrl(src,{ms:8000,noMirror:true}):'';
+  const page=/\/video\/\d{8,}/.test(String(post||''))?String(post).split('?')[0]:('https://www.tiktok.com/@_/video/'+id);
+  try{
+    const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(8000)});
+    const j=await res.json();
+    const mp4=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
+    const play=mp4?await radarTikTokPlayUrl(mp4,{ms:15000,noMirror:true}):'';
+    if(play&&key) radarTtPlayCache.set(key, play);
+    if(play) return play;
+  }catch(e){}
+  return src?radarTikTokPlayUrl(src,{ms:6000,noMirror:true}):'';
 }
 let radarFocusAlbum=[],radarFocusIndex=0;
 function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
