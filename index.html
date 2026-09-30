@@ -3683,8 +3683,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         try{vid.pause()}catch(e){}
         vid.classList.remove('is-on');
         vid.style.display='none';
-        if(quick&&quick!==full&&!/\.mp4|\/o1\/v\/|\/video\/tos\//i.test(quick)){p.style.display='';p.src=quick}
-        else p.style.display='none';
+        p.style.display='none';
       }else{
         p.style.display='none';
         vid.classList.add('is-on');
@@ -3694,7 +3693,8 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
         try{vid.pause()}catch(e){}
         vid.dataset.shown=full;
         vid.referrerPolicy=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
-        vid.poster=quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'';
+        vid.poster=ttNow?'':(quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'');
+        if(ttNow) vid.removeAttribute('poster');
         const playSrc=async()=>{
           let srcUrl=full;
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)||/^https:\/\/video\.twimg\.com\//i.test(srcUrl)){
@@ -3714,12 +3714,20 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             if(vid.dataset.shown!==full) return;
             if(!play) return;
             p.style.display='none';
-            vid.classList.add('is-on');
-            vid.style.display='block';
+            vid.poster='';
+            vid.removeAttribute('poster');
             vid.referrerPolicy='no-referrer';
             vid.src=play;
+            const show=()=>{
+              if(vid.dataset.shown!==full) return;
+              p.style.display='none';
+              vid.classList.add('is-on');
+              vid.style.display='block';
+              vid.play().catch(()=>{});
+            };
+            vid.addEventListener('loadeddata',show,{once:true});
             vid.load();
-            vid.play().catch(()=>{});
+            vid.play().then(show).catch(()=>{});
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
