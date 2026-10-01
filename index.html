@@ -3961,6 +3961,39 @@ async function radarTikTokOpenFile(src, post, savedId){
   }catch(e){}
   return src?radarTikTokPlayUrl(src,{ms:6000,noMirror:true}):'';
 }
+let radarTtZipChain=Promise.resolve();
+function radarTikTokZipBlob(src, post, savedId){
+  const run=radarTtZipChain.then(async()=>{
+    const id=radarTikTokVideoId(src, post, savedId);
+    const page=/\/video\/\d{8,}/.test(String(post||''))?String(post).split('?')[0]:(id?('https://www.tiktok.com/@_/video/'+id):'');
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        let file='';
+        if(page){
+          const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(page),{credentials:'omit',signal:AbortSignal.timeout(12000)});
+          const j=await res.json();
+          file=(j&&j.data&&(j.data.hdplay||j.data.play))||'';
+        }
+        if(!file) file=src;
+        const blobUrl=file?await radarTikTokPlayUrl(file,{ms:45000,noMirror:true}):'';
+        if(blobUrl){
+          const got=await fetch(blobUrl);
+          if(got.ok){
+            const blob=await got.blob();
+            if(blob&&blob.size>50000){
+              await new Promise(r=>setTimeout(r,400));
+              return blob;
+            }
+          }
+        }
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,900*(attempt+1)));
+    }
+    return null;
+  });
+  radarTtZipChain=run.then(()=>{},()=>{});
+  return run;
+}
 let radarFocusAlbum=[],radarFocusIndex=0;
 function radarFocusItemFromHx(x){const vid=x.type==='video'||x.type==='reel';return {full:vid?(x.directUrl||x.hlsUrl||''):hxImgQuality(x.directUrl||x.thumb||''),preview:x.thumb||'',savedId:x.id||'',source:x.postUrl||x.url||'',kind:x.type||'image'}}
 function radarAlbumFromImport(){return (typeof hxFiltered==='function'?hxFiltered():[]).filter(x=>['image','video','reel','story'].includes(x.type)).map(radarFocusItemFromHx).filter(x=>x.full||x.preview)}
@@ -4601,9 +4634,7 @@ async function hxDownloadAll(){
       const vid=x.type==='video'||x.type==='reel';
       const src=vid?x.directUrl:hxImgQuality(x.directUrl||x.thumb||x.url);
       if(vid&&(HXplatform==='tiktok'||/tiktok\.com\/@|tiktokcdn|\/video\/tos\//i.test((x.postUrl||'')+' '+(src||'')))){
-        const play=await radarTikTokOpenFile(src, x.postUrl||x.url, x.id);
-        if(!play) return null;
-        try{const res=await fetch(play); if(!res.ok) return null; return await res.blob()}catch(e){return null}
+        return await radarTikTokZipBlob(src, x.postUrl||x.url, x.id);
       }
       return await hxFetchMediaBlob(src, vid?'video':'image');
     },
