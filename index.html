@@ -3677,31 +3677,24 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
   if(vid){
     if(isVid&&full){
       radarHideTikTokEmbed();
-      const ttNow=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(full+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
+      const ttNow=/tiktokcdn|tiktokv\.com|\/video\/tos\/|tiktok\.com/i.test(full+' '+(it.source||''));
       const switching=vid.dataset.shown!==full;
       if(switching&&ttNow){
         try{vid.pause()}catch(e){}
         vid.autoplay=false;
-        vid.removeAttribute('src');
-        try{vid.load()}catch(e){}
-        vid.classList.add('is-on');
-        vid.style.display='block';
-        p.style.display='none';
-        vid.removeAttribute('poster');
-      }else{
-        p.style.display='none';
-        vid.classList.add('is-on');
-        vid.style.display='block';
       }
+      p.style.display='none';
+      vid.classList.add('is-on');
+      vid.style.display='block';
       if(switching){
         try{vid.pause()}catch(e){}
         vid.dataset.shown=full;
-        vid.referrerPolicy=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
+        vid.referrerPolicy=ttNow||/^https:\/\/video\.twimg\.com\//i.test(full)?'no-referrer':'';
         vid.poster=ttNow?'':(quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)?quick:'');
         if(ttNow) vid.removeAttribute('poster');
         const playSrc=async()=>{
           let srcUrl=full;
-          if(/\.m3u8(?:\?|$)/i.test(srcUrl)||/^https:\/\/video\.twimg\.com\//i.test(srcUrl)){
+          if(!ttNow&&(/\.m3u8(?:\?|$)/i.test(srcUrl)||/^https:\/\/video\.twimg\.com\//i.test(srcUrl))){
             const mp4=await radarXWorkingMp4(radarXStatusId(it.source||''),(srcUrl.match(/(?:amplify_video|ext_tw_video|tweet_video)\/(\d{8,})/)||[])[1]||'',srcUrl);
             if(mp4){
               srcUrl=mp4;
@@ -3712,22 +3705,21 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           }
           if(vid.dataset.shown!==full) return;
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
-          const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(srcUrl+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
-          if(tt){
+          if(ttNow){
             const play=await radarTikTokStreamUrl(srcUrl, it.source, it.savedId||savedId);
             if(vid.dataset.shown!==full||!play) return;
-            p.style.display='none';
-            vid.classList.add('is-on');
-            vid.style.display='block';
             vid.poster='';
             vid.removeAttribute('poster');
             vid.preload='metadata';
             vid.autoplay=false;
             vid.referrerPolicy='no-referrer';
-            if(vid.src!==play){vid.src=play;vid.load()}
+            vid.src=play;
+            vid.load();
             try{vid.pause()}catch(e){}
             return;
           }
+          vid.autoplay=true;
+          vid.preload='auto';
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
           vid.src=srcUrl;
           vid.load();
@@ -3789,7 +3781,7 @@ async function downloadZoomedImage(){
     const isVid=it.kind==='video'||it.kind==='reel'||/\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn\.net|\/o1\/v\/t(?:2|16|50|51)\//i.test(it.full||'');
     if(isVid){
       const url=it.full||'';
-      const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(url+' '+(it.source||''))||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
+      const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|tiktok\.com/i.test(url+' '+(it.source||''));
       if(tt){
         const play=await radarTikTokOpenFile(url, it.source, it.savedId||focus?.dataset.savedId||'');
         if(play){
