@@ -174,6 +174,8 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 .saved-image-tile[data-kind="video"],.saved-image-tile[data-kind="reel"]{background:#101820}
 .saved-image-tile[data-kind="video"] .saved-image-thumb,.saved-image-tile[data-kind="reel"] .saved-image-thumb{background:#101820}
 #savedInlineFocusVid{display:none;max-width:90vw;max-height:78vh;border-radius:16px;background:#000;box-shadow:0 28px 85px #000d}
+#savedInlineFocusPlay{display:none;position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:8;width:78px;height:78px;border-radius:50%;border:2px solid #fff;background:#000b;color:#fff;font-size:34px;line-height:1;cursor:pointer;align-items:center;justify-content:center}
+.saved-inline-focus.show #savedInlineFocusPlay.is-on{display:flex}
 #savedInlineFocusTt{display:none;width:min(92vw,440px);height:min(78vh,760px);border:0;border-radius:16px;background:#000;box-shadow:0 28px 85px #000d}
 .saved-inline-focus.show #savedInlineFocusVid.is-on{display:block}
 .saved-inline-focus.show #savedInlineFocusTt.is-on{display:block}
@@ -3653,6 +3655,19 @@ async function radarXDirectMp4(statusId, mediaId){
   }
   return '';
 }
+function radarTtPlayBtn(on){
+  const b=document.getElementById('savedInlineFocusPlay');
+  if(!b) return;
+  b.classList.toggle('is-on',!!on);
+  b.hidden=!on;
+}
+function radarFocusUserPlay(){
+  const vid=document.getElementById('savedInlineFocusVid');
+  if(!vid) return;
+  vid.dataset.userPlay='1';
+  radarTtPlayBtn(false);
+  vid.play().catch(()=>{radarTtPlayBtn(true)});
+}
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
   if(!l||!p)return;
@@ -3682,6 +3697,8 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       if(switching&&ttNow){
         try{vid.pause()}catch(e){}
         vid.autoplay=false;
+        vid.dataset.userPlay='';
+        radarTtPlayBtn(false);
         vid.removeAttribute('src');
         try{vid.load()}catch(e){}
         vid.classList.add('is-on');
@@ -3723,9 +3740,22 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             vid.removeAttribute('poster');
             vid.preload='metadata';
             vid.autoplay=false;
+            vid.dataset.userPlay='';
             vid.referrerPolicy='no-referrer';
             if(vid.src!==play){vid.src=play;vid.load()}
             try{vid.pause()}catch(e){}
+            radarTtPlayBtn(true);
+            if(!vid.dataset.ttGuard){
+              vid.dataset.ttGuard='1';
+              vid.addEventListener('play',()=>{
+                const tt=/tiktokcdn|tiktokv\.com|\/video\/tos\/|mime_type=video_mp4|tiktok\.com/i.test(vid.currentSrc||vid.src||'')||(typeof HXplatform!=='undefined'&&HXplatform==='tiktok');
+                if(tt&&vid.dataset.userPlay!=='1'){try{vid.pause()}catch(e){} radarTtPlayBtn(true);return}
+                radarTtPlayBtn(false);
+              });
+              vid.addEventListener('pause',()=>{
+                if(vid.classList.contains('is-on')&&vid.dataset.userPlay==='1') radarTtPlayBtn(true);
+              });
+            }
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
@@ -3737,6 +3767,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       }
     }else{
       radarHideTikTokEmbed();
+      radarTtPlayBtn(false);
       try{vid.pause()}catch(e){}
       vid.classList.remove('is-on');
       vid.style.display='none';
@@ -3862,7 +3893,7 @@ async function saveZoomedImage(){
     }
   }
 }
-function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';radarHideTikTokEmbed();if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown=''}if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
+function closeInlineSavedFocus(){const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),v=document.getElementById('savedInlineFocusVid');if(!l)return;l.classList.remove('show');l.style.pointerEvents='none';document.documentElement.style.overflow='';document.body.style.overflow='';radarHideTikTokEmbed();if(v){try{v.pause()}catch(e){}v.classList.remove('is-on');v.removeAttribute('src');v.dataset.shown='';v.dataset.userPlay=''}radarTtPlayBtn(false);if(p){p.dataset.shown='';p.style.display='';setTimeout(()=>{if(!l.classList.contains('show')){p.removeAttribute('src');p.dataset.shown=''}},320)}}
 function radarHideTikTokEmbed(){
   const frame=document.getElementById('savedInlineFocusTt');
   if(!frame)return;
@@ -4932,7 +4963,7 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusNext" hidden onclick="event.stopPropagation();radarFocusStep(1)" aria-label="التالي">‹</button><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusPrev" hidden onclick="event.stopPropagation();radarFocusStep(-1)" aria-label="السابق">›</button><img id="savedInlineFocusImg" draggable="false" referrerpolicy="no-referrer"><video id="savedInlineFocusVid" controls playsinline webkit-playsinline preload="metadata" referrerpolicy="no-referrer" onclick="event.stopPropagation()"></video><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusDl" type="button" class="saved-inline-focus-btn" title="تحميل بأعلى جودة" aria-label="تحميل بأعلى جودة" style="color:#8affb0;border-color:#2eb87288;background:#136b3e44;cursor:pointer;" onclick="event.stopPropagation();downloadZoomedImage()">⬇ تحميل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarFocusEngineClick('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarFocusEngineClick('google',event)">🔍 جوجل</a></div><div id="savedInlineFocusCount" hidden></div><div class="saved-inline-focus-tip">اسحبي يمين/يسار للتصفح · اضغطي للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusNext" hidden onclick="event.stopPropagation();radarFocusStep(1)" aria-label="التالي">‹</button><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusPrev" hidden onclick="event.stopPropagation();radarFocusStep(-1)" aria-label="السابق">›</button><img id="savedInlineFocusImg" draggable="false" referrerpolicy="no-referrer"><video id="savedInlineFocusVid" controls playsinline webkit-playsinline preload="metadata" referrerpolicy="no-referrer" onclick="event.stopPropagation()"></video><button type="button" id="savedInlineFocusPlay" aria-label="تشغيل" onclick="event.stopPropagation();radarFocusUserPlay()">▶</button><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusDl" type="button" class="saved-inline-focus-btn" title="تحميل بأعلى جودة" aria-label="تحميل بأعلى جودة" style="color:#8affb0;border-color:#2eb87288;background:#136b3e44;cursor:pointer;" onclick="event.stopPropagation();downloadZoomedImage()">⬇ تحميل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarFocusEngineClick('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarFocusEngineClick('google',event)">🔍 جوجل</a></div><div id="savedInlineFocusCount" hidden></div><div class="saved-inline-focus-tip">اسحبي يمين/يسار للتصفح · اضغطي للعودة</div></div>
 </body>
 
 </html>
