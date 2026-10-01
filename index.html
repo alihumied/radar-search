@@ -3681,6 +3681,9 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       const switching=vid.dataset.shown!==full;
       if(switching&&ttNow){
         try{vid.pause()}catch(e){}
+        vid.autoplay=false;
+        vid.removeAttribute('src');
+        try{vid.load()}catch(e){}
         vid.classList.add('is-on');
         vid.style.display='block';
         p.style.display='none';
@@ -3718,10 +3721,11 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             vid.style.display='block';
             vid.poster='';
             vid.removeAttribute('poster');
-            vid.preload='auto';
+            vid.preload='metadata';
+            vid.autoplay=false;
             vid.referrerPolicy='no-referrer';
             if(vid.src!==play){vid.src=play;vid.load()}
-            vid.play().catch(()=>{});
+            try{vid.pause()}catch(e){}
             return;
           }
           vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'';
