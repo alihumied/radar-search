@@ -3073,7 +3073,7 @@ function radarShareVideoScore(url){
 }
 function radarShareImageScore(url){
   const s=String(url||'');
-  if(/emoji|rsrc\.php|static\.|avatar|profile_pic|s60x60|s100x100|p50x50|p64x64|s150x150|ctp=s(?:[1-9]\d|[1-3]\d\d)x/i.test(s)) return -1;
+  if(/emoji|rsrc\.php|static\.|avatar|profile_pic|s50x50|s60x60|s100x100|p50x50|p64x64|s150x150|\/t39\.30808-1\/|ctp=s(?:[1-9]\d|[1-3]\d\d)x/i.test(s)) return -1;
   const ctp=s.match(/ctp=[sp](\d{2,4})x(\d{2,4})/i);
   const dim=ctp||s.match(/(\d{3,4})x(\d{3,4})/);
   let n=dim?(+dim[1])*(+dim[2]):1000;
@@ -3123,10 +3123,26 @@ function radarFbPostFromText(text){
   if(owner&&fbid) return 'https://www.facebook.com/'+owner+'/posts/'+fbid;
   return '';
 }
+async function radarFbEmbedImages(id, link){
+  const hrefs=[];
+  if(id) hrefs.push('https://www.facebook.com/permalink.php?story_fbid='+id+'&id='+id);
+  if(link && !hrefs.includes(link)) hrefs.push(link);
+  let images=[];
+  for(const href of hrefs){
+    const plugin='https://www.facebook.com/plugins/post.php?href='+encodeURIComponent(href)+'&show_text=1';
+    const picked=radarSharePickFromText(await radarSharePageText(plugin));
+    const use=picked.images.filter(u=>radarShareImageScore(u)>=40000);
+    if(use.length>images.length) images=use;
+    if(images.length) break;
+  }
+  return images;
+}
 async function radarFbShareMedia(link){
+  let fbId='';
   try{
     const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url:link,quality:'best'})});
     const j=await res.json();
+    fbId=(JSON.stringify(j.detail||'').match(/\[facebook\]\s+(\d{8,})/)||[])[1]||'';
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
     fmts.sort((a,b)=>(parseInt(b.quality,10)||0)-(parseInt(a.quality,10)||0));
     const top=fmts[0]&&fmts[0].url||'';
@@ -3141,9 +3157,10 @@ async function radarFbShareMedia(link){
     const picked=radarSharePickFromText(p===link?shareText:await radarSharePageText(p));
     if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
     const big=picked.images.filter(u=>radarShareImageScore(u)>=200000);
-    const use=big.length?big:picked.images.filter(u=>!/static\.|rsrc\.php/i.test(u));
+    const use=big.length?big:picked.images.filter(u=>radarShareImageScore(u)>=40000);
     if(use.length>images.length) images=use;
   }
+  if(!video && !images.length) images=await radarFbEmbedImages(fbId, post||link);
   return {video, images};
 }
 async function radarShareSave(url,ext,kind,post){
@@ -4780,6 +4797,7 @@ async function hxFetchMediaBlob(src, kind){
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
+    if(/fbcdn\.net|scontent/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
