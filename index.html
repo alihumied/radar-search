@@ -3208,6 +3208,41 @@ async function radarFbShareMedia(link){
   images=images.map(radarFbLargestImage);
   return {video, images};
 }
+async function radarShareSaveBlob(blob,ext,kind){
+  try{
+    if(kind==='video') blob=await radarMp4FastStart(blob);
+    if(!(await radarBlobOk(blob,kind))) return {ok:false};
+    const u=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=u;a.download=`radar-${kind}-${Date.now()}.${ext}`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),20000);
+    return {ok:true};
+  }catch(e){return {ok:false}}
+}
+async function radarIgHostFile(code,n){
+  const src='https://corsmirror.com/v1?url='+encodeURIComponent('https://uuinstagram.com/videos/'+code+'/'+n);
+  const res=await fetch(src,{credentials:'omit',referrerPolicy:'no-referrer'});
+  if(!res.ok) return null;
+  const blob=await res.blob();
+  if(!blob||blob.size<800) return null;
+  const head=await radarBytesText(blob,16);
+  if(head.includes('ftyp')) return {blob,ext:'mp4',kind:'video'};
+  if(head.charCodeAt(0)===0xFF||head.startsWith('\x89P')||head.startsWith('RIFF')||head.startsWith('GIF')) return {blob,ext:'jpg',kind:'image'};
+  return null;
+}
+async function radarIgShareFiles(link){
+  const canon=radarIgCanon(link);
+  const code=(canon.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'';
+  if(!code) return [];
+  const files=[];
+  for(let n=1;n<=6;n++){
+    const f=await radarIgHostFile(code,n);
+    if(!f) break;
+    files.push(f);
+    if(f.kind==='video') break;
+  }
+  return files;
+}
 async function radarShareSave(url,ext,kind,post){
   try{
     const src=kind==='video'?url:radarFbLargestImage(url);
@@ -3263,17 +3298,21 @@ async function radarIngestShare(raw){
       }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
       else media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
     }else if(/instagram\.com/i.test(link)){
-      const canon=radarIgCanon(link);
-      const pages=[canon];
-      try{const u=new URL(canon); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
-      let video='',images=[];
-      for(const p of pages){
-        const picked=radarSharePickFromText(await radarSharePageText(p));
-        if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
-        if(picked.images.length>images.length) images=picked.images;
+      const got=await radarIgShareFiles(link);
+      if(got.length) got.forEach(f=>files.push(f));
+      else{
+        const canon=radarIgCanon(link);
+        const pages=[canon];
+        try{const u=new URL(canon); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
+        let video='',images=[];
+        for(const p of pages){
+          const picked=radarSharePickFromText(await radarSharePageText(p));
+          if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
+          if(picked.images.length>images.length) images=picked.images;
+        }
+        if(video) files.push({url:video,ext:'mp4',kind:'video'});
+        else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
       }
-      if(video) files.push({url:video,ext:'mp4',kind:'video'});
-      else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
     }else if(radarShareIsVideoUrl(link)){
       files.push({url:link,ext:'mp4',kind:'video'});
     }else if(/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(link)){
@@ -3300,7 +3339,7 @@ async function radarIngestShare(raw){
   if(!files.length){say('⚠️ وصل الرابط، وما لقينا فيديو أو صورة بأعلى جودة.');return}
   let ok=0;
   for(const f of files){
-    const r=await radarShareSave(f.url,f.ext,f.kind,link);
+    const r=f.blob?await radarShareSaveBlob(f.blob,f.ext,f.kind):await radarShareSave(f.url,f.ext,f.kind,link);
     if(r&&r.ok) ok++;
     await new Promise(res=>setTimeout(res,350));
   }
