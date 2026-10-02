@@ -3689,7 +3689,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
       if(switching){
         try{vid.pause()}catch(e){}
         vid.dataset.shown=full;
-        try{vid.referrerPolicy=(ttNow||/^https:\/\/video\.twimg\.com\//i.test(full))?'no-referrer':'strict-origin-when-cross-origin'}catch(e){}
+        try{vid.referrerPolicy='no-referrer'}catch(e){}
         if(!ttNow&&quick&&quick!==full&&!/\.mp4|\/o1\/v\//i.test(quick)) vid.poster=quick;
         else{vid.poster='';try{vid.removeAttribute('poster')}catch(e){}}
         const playSrc=async()=>{
@@ -3704,6 +3704,10 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             }
           }
           if(vid.dataset.shown!==full) return;
+          if(/\.m3u8(?:\?|$)/i.test(srcUrl)&&!ttNow){
+            const alt=await radarXDirectMp4(radarXStatusId(it.source||''),(srcUrl.match(/(?:amplify_video|ext_tw_video|tweet_video)\/(\d{8,})/)||[])[1]||'');
+            if(alt) srcUrl=alt;
+          }
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           if(ttNow){
             let play='';
@@ -3723,7 +3727,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           }
           vid.autoplay=true;
           vid.preload='auto';
-          try{vid.referrerPolicy=/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'strict-origin-when-cross-origin'}catch(e){}
+          try{vid.referrerPolicy='no-referrer'}catch(e){}
           vid.src=srcUrl;
           vid.load();
           vid.play().catch(()=>{});
@@ -4927,7 +4931,7 @@ window.addEventListener('message',async event=>{
 });
 </script>
 
-<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusNext" hidden onclick="event.stopPropagation();radarFocusStep(1)" aria-label="التالي">‹</button><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusPrev" hidden onclick="event.stopPropagation();radarFocusStep(-1)" aria-label="السابق">›</button><img id="savedInlineFocusImg" draggable="false" referrerpolicy="no-referrer"><video id="savedInlineFocusVid" controls playsinline webkit-playsinline preload="metadata" onclick="event.stopPropagation()"></video><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusDl" type="button" class="saved-inline-focus-btn" title="تحميل بأعلى جودة" aria-label="تحميل بأعلى جودة" style="color:#8affb0;border-color:#2eb87288;background:#136b3e44;cursor:pointer;" onclick="event.stopPropagation();downloadZoomedImage()">⬇ تحميل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarFocusEngineClick('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarFocusEngineClick('google',event)">🔍 جوجل</a></div><div id="savedInlineFocusCount" hidden></div><div class="saved-inline-focus-tip">اسحبي يمين/يسار للتصفح · اضغطي للعودة</div></div>
+<div class="saved-inline-focus" id="savedInlineFocus" onclick="closeInlineSavedFocus()"><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusNext" hidden onclick="event.stopPropagation();radarFocusStep(1)" aria-label="التالي">‹</button><button type="button" class="saved-inline-focus-nav" id="savedInlineFocusPrev" hidden onclick="event.stopPropagation();radarFocusStep(-1)" aria-label="السابق">›</button><img id="savedInlineFocusImg" draggable="false" referrerpolicy="no-referrer"><video id="savedInlineFocusVid" controls playsinline webkit-playsinline preload="metadata" referrerpolicy="no-referrer" onclick="event.stopPropagation()"></video><div class="saved-inline-focus-actions" id="savedInlineFocusActions" onclick="event.stopPropagation()"><button id="savedInlineFocusDl" type="button" class="saved-inline-focus-btn" title="تحميل بأعلى جودة" aria-label="تحميل بأعلى جودة" style="color:#8affb0;border-color:#2eb87288;background:#136b3e44;cursor:pointer;" onclick="event.stopPropagation();downloadZoomedImage()">⬇ تحميل</button><button id="savedInlineFocusSave" type="button" class="saved-inline-focus-btn" style="color:#ffd769;border-color:#d8a62a88;background:#d8a62a22;cursor:pointer;" onclick="event.stopPropagation();saveZoomedImage()">💾 حفظ</button><a id="savedInlineFocusYandex" class="saved-inline-focus-btn" href="https://yandex.com/images/search?rpt=imageview" target="_blank" rel="noopener" style="color:#FF3333;border-color:#FF333388;background:#FF333322;cursor:pointer;" onclick="return radarFocusEngineClick('yandex',event)">🔍 ياندكس</a><a id="savedInlineFocusGoogle" class="saved-inline-focus-btn" href="https://lens.google.com/upload" target="_blank" rel="noopener" style="color:#4285F4;border-color:#4285F488;background:#4285F422;cursor:pointer;" onclick="return radarFocusEngineClick('google',event)">🔍 جوجل</a></div><div id="savedInlineFocusCount" hidden></div><div class="saved-inline-focus-tip">اسحبي يمين/يسار للتصفح · اضغطي للعودة</div></div>
 </body>
 
 </html>
