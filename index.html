@@ -3059,7 +3059,7 @@ if('serviceWorker' in navigator){
 }
 
 /* تنزيل من قائمة المشاركة: فيديو / ريل / صورة بأعلى جودة، بنفس أولوية سكربت الجلب */
-function radarShareUnescape(s){return String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%').replace(/&/g,'&')}
+function radarShareUnescape(s){const amp=String.fromCharCode(38)+'amp;';return String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%').split(amp).join(String.fromCharCode(38))}
 function radarShareIsVideoUrl(u){return /\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4|video\.twimg\.com\/.+\.mp4/i.test(u||'')}
 function radarShareVideoScore(url){
   const s=String(url||'');
@@ -3073,8 +3073,9 @@ function radarShareVideoScore(url){
 }
 function radarShareImageScore(url){
   const s=String(url||'');
-  if(/emoji|rsrc\.php|static\.|avatar|profile_pic|s60x60|s100x100|p50x50|p64x64|s150x150|stp=dst-jpg_s\d{2,3}x/i.test(s)) return -1;
-  const dim=s.match(/(\d{3,4})x(\d{3,4})/);
+  if(/emoji|rsrc\.php|static\.|avatar|profile_pic|s60x60|s100x100|p50x50|p64x64|s150x150|ctp=s(?:[1-9]\d|[1-3]\d\d)x/i.test(s)) return -1;
+  const ctp=s.match(/ctp=[sp](\d{2,4})x(\d{2,4})/i);
+  const dim=ctp||s.match(/(\d{3,4})x(\d{3,4})/);
   let n=dim?(+dim[1])*(+dim[2]):1000;
   if(/orig|_o\.|_n\.|1080|2048|dst-jpg_n/i.test(s)) n+=1e7;
   return n;
@@ -3110,14 +3111,35 @@ async function radarSharePageText(link){
   return '';
 }
 async function radarFbShareBest(link){
+  const media=await radarFbShareMedia(link);
+  return media.video||'';
+}
+async function radarFbShareMedia(link){
+  let detail='';
   try{
     const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url:link,quality:'best'})});
-    if(!res.ok) return '';
     const j=await res.json();
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
     fmts.sort((a,b)=>(parseInt(b.quality,10)||0)-(parseInt(a.quality,10)||0));
-    return (fmts[0]&&fmts[0].url)||j.download_url||'';
-  }catch(e){return ''}
+    const video=(fmts[0]&&fmts[0].url)||j.download_url||'';
+    if(video) return {video, images:[]};
+    detail=JSON.stringify(j.detail||j||'');
+  }catch(e){}
+  let dec=detail;
+  try{dec=decodeURIComponent(detail)}catch(e){}
+  const fbid=(dec.match(/story_fbid=(\d{6,})/)||[])[1]||'';
+  const owner=(dec.match(/post_id=(\d{6,})_/)||dec.match(/[?&]id=(\d{6,})/)||[])[1]||'';
+  const pages=[];
+  if(owner&&fbid) pages.push('https://www.facebook.com/'+owner+'/posts/'+fbid);
+  pages.push(link);
+  let video='',images=[];
+  for(const p of pages){
+    const picked=radarSharePickFromText(await radarSharePageText(p));
+    if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
+    const big=picked.images.filter(u=>radarShareImageScore(u)>=200000);
+    if(big.length>images.length) images=big;
+  }
+  return {video, images};
 }
 async function radarShareSave(url,ext,kind,post){
   try{
@@ -3166,13 +3188,12 @@ async function radarIngestShare(raw){
         else picked.images.slice(0,4).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
       }
     }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link)){
-      const best=await radarFbShareBest(link);
-      if(best) files.push({url:best,ext:'mp4',kind:'video'});
-      else{
-        const picked=radarSharePickFromText(await radarSharePageText(link));
-        if(picked.video) files.push({url:picked.video,ext:'mp4',kind:'video'});
-        else picked.images.slice(0,4).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-      }
+      const media=await radarFbShareMedia(link);
+      if(/\/share\/p\/|photo\.php|\/photos?\//i.test(link)){
+        if(media.images.length) media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+        else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
+      }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
+      else media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
     }else if(/instagram\.com/i.test(link)){
       const pages=[link];
       try{const u=new URL(link); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
