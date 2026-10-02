@@ -3710,6 +3710,7 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
           }
           if(/\.m3u8(?:\?|$)/i.test(srcUrl)){vid.removeAttribute('src'); return}
           if(ttNow){
+            vid.onerror=null;
             let play='';
             try{play=await radarTikTokStreamUrl(srcUrl, it.source, it.savedId||savedId)}catch(e){}
             if(vid.dataset.shown!==full) return;
@@ -3725,12 +3726,29 @@ function openInlineSavedFocus(src, preview, savedId, album, index){
             try{vid.pause()}catch(e){}
             return;
           }
-          vid.autoplay=true;
-          vid.preload='auto';
-          try{vid.referrerPolicy='no-referrer'}catch(e){}
-          vid.src=srcUrl;
-          vid.load();
-          vid.play().catch(()=>{});
+          const token=full;
+          const begin=(url,policy)=>{
+            try{vid.referrerPolicy=policy}catch(e){}
+            vid.autoplay=true;
+            vid.preload='auto';
+            vid.src=url;
+            vid.load();
+            const go=vid.play();
+            if(go&&go.catch) go.catch(()=>{});
+          };
+          let step=0;
+          vid.onerror=async()=>{
+            if(vid.dataset.shown!==token) return;
+            step++;
+            if(step===1){begin(srcUrl,'no-referrer');return}
+            if(step===2){
+              vid.onerror=null;
+              const blob=await hxFetchMediaBlob(srcUrl,'video');
+              if(!blob||vid.dataset.shown!==token) return;
+              begin(URL.createObjectURL(blob),'no-referrer');
+            }
+          };
+          begin(srcUrl,/^https:\/\/video\.twimg\.com\//i.test(srcUrl)?'no-referrer':'strict-origin-when-cross-origin');
         };
         playSrc();
       }
@@ -4590,7 +4608,7 @@ async function hxFetchMediaBlob(src, kind){
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
-  }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com/i.test(u)){
+  }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
   const opts=kind==='video'
