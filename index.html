@@ -3059,7 +3059,7 @@ if('serviceWorker' in navigator){
 }
 
 /* تنزيل من قائمة المشاركة: فيديو / ريل / صورة بأعلى جودة، بنفس أولوية سكربت الجلب */
-function radarShareUnescape(s){const amp=String.fromCharCode(38)+'amp;';return String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%').split(amp).join(String.fromCharCode(38))}
+function radarShareUnescape(s){let t=String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%');const amp=String.fromCharCode(38)+'amp;';for(let i=0;i<4;i++){if(!t.includes(amp))break;t=t.split(amp).join(String.fromCharCode(38))}return t}
 function radarShareIsVideoUrl(u){return /\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4|video\.twimg\.com\/.+\.mp4/i.test(u||'')}
 function radarShareVideoScore(url){
   const s=String(url||'');
@@ -3125,19 +3125,22 @@ async function radarFbShareMedia(link){
     if(video) return {video, images:[]};
     detail=JSON.stringify(j.detail||j||'');
   }catch(e){}
-  let dec=detail;
-  try{dec=decodeURIComponent(detail)}catch(e){}
-  const fbid=(dec.match(/story_fbid=(\d{6,})/)||[])[1]||'';
+  const shareText=await radarSharePageText(link);
+  let dec=[detail,shareText].join('\n');
+  for(let i=0;i<3;i++){try{const n=decodeURIComponent(dec);if(n===dec)break;dec=n}catch(e){break}}
+  dec=radarShareUnescape(dec);
+  const fbid=(dec.match(/story_fbid=(\d{6,})/)||dec.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||'';
   const owner=(dec.match(/post_id=(\d{6,})_/)||dec.match(/[?&]id=(\d{6,})/)||[])[1]||'';
   const pages=[];
   if(owner&&fbid) pages.push('https://www.facebook.com/'+owner+'/posts/'+fbid);
   pages.push(link);
   let video='',images=[];
   for(const p of pages){
-    const picked=radarSharePickFromText(await radarSharePageText(p));
+    const picked=radarSharePickFromText(p===link?shareText:await radarSharePageText(p));
     if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
     const big=picked.images.filter(u=>radarShareImageScore(u)>=200000);
-    if(big.length>images.length) images=big;
+    const use=big.length?big:picked.images.filter(u=>!/static\.|rsrc\.php/i.test(u));
+    if(use.length>images.length) images=use;
   }
   return {video, images};
 }
