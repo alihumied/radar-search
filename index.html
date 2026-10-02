@@ -3114,26 +3114,28 @@ async function radarFbShareBest(link){
   const media=await radarFbShareMedia(link);
   return media.video||'';
 }
+function radarFbPostFromText(text){
+  const s=String(text||'');
+  const post=s.match(/post_id(?:=|%3D)(\d{6,})_(\d{6,})/i);
+  if(post) return 'https://www.facebook.com/'+post[1]+'/posts/'+post[2];
+  const fbid=(s.match(/story_fbid(?:=|%3D)(\d{6,})/i)||[])[1]||'';
+  const owner=(s.match(/(?:[?&]|%26)id(?:=|%3D)(\d{6,})/i)||[])[1]||'';
+  if(owner&&fbid) return 'https://www.facebook.com/'+owner+'/posts/'+fbid;
+  return '';
+}
 async function radarFbShareMedia(link){
-  let detail='';
   try{
     const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url:link,quality:'best'})});
     const j=await res.json();
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
     fmts.sort((a,b)=>(parseInt(b.quality,10)||0)-(parseInt(a.quality,10)||0));
-    const video=(fmts[0]&&fmts[0].url)||j.download_url||'';
+    const top=fmts[0]&&fmts[0].url||'';
+    const video=j.download_url||top||'';
     if(video) return {video, images:[]};
-    detail=JSON.stringify(j.detail||j||'');
   }catch(e){}
   const shareText=await radarSharePageText(link);
-  let dec=[detail,shareText].join('\n');
-  for(let i=0;i<3;i++){try{const n=decodeURIComponent(dec);if(n===dec)break;dec=n}catch(e){break}}
-  dec=radarShareUnescape(dec);
-  const fbid=(dec.match(/story_fbid=(\d{6,})/)||dec.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||'';
-  const owner=(dec.match(/post_id=(\d{6,})_/)||dec.match(/[?&]id=(\d{6,})/)||[])[1]||'';
-  const pages=[];
-  if(owner&&fbid) pages.push('https://www.facebook.com/'+owner+'/posts/'+fbid);
-  pages.push(link);
+  const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
+  const pages=[post,link].filter(Boolean);
   let video='',images=[];
   for(const p of pages){
     const picked=radarSharePickFromText(p===link?shareText:await radarSharePageText(p));
