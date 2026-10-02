@@ -3059,7 +3059,38 @@ if('serviceWorker' in navigator){
 }
 
 /* تنزيل من قائمة المشاركة: فيديو / ريل / صورة بأعلى جودة، بنفس أولوية سكربت الجلب */
-function radarShareUnescape(s){let t=String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%');const amp=String.fromCharCode(38)+'amp;';for(let i=0;i<4;i++){if(!t.includes(amp))break;t=t.split(amp).join(String.fromCharCode(38))}return t}
+function radarShareUnescape(s){
+  let t=String(s||'');
+  for(let i=0;i<4;i++){
+    const n=t.replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%').replace(/\\"/g,'"');
+    if(n===t) break;
+    t=n;
+  }
+  const amp=String.fromCharCode(38)+'amp;';
+  for(let i=0;i<4;i++){if(!t.includes(amp))break;t=t.split(amp).join(String.fromCharCode(38))}
+  return t;
+}
+function radarIgCanon(link){
+  try{
+    const u=new URL(link);
+    const parts=u.pathname.split('/').filter(Boolean);
+    let kind='', code='';
+    const share=parts.indexOf('share');
+    if(share>=0){
+      kind=parts[share+1]||'';
+      code=parts[share+2]||'';
+      if(kind==='reel'||kind==='reels') kind='reel';
+      else if(kind==='p'||kind==='tv') {}
+      else { code=kind; kind='reel'; }
+    }else{
+      const i=parts.findIndex(p=>/^(?:reel|reels|p|tv)$/i.test(p));
+      if(i>=0){ kind=parts[i].toLowerCase()==='reels'?'reel':parts[i].toLowerCase(); code=parts[i+1]||''; }
+    }
+    code=(code||'').replace(/[^A-Za-z0-9_-]/g,'');
+    if(!code) return link.split('?')[0];
+    return 'https://www.instagram.com/'+kind+'/'+code+'/';
+  }catch(e){return link}
+}
 function radarShareIsVideoUrl(u){return /\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4|video\.twimg\.com\/.+\.mp4/i.test(u||'')}
 function radarShareVideoScore(url){
   const s=String(url||'');
@@ -3232,13 +3263,14 @@ async function radarIngestShare(raw){
       }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
       else media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
     }else if(/instagram\.com/i.test(link)){
-      const pages=[link];
-      try{const u=new URL(link); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
+      const canon=radarIgCanon(link);
+      const pages=[canon];
+      try{const u=new URL(canon); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
       let video='',images=[];
       for(const p of pages){
         const picked=radarSharePickFromText(await radarSharePageText(p));
         if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
-        if(!images.length&&picked.images.length) images=picked.images;
+        if(picked.images.length>images.length) images=picked.images;
       }
       if(video) files.push({url:video,ext:'mp4',kind:'video'});
       else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
