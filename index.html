@@ -3058,25 +3058,128 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 
-/* استقبال رابط تمت مشاركته من تطبيق آخر (إنستجرام/X/فيسبوك) عبر قائمة "مشاركة" بأندرويد */
+/* تنزيل من قائمة المشاركة: فيديو / ريل / صورة بأعلى جودة، بنفس أولوية سكربت الجلب */
+function radarShareUnescape(s){return String(s||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').replace(/\\u0025/g,'%').replace(/&/g,'&')}
+function radarShareIsVideoUrl(u){return /\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4|video\.twimg\.com\/.+\.mp4/i.test(u||'')}
+function radarShareVideoScore(url){
+  const s=String(url||'');
+  const dim=s.match(/(\d{3,4})x(\d{3,4})/);
+  let n=dim?(+dim[1])*(+dim[2]):0;
+  if(/playable_url_quality_hd|browser_native_hd|hd_src|hdplay/i.test(s)) n+=8e9;
+  if(/native_sd|_sd[_.]|\/sd\//i.test(s)) n-=3e8;
+  if(/_1080|1920x|1080x/i.test(s)) n+=5e8;
+  if(/_720|1280x|720x/i.test(s)) n+=2e8;
+  return n;
+}
+function radarShareImageScore(url){
+  const s=String(url||'');
+  if(/emoji|rsrc\.php|static\.|avatar|profile_pic|s60x60|s100x100|p50x50|p64x64|s150x150|stp=dst-jpg_s\d{2,3}x/i.test(s)) return -1;
+  const dim=s.match(/(\d{3,4})x(\d{3,4})/);
+  let n=dim?(+dim[1])*(+dim[2]):1000;
+  if(/orig|_o\.|_n\.|1080|2048|dst-jpg_n/i.test(s)) n+=1e7;
+  return n;
+}
+function radarSharePickFromText(text){
+  const raw=radarShareUnescape(text);
+  const vids=[];
+  ['playable_url_quality_hd','browser_native_hd_url','hd_src_no_ratelimit','hd_src','browser_native_sd_url','playable_url','progressive_url'].forEach(key=>{
+    const re=new RegExp('"'+key+'"\\s*:\\s*"(https:[^"]+)"','gi');
+    let m; while((m=re.exec(raw))) vids.push(radarShareUnescape(m[1]));
+  });
+  let m; const mp4=/https?:\/\/[^"'\s<>]+?\.mp4(?:\?[^"'\s<>]*)?/gi;
+  while((m=mp4.exec(raw))) vids.push(radarShareUnescape(m[0]));
+  const imgs=[]; const im=/https?:\/\/[^"'\s<>]+?\.(?:jpe?g|png|webp)(?:\?[^"'\s<>]*)?/gi;
+  while((m=im.exec(raw))) imgs.push(radarShareUnescape(m[0]));
+  const video=vids.filter(radarShareIsVideoUrl).sort((a,b)=>radarShareVideoScore(b)-radarShareVideoScore(a))[0]||'';
+  const images=imgs.map(u=>typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u).filter(u=>radarShareImageScore(u)>=0);
+  const seen=new Set();
+  const bestImages=[];
+  images.sort((a,b)=>radarShareImageScore(b)-radarShareImageScore(a));
+  for(const u of images){const k=u.split('?')[0]; if(seen.has(k)) continue; seen.add(k); bestImages.push(u); if(bestImages.length>=8) break}
+  return {video, images:bestImages};
+}
+async function radarSharePageText(link){
+  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(link), link]){
+    try{
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const t=await res.text();
+      if(t&&t.length>180) return t;
+    }catch(e){}
+  }
+  return '';
+}
+async function radarIngestShare(link){
+  const status=document.getElementById('imageSearchStatus');
+  const say=t=>{if(status)status.textContent=t};
+  say('⏳ جارٍ جلب أعلى جودة من المشاركة...');
+  const files=[];
+  try{
+    if(/tiktok\.com|vt\.tiktok|vm\.tiktok/i.test(link)){
+      const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),{credentials:'omit'});
+      const j=await res.json();
+      const data=j&&j.data||{};
+      const images=Array.isArray(data.images)?data.images.filter(Boolean):[];
+      if(/\/photo\//i.test(link)&&images.length) images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+      else{
+        const mp4=data.hdplay||data.play||'';
+        if(mp4){const play=await radarTikTokPlayUrl(mp4,{ms:45000,noMirror:true}); if(play) files.push({url:play,ext:'mp4',kind:'video'})}
+        else images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+      }
+    }else if(/(?:x|twitter)\.com/i.test(link)){
+      const mp4=await radarXDirectMp4((link.match(/status\/(\d{8,})/)||[])[1]||'','');
+      if(mp4) files.push({url:mp4,ext:'mp4',kind:'video'});
+      else{
+        const picked=radarSharePickFromText(await radarSharePageText(link));
+        if(picked.video) files.push({url:picked.video,ext:'mp4',kind:'video'});
+        else picked.images.slice(0,4).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+      }
+    }else if(radarShareIsVideoUrl(link)){
+      files.push({url:link,ext:'mp4',kind:'video'});
+    }else if(/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(link)){
+      files.push({url:typeof radarHighestImageUrl==='function'?radarHighestImageUrl(link):link,ext:'jpg',kind:'image'});
+    }else{
+      const picked=radarSharePickFromText(await radarSharePageText(link));
+      let extra={video:'',images:[]};
+      if(/facebook\.com|fb\.watch/i.test(link)){
+        try{
+          const path=new URL(link).pathname+new URL(link).search;
+          extra=radarSharePickFromText(await radarSharePageText('https://m.facebook.com'+path));
+        }catch(e){}
+      }
+      const video=picked.video||extra.video;
+      const images=picked.images.length?picked.images:extra.images;
+      const wantVideo=/reel|\/videos?\/|\/watch|fb\.watch|\/tv\/|\/share\/[vr]\//i.test(link);
+      if(wantVideo&&video) files.push({url:video,ext:'mp4',kind:'video'});
+      else if(!wantVideo&&images.length) images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+      else if(video) files.push({url:video,ext:'mp4',kind:'video'});
+      else images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+    }
+  }catch(e){}
+  if(!files.length){say('⚠️ وصل الرابط، وما لقينا فيديو أو صورة بأعلى جودة.');return}
+  let ok=0;
+  for(const f of files){
+    const r=await hxDownloadToDevice(f.url,f.ext,f.kind,link);
+    if(r&&r.ok) ok++;
+    await new Promise(res=>setTimeout(res,350));
+  }
+  say(ok?`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`:'⚠️ تعذّر حفظ الملف على الجهاز.');
+  if(ok&&navigator.vibrate) navigator.vibrate(30);
+}
 function handleSharedLink(){
   const params = new URLSearchParams(window.location.search);
-  const shared = params.get('shared_url') || params.get('shared_text') || '';
-  const urlMatch = shared.match(/https?:\/\/\S+/);
+  const shared = [params.get('url'),params.get('text'),params.get('title'),params.get('shared_url'),params.get('shared_text')].filter(Boolean).join('\n');
+  const urlMatch = String(shared).match(/https?:\/\/[^\s]+/);
   if(!urlMatch) return;
-  const link = unwrapFacebookLink(urlMatch[0]);
+  const link = unwrapFacebookLink(urlMatch[0].replace(/[)\].,]+$/,''));
   window.history.replaceState({}, '', window.location.pathname);
-
-  // روابط محتوى محدد (فيديو/صورة/منشور/ريلز/ستوري/مشاركة سريعة) → البحث العكسي دايمًا
-  const fbPath = (link.split('facebook.com/')[1] || '').split(/[?#]/)[0];
-  const fbSegments = fbPath.split('/').filter(Boolean);
-  const isSpecificContent = /\/(videos?|photos?|posts?|reels?|reel|stories|story\.php|watch|permalink\.php|photo\.php|share|groups\/[^/]+\/(posts|permalink))\b/i.test(link)
-    // أو أي رابط فيه أكتر من جزء بعد اسم المستخدم (يعني مو بروفايل عام لحاله)
-    || fbSegments.length > 1;
-
-  // البحث العكسي (بروفايل أو أي محتوى محدد فيديو/صورة/منشور)
-  document.getElementById('imageUrlInput').value = link;
-  setTimeout(()=> runImageSearch(), 300);
+  if(/facebook\.com|fb\.watch|fb\.com|instagram\.com|tiktok\.com|vt\.tiktok|vm\.tiktok|(?:x|twitter)\.com|\.mp4(?:\?|$)|\.(?:jpe?g|png|webp)(?:\?|$)/i.test(link)){
+    radarIngestShare(link);
+    return;
+  }
+  const box=document.getElementById('imageUrlInput');
+  if(box) box.value=link;
+  setTimeout(()=>{ if(typeof runImageSearch==='function') runImageSearch(); }, 300);
 }
 /* theme */
 const THEME_KEY='radar_app_theme';
