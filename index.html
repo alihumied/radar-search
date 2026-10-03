@@ -3331,12 +3331,15 @@ async function radarIngestShare(raw){
         else images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
       }
     }else if(/(?:x|twitter)\.com/i.test(link)){
-      const mp4=await radarXDirectMp4((link.match(/status\/(\d{8,})/)||[])[1]||'','');
-      if(mp4) files.push({url:mp4,ext:'mp4',kind:'video'});
+      const got=await radarXShareFiles(link);
+      if(got.length) got.forEach(f=>files.push(f));
       else{
         const picked=radarSharePickFromText(await radarSharePageText(link));
         if(picked.video) files.push({url:picked.video,ext:'mp4',kind:'video'});
-        else picked.images.slice(0,4).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+        else{
+          const seen=new Set();
+          picked.images.forEach(u=>{const img=radarXOrigImage(u)||u; if(seen.has(img))return; seen.add(img); files.push({url:img,ext:'jpg',kind:'image'})});
+        }
       }
     }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link)){
       const media=await radarFbShareMedia(link);
@@ -4040,6 +4043,53 @@ async function radarXDirectMp4(statusId, mediaId){
     }catch(e){}
   }
   return '';
+}
+function radarXOrigImage(url){
+  let u=String(url||'').replace(/\\u0026/g,'&').replace(/\\\//g,'/').split('#')[0];
+  if(!/pbs\.twimg\.com\/media\//i.test(u)) return '';
+  if(/[?&]format=/i.test(u)) u=u.replace(/([?&])format=[^&]*/i,'$1format=jpg');
+  if(/[?&]name=/i.test(u)) u=u.replace(/([?&])name=[^&]*/i,'$1name=orig');
+  else u+=(u.includes('?')?'&':'?')+'name=orig';
+  return u;
+}
+async function radarXShareFiles(link){
+  const id=(String(link||'').match(/status\/(\d{8,})/)||[])[1]||'';
+  if(!id) return [];
+  const api='https://api.fxtwitter.com/status/'+id;
+  let text='';
+  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(api), api]){
+    try{
+      const res=await fetch(u,{referrerPolicy:'no-referrer',credentials:'omit'});
+      if(!res.ok) continue;
+      const t=await res.text();
+      if(t&&t.length>40){ text=t; break; }
+    }catch(e){}
+  }
+  if(!text) return [];
+  const mp4=radarXBestMp4(text,'');
+  if(mp4) return [{url:mp4,ext:'mp4',kind:'video'}];
+  const files=[];
+  const seen=new Set();
+  const push=raw=>{
+    const img=radarXOrigImage(raw);
+    if(!img) return;
+    const key=img.split('?')[0].replace(/\.(?:jpe?g|png|webp)$/i,'');
+    if(seen.has(key)) return;
+    seen.add(key);
+    files.push({url:img,ext:'jpg',kind:'image'});
+  };
+  try{
+    const j=JSON.parse(text);
+    const media=(j.tweet&&j.tweet.media)||{};
+    const photos=Array.isArray(media.photos)?media.photos:(Array.isArray(media.all)?media.all.filter(m=>m&&m.type==='photo'):[]);
+    photos.forEach(p=>push(p&&p.url));
+  }catch(e){}
+  if(!files.length){
+    const raw=text.replace(/\\u0026/g,'&').replace(/\\\//g,'/');
+    const re=/https:\/\/pbs\.twimg\.com\/media\/[A-Za-z0-9_-]+(?:\.(?:jpe?g|png|webp))?(?:\?[^"'\s]*)?/gi;
+    let m; while((m=re.exec(raw))) push(m[0]);
+  }
+  return files.slice(0,6);
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
   const l=document.getElementById('savedInlineFocus'),p=document.getElementById('savedInlineFocusImg'),vid=document.getElementById('savedInlineFocusVid');
@@ -4952,6 +5002,21 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl){
         }
       }catch(e2){}
     }
+    if(/pbs\.twimg\.com|pbs\.twitter\.com/i.test(src||'')&&!/corsmirror\.com/i.test(src||'')){
+      try{
+        const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(src),{referrerPolicy:'no-referrer',credentials:'omit'});
+        if(res.ok){
+          const blob=await res.blob();
+          if(blob.size>800&&await radarBlobOk(blob,'image')){
+            const u=URL.createObjectURL(blob),a=document.createElement('a');
+            a.href=u;a.download=`radar-image-${Date.now()}.jpg`;
+            document.body.appendChild(a);a.click();a.remove();
+            setTimeout(()=>URL.revokeObjectURL(u),20000);
+            return {ok:true};
+          }
+        }
+      }catch(e2){}
+    }
     // فشل fetch غالبًا بسبب قيود CORS من سيرفر الفيديو (رافض طلبات من موقع تاني غير x.com) —
     // هاد قيد أمان من طرف السيرفر، ما فيه حل برمجي له. البديل: نفتح رابط الفيديو المباشر نفسه
     // بتبويب جديد (فتح رابط عادي مش خاضع لنفس قيد fetch)، وهيك مشغّل الفيديو الأصلي بالمتصفح
@@ -4996,7 +5061,7 @@ async function hxFetchMediaBlob(src, kind){
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
-    if(/fbcdn\.net|scontent/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
+    if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
