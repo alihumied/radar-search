@@ -177,10 +177,45 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
 #savedInlineFocusTt{display:none;width:min(92vw,440px);height:min(78vh,760px);border:0;border-radius:16px;background:#000;box-shadow:0 28px 85px #000d}
 .saved-inline-focus.show #savedInlineFocusVid.is-on{display:block}
 .saved-inline-focus.show #savedInlineFocusTt.is-on{display:block}
+.radar-share-choice{position:fixed;inset:0;z-index:10220;background:#02060ecc;display:flex;align-items:flex-end;justify-content:center;padding:16px 14px calc(18px + env(safe-area-inset-bottom));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.radar-share-choice[hidden]{display:none!important}
+.radar-share-card{width:min(560px,100%);background:linear-gradient(180deg,var(--panel),var(--bg-1));border:1px solid var(--line);border-radius:24px;padding:18px 16px 16px;box-shadow:0 24px 70px #000a;animation:radarShareIn .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes radarShareIn{from{transform:translateY(22px);opacity:.35}to{transform:none;opacity:1}}
+.radar-share-kicker{font-size:12px;color:var(--cyan);font-weight:800}
+.radar-share-title{font-size:22px;font-weight:900;margin:4px 0 0;color:var(--text)}
+.radar-share-link{margin:8px 0 14px;color:var(--muted);font:12px/1.5 'JetBrains Mono',monospace;direction:ltr;text-align:left;word-break:break-all;max-height:4.5em;overflow:hidden}
+.radar-share-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.radar-share-opt{border:1px solid var(--line);border-radius:20px;background:var(--bg-0);color:var(--text);padding:16px 10px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;font-family:Tajawal,sans-serif;min-height:176px;text-align:center}
+.radar-share-opt b{font-size:18px;font-weight:900;display:block}
+.radar-share-opt small{color:var(--muted);font-size:12px;line-height:1.45;display:block;margin-top:3px}
+.radar-share-ico{width:76px;height:76px;display:flex;align-items:center;justify-content:center;color:#f4fdff}
+.radar-share-opt.search{border-color:#3fd4ff99}
+.radar-share-opt.search .radar-share-ico{border-radius:50%;background:radial-gradient(circle at 32% 28%,#9cf3ff,#128fb8 52%,#06384f);box-shadow:0 12px 26px #3fd4ff40,inset 0 0 0 1px #ffffff33}
+.radar-share-opt.download{border-color:#3ddea099}
+.radar-share-opt.download .radar-share-ico{border-radius:18px;background:radial-gradient(circle at 32% 28%,#c8ffdf,#12a05c 54%,#064428);box-shadow:0 12px 26px #3ddea040,inset 0 0 0 1px #ffffff33}
+.radar-share-opt:active{transform:scale(.98)}
+@media(max-width:420px){.radar-share-actions{grid-template-columns:1fr}.radar-share-opt{min-height:0;flex-direction:row;align-items:center;text-align:right;padding:12px 14px;gap:12px}.radar-share-ico{width:60px;height:60px;flex-shrink:0}.radar-share-opt span:last-child{flex:1}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
+<div id="radarShareChoice" class="radar-share-choice" hidden onclick="if(event.target===this)radarShareChoose('dismiss')">
+  <div class="radar-share-card" role="dialog" aria-modal="true" aria-labelledby="radarShareChoiceTitle">
+    <div class="radar-share-kicker" id="radarShareChoiceKicker">وصلت مشاركة إلى RADAR</div>
+    <h2 class="radar-share-title" id="radarShareChoiceTitle">ماذا تريد أن تفعل؟</h2>
+    <div class="radar-share-link" id="radarShareChoiceLink"></div>
+    <div class="radar-share-actions">
+      <button type="button" class="radar-share-opt search" onclick="radarShareChoose('search')">
+        <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="15" stroke="currentColor" stroke-width="2.2" opacity=".45"/><circle cx="24" cy="24" r="8.5" stroke="currentColor" stroke-width="2.2" opacity=".85"/><circle cx="24" cy="24" r="3" fill="currentColor"/><path d="M24 24 35.2 12.8A15 15 0 0 0 24 9Z" fill="currentColor"/></svg></span>
+        <span><b>بحث عكسي</b><small>صورة المنشور ثم ياندكس وجوجل</small></span>
+      </button>
+      <button type="button" class="radar-share-opt download" onclick="radarShareChoose('download')">
+        <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M24 7v18" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M15 19.5 24 28.5 33 19.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 36.5h24" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M16 36.5v-3.2h16v3.2" stroke="currentColor" stroke-width="2.2" opacity=".55"/></svg></span>
+        <span><b>تحميل</b><small>حفظ الفيديو أو الصورة على الجهاز</small></span>
+      </button>
+    </div>
+  </div>
+</div>
 <div class="wrap">
 
   <header>
@@ -3336,7 +3371,11 @@ async function radarIngestShare(raw){
     }
   }catch(e){}
   }
-  if(!files.length){say('⚠️ وصل الرابط، وما لقينا فيديو أو صورة بأعلى جودة.');return}
+  if(!files.length){
+    const longIg=/instagram\.com/i.test(link)&&((radarIgCanon(link).match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'').length>15;
+    say(longIg?'⚠️ رابط المشاركة من تطبيق إنستغرام طويل وما فيه رمز الريل. إنستغرام ما يرجّع فيديو لهذا الشكل. افتح الريل في كروم وانسخ الرابط القصير من شريط العنوان.':'⚠️ وصل الرابط، وما لقينا فيديو أو صورة بأعلى جودة.');
+    return;
+  }
   let ok=0;
   for(const f of files){
     const r=f.blob?await radarShareSaveBlob(f.blob,f.ext,f.kind):await radarShareSave(f.url,f.ext,f.kind,link);
@@ -3346,12 +3385,73 @@ async function radarIngestShare(raw){
   say(ok?`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`:'⚠️ تعذّر حفظ الملف على الجهاز.');
   if(ok&&navigator.vibrate) navigator.vibrate(30);
 }
+function radarShareQueryValue(name){
+  const q=String(location.search||'').replace(/^\?/,'');
+  let from=0;
+  while(from<q.length){
+    const at=q.indexOf(name+'=', from);
+    if(at<0) return '';
+    if(at===0 || q[at-1]==='&'){
+      let rest=q.slice(at+name.length+1);
+      const cut=rest.search(/&(text|title|url|shared_url|shared_text)=/);
+      if(cut>=0) rest=rest.slice(0,cut);
+      if(/^https?%3A/i.test(rest)){try{return decodeURIComponent(rest.replace(/\+/g,'%20'))}catch(e){}}
+      return rest;
+    }
+    from=at+name.length+1;
+  }
+  return '';
+}
+let radarSharePending='';
+function radarSharePageLink(raw){
+  const links=[...String(raw||'').matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m=>unwrapFacebookLink(m[0].replace(/[),.;]+$/,'')));
+  return links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu/i.test(u)&&!radarShareIsVideoUrl(u))
+    || links.find(u=>/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(u))
+    || links[0]
+    || '';
+}
+function radarShareChoose(mode){
+  const raw=radarSharePending;
+  const box=document.getElementById('radarShareChoice');
+  if(box) box.hidden=true;
+  document.body.style.overflow='';
+  radarSharePending='';
+  if(!raw||mode==='dismiss') return;
+  if(mode==='search'){
+    const link=radarSharePageLink(raw);
+    const input=document.getElementById('imageUrlInput');
+    if(input) input.value=link;
+    const core=input&&input.closest('.core');
+    if(core) core.scrollIntoView({behavior:'smooth',block:'start'});
+    runImageSearch();
+    return;
+  }
+  radarIngestShare(raw);
+}
+function radarSharePlatformName(link){
+  const u=String(link||'');
+  if(/instagram\.com/i.test(u)) return 'إنستغرام';
+  if(/facebook\.com|fb\.watch|fb\.com/i.test(u)) return 'فيسبوك';
+  if(/tiktok\.com/i.test(u)) return 'تيك توك';
+  if(/(?:^|\/\/|\.)(?:x|twitter)\.com/i.test(u)) return 'X';
+  if(/youtu\.?be/i.test(u)) return 'يوتيوب';
+  return '';
+}
 function handleSharedLink(){
   const params = new URLSearchParams(window.location.search);
-  const shared = [params.get('url'),params.get('text'),params.get('title'),params.get('shared_url'),params.get('shared_text')].filter(Boolean).join('\n');
+  const shared = ['url','text','title','shared_url','shared_text'].map(k=>radarShareQueryValue(k)||params.get(k)||'').filter(Boolean).join('\n');
   if(!/https?:\/\//i.test(shared)) return;
   window.history.replaceState({}, '', window.location.pathname);
-  radarIngestShare(shared);
+  radarSharePending=shared;
+  const link=radarSharePageLink(shared);
+  const label=document.getElementById('radarShareChoiceLink');
+  if(label) label.textContent=link;
+  const kick=document.getElementById('radarShareChoiceKicker');
+  const plat=radarSharePlatformName(link);
+  if(kick) kick.textContent=plat?('مشاركة من '+plat):'وصلت مشاركة إلى RADAR';
+  const box=document.getElementById('radarShareChoice');
+  if(box) box.hidden=false;
+  document.body.style.overflow='hidden';
 }
 /* theme */
 const THEME_KEY='radar_app_theme';
