@@ -3355,13 +3355,19 @@ async function radarIngestShare(raw){
       const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),{credentials:'omit'});
       const j=await res.json();
       const data=j&&j.data||{};
-      const images=Array.isArray(data.images)?data.images.filter(Boolean):[];
-      if(/\/photo\//i.test(link)&&images.length) images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-      else{
-        const mp4=data.hdplay||data.play||'';
-        if(mp4){const play=await radarTikTokPlayUrl(mp4,{ms:45000,noMirror:true}); if(play) files.push({url:play,ext:'mp4',kind:'video'})}
-        else images.forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-      }
+      const images=(Array.isArray(data.images)?data.images:[]).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
+      const playUrl=data.hdplay||data.play||'';
+      const photoPost=images.length&&(!Number(data.duration)||/\/photo\//i.test(link)||/ies-music|music\.tiktokcdn/i.test(playUrl));
+      const pushImages=()=>images.slice(0,20).forEach(u=>{
+        const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
+        files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image'});
+      });
+      if(photoPost) pushImages();
+      else if(playUrl){
+        const play=await radarTikTokPlayUrl(playUrl,{ms:45000,noMirror:true});
+        if(play) files.push({url:play,ext:'mp4',kind:'video'});
+        else pushImages();
+      }else pushImages();
     }else if(/(?:x|twitter)\.com/i.test(link)){
       const got=await radarXShareFiles(link);
       if(got.length) got.forEach(f=>files.push(f));
