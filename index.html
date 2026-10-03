@@ -3127,6 +3127,61 @@ function radarIgCanon(link){
   }catch(e){return link}
 }
 function radarShareIsVideoUrl(u){return /\.mp4(?:\?|$)|video[.-][a-z0-9]*\.fbcdn|\/o1\/v\/t(?:2|16|50|51)\/|\/video\/tos\/|mime_type=video_mp4|video\.twimg\.com\/.+\.mp4/i.test(u||'')}
+function radarFbVideoInfo(url){
+  const s=String(url||'');
+  let text='';
+  try{
+    const m=s.match(/[?&]efg=([^&]+)/i);
+    if(m){
+      let raw=decodeURIComponent(m[1]).replace(/-/g,'+').replace(/_/g,'/').replace(/[^A-Za-z0-9+/=]/g,'');
+      while(raw.length%4) raw+='=';
+      text=atob(raw);
+    }
+  }catch(e){}
+  const hm=text.match(/\.(\d{3,4})\./)||text.match(/(\d{3,4})p/i);
+  return {
+    h:hm?+hm[1]:0,
+    audio:/heaac|_audio|audio_only/i.test(text),
+    dash:/dash_/i.test(text)&&!/progressive/i.test(text),
+    progressive:/progressive/i.test(text)
+  };
+}
+function radarBestProgressiveMp4(urls){
+  const rows=[];
+  const seen=new Set();
+  for(const url of urls||[]){
+    const u=String(url||'').trim();
+    if(!u||seen.has(u)||/rsrc\.php|static\.xx\.fbcdn/i.test(u)) continue;
+    if(!radarShareIsVideoUrl(u)) continue;
+    seen.add(u);
+    const info=radarFbVideoInfo(u);
+    if(info.audio) continue;
+    rows.push({url:u,h:info.h,dash:info.dash,progressive:info.progressive||!info.dash});
+  }
+  const prog=rows.filter(r=>r.progressive&&!r.dash);
+  const pool=prog.length?prog:rows;
+  pool.sort((a,b)=>(b.h-a.h)||(radarShareVideoScore(b.url)-radarShareVideoScore(a.url)));
+  return pool[0]?pool[0].url:'';
+}
+function radarShareVideoList(text){
+  const raw=radarShareUnescape(text);
+  const vids=[];
+  ['playable_url_quality_hd','browser_native_hd_url','hd_src_no_ratelimit','hd_src','browser_native_sd_url','playable_url','progressive_url'].forEach(key=>{
+    const re=new RegExp('"'+key+'"\\s*:\\s*"(https:[^"]+)"','gi');
+    let m; while((m=re.exec(raw))) vids.push(radarShareUnescape(m[1]));
+  });
+  let m; const mp4=/https?:\/\/[^"'\s<>]+?\.mp4(?:\?[^"'\s<>]*)?/gi;
+  while((m=mp4.exec(raw))) vids.push(radarShareUnescape(m[0]));
+  return vids;
+}
+function radarVideoArea(url){
+  let best=0;
+  const re=/(\d{3,4})x(\d{3,4})/g;
+  let m; while((m=re.exec(String(url||'')))) best=Math.max(best,(+m[1])*(+m[2]));
+  const h=radarFbVideoInfo(url).h;
+  if(h) best=Math.max(best,h*h);
+  return best;
+}
 function radarShareVideoScore(url){
   const s=String(url||'');
   const dim=s.match(/(\d{3,4})x(\d{3,4})/);
@@ -3148,16 +3203,10 @@ function radarShareImageScore(url){
 }
 function radarSharePickFromText(text){
   const raw=radarShareUnescape(text);
-  const vids=[];
-  ['playable_url_quality_hd','browser_native_hd_url','hd_src_no_ratelimit','hd_src','browser_native_sd_url','playable_url','progressive_url'].forEach(key=>{
-    const re=new RegExp('"'+key+'"\\s*:\\s*"(https:[^"]+)"','gi');
-    let m; while((m=re.exec(raw))) vids.push(radarShareUnescape(m[1]));
-  });
-  let m; const mp4=/https?:\/\/[^"'\s<>]+?\.mp4(?:\?[^"'\s<>]*)?/gi;
-  while((m=mp4.exec(raw))) vids.push(radarShareUnescape(m[0]));
+  const vids=radarShareVideoList(raw);
   const imgs=[]; const im=/https?:\/\/[^"'\s<>]+?\.(?:jpe?g|png|webp)(?:\?[^"'\s<>]*)?/gi;
-  while((m=im.exec(raw))) imgs.push(radarShareUnescape(m[0]));
-  const video=vids.filter(radarShareIsVideoUrl).sort((a,b)=>radarShareVideoScore(b)-radarShareVideoScore(a))[0]||'';
+  let m; while((m=im.exec(raw))) imgs.push(radarShareUnescape(m[0]));
+  const video=radarBestProgressiveMp4(vids)||'';
   const images=imgs.map(u=>typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u).filter(u=>radarShareImageScore(u)>=0);
   const seen=new Set();
   const bestImages=[];
@@ -3277,17 +3326,33 @@ async function radarFbShareMedia(link){
     const found=(detail.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||(detail.match(/story_fbid(?:=|%3D)(\d{8,})/i)||[])[1]||'';
     if(found) fbId=found;
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
-    fmts.sort((a,b)=>(parseInt(b.quality,10)||0)-(parseInt(a.quality,10)||0));
-    const top=fmts[0]&&fmts[0].url||'';
-    return j.download_url||top||'';
+    const urls=[j.download_url].concat(fmts.map(f=>f.url));
+    return radarBestProgressiveMp4(urls);
   };
   const ask=async(url)=>{
     const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url,quality:'best'})});
     return await res.json();
   };
   try{
-    let video=take(await ask(link));
-    if(!video&&fbId&&/\/share\//i.test(link)) video=take(await ask('https://www.facebook.com/reel/'+fbId+'/'));
+    const urls=[];
+    const first=take(await ask(link));
+    if(first) urls.push(first);
+    if(fbId && radarFbVideoInfo(radarBestProgressiveMp4(urls)).h<1080){
+      for(const alt of ['https://www.facebook.com/reel/'+fbId+'/','https://www.facebook.com/watch/?v='+fbId]){
+        try{ const more=take(await ask(alt)); if(more) urls.push(more); }catch(e){}
+        if(radarFbVideoInfo(radarBestProgressiveMp4(urls)).h>=1080) break;
+      }
+    }
+    let video=radarBestProgressiveMp4(urls);
+    if(video && radarFbVideoInfo(video).h>=720) return {video, images:[], login:false};
+    const shareText=await radarSharePageText(link);
+    const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
+    const pages=[post, link, fbId?('https://www.facebook.com/plugins/video.php?href='+encodeURIComponent('https://www.facebook.com/reel/'+fbId+'/')):''].filter(Boolean);
+    for(const p of pages){
+      const text=p===link?shareText:await radarSharePageText(p);
+      radarShareVideoList(text).forEach(u=>urls.push(u));
+    }
+    video=radarBestProgressiveMp4(urls);
     if(video) return {video, images:[], login:false};
   }catch(e){}
   const shareText=await radarSharePageText(link);
@@ -4221,7 +4286,7 @@ async function radarXWorkingMp4(statusId, mediaId, current){
         const flat=(await res.text()).replace(/\\\//g,'/').replace(/\\u0026/g,'&');
         let urls=[...flat.matchAll(/https:\/\/video\.twimg\.com\/[^"'\s]+?\.mp4[^"'\s]*/gi)].map(m=>m[0]);
         if(mediaId){const own=urls.filter(u=>u.includes('/'+mediaId+'/')); if(own.length) urls=own}
-        urls.sort((a,b)=>{const da=a.match(/(\d{3,4})x(\d{3,4})/)||[], db=b.match(/(\d{3,4})x(\d{3,4})/)||[]; return ((+db[1]||0)*(+db[2]||0))-((+da[1]||0)*(+da[2]||0))});
+        urls.sort((a,b)=>radarVideoArea(b)-radarVideoArea(a));
         urls.forEach(add);
       }
     }catch(e){}
@@ -4240,7 +4305,7 @@ function radarXBestMp4(text, mediaId){
   const urls=[...String(text||'').matchAll(/https:\/\/video\.twimg\.com\/[^"\\\s]+/g)].map(m=>m[0].replace(/\\\//g,'/').replace(/\\u0026/g,'&'));
   let mp4s=urls.filter(u=>/\.mp4(?:\?|$)/i.test(u)&&!/\/aud\/|\/mp4a\/|\/aac\//i.test(u));
   if(mediaId){const own=mp4s.filter(u=>u.includes('/'+mediaId+'/')); if(own.length) mp4s=own}
-  mp4s.sort((a,b)=>{const da=a.match(/(\d{3,4})x(\d{3,4})/)||[], db=b.match(/(\d{3,4})x(\d{3,4})/)||[]; return ((+db[1]||0)*(+db[2]||0))-((+da[1]||0)*(+da[2]||0))});
+  mp4s.sort((a,b)=>radarVideoArea(b)-radarVideoArea(a));
   return mp4s[0]||'';
 }
 async function radarXDirectMp4(statusId, mediaId){
