@@ -3282,14 +3282,35 @@ async function radarIgShareFiles(link){
   const code=m?m[2]:'';
   if(!code) return [];
   const files=[];
-  if(code.length<=15){
+  const pushFile=(url,fileKind)=>{
+    if(!url) return;
+    let ext='jpg';
+    if(fileKind==='video') ext='mp4';
+    else{
+      const e=(String(url).match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
+      ext=/jpeg/i.test(e)?'jpg':e.toLowerCase();
+    }
+    files.push({url,ext,kind:fileKind});
+  };
+  if(code.length<=15 && kind==='p'){
+    const seen=new Set();
+    for(let i=1;i<=20;i++){
+      const picked=radarSharePickFromText(await radarSharePageText('https://fxinstagram.com/p/'+code+'/?img_index='+i));
+      const url=picked.video||picked.images[0]||'';
+      if(!url) break;
+      const key=(url.match(/\/(\d{6,})_/)||[])[1]||url.split('?')[0];
+      if(seen.has(key)) break;
+      seen.add(key);
+      pushFile(url, picked.video?'video':'image');
+    }
+  }else if(code.length<=15){
     const pages=['https://fxinstagram.com/'+kind+'/'+code+'/'];
     if(kind!=='p') pages.push('https://fxinstagram.com/p/'+code+'/');
     if(kind!=='reel') pages.push('https://fxinstagram.com/reel/'+code+'/');
     for(const page of pages){
       const picked=radarSharePickFromText(await radarSharePageText(page));
-      if(picked.video){files.push({url:picked.video,ext:'mp4',kind:'video'}); break}
-      if(picked.images.length){picked.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'})); break}
+      if(picked.video){pushFile(picked.video,'video'); break}
+      if(picked.images.length){picked.images.slice(0,6).forEach(u=>pushFile(u,'image')); break}
     }
   }
   if(files.length) return files;
@@ -3400,8 +3421,21 @@ async function radarIngestShare(raw){
   }catch(e){}
   }
   if(!files.length){
+    if(/facebook\.com|fb\.watch|fb\.com/i.test(link) && /\/share\/v\/|\/reels?\/|\/videos\/|\/watch|fb\.watch/i.test(link)){
+      say('⏳ فيسبوك ما سلّم الملف من الرابط. فتح الصفحة حتى ينتزعها السكربت من الحساب...');
+      const grabbed=await radarFbScriptGrab(link);
+      if(grabbed===true){
+        say('⬇️ بدأ تنزيل 1 ملف بأعلى جودة');
+        if(navigator.vibrate) navigator.vibrate(30);
+        return;
+      }
+      if(grabbed==='blocked'){
+        radarFbAskOpen(link);
+        return;
+      }
+    }
     if(fbLogin){
-      say('⚠️ فيسبوك لا يسلّم هذا الفيديو إلا لحساب مسجّل. رابط المشاركة ما يحتوي الملف، فما نقدر نحمّله من رادار.');
+      say('⚠️ فيسبوك لا يسلّم هذا الفيديو إلا لحساب مسجّل. حدّث سكربت رادار في Quetta وشارك الرابط من نفس المتصفح وأنت داخل فيسبوك.');
       return;
     }
     const longIg=/instagram\.com/i.test(link)&&((radarIgCanon(link).match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'').length>15;
@@ -3409,6 +3443,8 @@ async function radarIngestShare(raw){
     return;
   }
   let ok=0;
+  try{ if(radarFbGrabWin && !radarFbGrabWin.closed) radarFbGrabWin.close(); }catch(e){}
+  radarFbGrabWin=null;
   for(const f of files){
     const r=f.blob?await radarShareSaveBlob(f.blob,f.ext,f.kind):await radarShareSave(f.url,f.ext,f.kind,link);
     if(r&&r.ok) ok++;
@@ -3435,6 +3471,96 @@ function radarShareQueryValue(name){
   return '';
 }
 let radarSharePending='';
+let radarFbGrabWin=null;
+let radarFbGrabResolve=null;
+function radarFbGrabTarget(link){
+  return String(link||'').split('#')[0]+'#radar_grab=1';
+}
+window.addEventListener('message', ev=>{
+  let host='';
+  try{ host=new URL(ev.origin).hostname; }catch(e){ return; }
+  if(!/(^|\.)facebook\.com$/i.test(host)) return;
+  const d=ev.data;
+  if(!d || d.type!=='radar-fb-grab' || typeof radarFbGrabResolve!=='function') return;
+  radarFbGrabResolve(d);
+});
+function radarFbAskOpen(link){
+  const status=document.getElementById('imageSearchStatus');
+  if(!status) return;
+  status.replaceChildren();
+  status.append('⚠️ المتصفح منع نافذة فيسبوك. ');
+  const b=document.createElement('button');
+  b.type='button';
+  b.textContent='افتح بالسكربت';
+  b.style.cssText='margin-inline-start:8px;padding:6px 12px;border-radius:999px;border:1px solid #7ee787;background:#13301c;color:#d8ffe6;font:inherit';
+  b.addEventListener('click', async ()=>{
+    b.disabled=true;
+    try{ radarFbGrabWin=window.open('about:blank','radar_fb_grab'); }catch(e){ radarFbGrabWin=null; }
+    const grabbed=await radarFbScriptGrab(link);
+    status.textContent=grabbed===true?'⬇️ بدأ تنزيل 1 ملف بأعلى جودة':'⚠️ السكربت ما لقى الفيديو. حدّث سكربت Quetta وكن داخل فيسبوك في نفس المتصفح.';
+  });
+  status.appendChild(b);
+}
+async function radarFbScriptGrab(link){
+  let w=radarFbGrabWin;
+  radarFbGrabWin=null;
+  if(!w || w.closed){
+    try{ w=window.open('about:blank','radar_fb_grab'); }catch(e){ w=null; }
+  }
+  if(!w) return 'blocked';
+  const target=radarFbGrabTarget(link);
+  let waited=false;
+  const result=await new Promise(resolve=>{
+    let timer=0;
+    const finish=()=>{ if(radarFbGrabResolve===onMsg) radarFbGrabResolve=null; resolve(null); };
+    timer=setTimeout(finish, 45000);
+    function onMsg(d){
+      if(d && d.needLogin){
+        if(!waited){
+          waited=true;
+          clearTimeout(timer);
+          timer=setTimeout(finish, 90000);
+          const status=document.getElementById('imageSearchStatus');
+          if(status) status.textContent='⏳ سجّل الدخول في نافذة فيسبوك. السكربت يكمل الانتزاع بعد الدخول.';
+        }
+        return;
+      }
+      clearTimeout(timer);
+      if(radarFbGrabResolve===onMsg) radarFbGrabResolve=null;
+      resolve(d);
+    }
+    radarFbGrabResolve=onMsg;
+    try{ w.location.replace(target); }
+    catch(e){
+      try{ w.location.href=target; }
+      catch(e2){
+        clearTimeout(timer);
+        radarFbGrabResolve=null;
+        resolve(null);
+      }
+    }
+  });
+  if(!result){
+    try{ w.close(); }catch(e){}
+    return false;
+  }
+  if(result.saved){
+    try{ w.close(); }catch(e){}
+    return true;
+  }
+  const urls=(Array.isArray(result.urls)?result.urls:[]).filter(u=>/^https?:\/\//i.test(u));
+  if(!urls.length){
+    try{ w.close(); }catch(e){}
+    return false;
+  }
+  let ok=false;
+  for(const u of urls.slice(0,2)){
+    const r=await radarShareSave(u,'mp4','video',link);
+    if(r&&(r.ok||r.openedDirect)){ ok=true; break; }
+  }
+  try{ w.close(); }catch(e){}
+  return ok;
+}
 function radarSharePageLink(raw){
   const links=[...String(raw||'').matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m=>unwrapFacebookLink(m[0].replace(/[),.;]+$/,'')));
   return links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu/i.test(u)&&!radarShareIsVideoUrl(u))
@@ -3449,6 +3575,13 @@ function radarShareChoose(mode){
   document.body.style.overflow='';
   radarSharePending='';
   if(!raw||mode==='dismiss') return;
+  if(mode==='download'){
+    const page=radarSharePageLink(raw);
+    if(/facebook\.com|fb\.watch|fb\.com/i.test(page) && /\/share\/v\/|\/reels?\/|\/videos\/|\/watch|fb\.watch/i.test(page)){
+      try{ if(radarFbGrabWin && !radarFbGrabWin.closed) radarFbGrabWin.close(); }catch(e){}
+      try{ radarFbGrabWin=window.open('about:blank','radar_fb_grab'); }catch(e){ radarFbGrabWin=null; }
+    }
+  }
   if(mode==='search'){
     const link=radarSharePageLink(raw);
     const input=document.getElementById('imageUrlInput');
