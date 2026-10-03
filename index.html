@@ -3549,10 +3549,7 @@ async function radarIngestShare(raw){
   }catch(e){}
   }
   if(!files.length){
-    if(radarOpenInQuetta(link)){
-      say('⏳ ما انحمّل من رادار. جارٍ فتح الرابط في Quetta...');
-      return;
-    }
+    if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
       return;
@@ -3572,18 +3569,32 @@ async function radarIngestShare(raw){
   if(ok){
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
-  }else if(radarOpenInQuetta(link)){
-    say('⏳ تعذّر الحفظ من رادار. جارٍ فتح الرابط في Quetta...');
-  }else say('⚠️ تعذّر حفظ الملف على الجهاز.');
+  }else if(!radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
-function radarOpenInQuetta(link){
+function radarQuettaIntent(link){
   const raw=String(link||'').trim();
-  if(!/^https?:\/\//i.test(raw)) return false;
-  if(!/Android/i.test(navigator.userAgent||'')) return false;
-  let target=raw.split('#')[0];
-  if(/facebook\.com|fb\.watch|fb\.com/i.test(target)) target+='#radar_grab=1';
-  const intent='intent:#Intent;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=net.quetta.browser;data='+encodeURIComponent(target)+';end';
-  try{ location.href=intent; return true; }catch(e){ return false; }
+  if(!/^https?:\/\//i.test(raw)) return '';
+  let u;
+  try{ u=new URL(raw.split('#')[0]); }catch(e){ return ''; }
+  if(/facebook\.com|fb\.watch|fb\.com/i.test(u.hostname)) u.searchParams.set('radar_grab','1');
+  const scheme=u.protocol.replace(':','');
+  return 'intent://'+u.host+u.pathname+u.search+'#Intent;scheme='+scheme+';package=net.quetta.browser;end';
+}
+function radarOfferQuetta(link){
+  const intent=radarQuettaIntent(link);
+  if(!intent || !/Android/i.test(navigator.userAgent||'')) return false;
+  const status=document.getElementById('imageSearchStatus');
+  if(status){
+    status.replaceChildren();
+    status.append('ما انحمّل من رادار. ');
+    const a=document.createElement('a');
+    a.href=intent;
+    a.textContent='افتح في Quetta';
+    a.style.cssText='display:inline-block;margin-inline-start:8px;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
+    status.appendChild(a);
+  }
+  try{ location.href=intent; }catch(e){}
+  return true;
 }
 function radarShareQueryValue(name){
   const q=String(location.search||'').replace(/^\?/,'');
