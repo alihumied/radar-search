@@ -3215,15 +3215,25 @@ async function radarFbEmbedImages(id, link){
 }
 async function radarFbShareMedia(link){
   let fbId='';
-  try{
-    const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url:link,quality:'best'})});
-    const j=await res.json();
-    fbId=(JSON.stringify(j.detail||'').match(/\[facebook\]\s+(\d{8,})/)||[])[1]||'';
+  let loginOnly=false;
+  const take=j=>{
+    const detail=typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||j.message||j.error||'');
+    if(/login\/\?next|registered users|only available for registered|private video|login required/i.test(detail)) loginOnly=true;
+    const found=(detail.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||(detail.match(/story_fbid(?:=|%3D)(\d{8,})/i)||[])[1]||'';
+    if(found) fbId=found;
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
     fmts.sort((a,b)=>(parseInt(b.quality,10)||0)-(parseInt(a.quality,10)||0));
     const top=fmts[0]&&fmts[0].url||'';
-    const video=j.download_url||top||'';
-    if(video) return {video, images:[]};
+    return j.download_url||top||'';
+  };
+  const ask=async(url)=>{
+    const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url,quality:'best'})});
+    return await res.json();
+  };
+  try{
+    let video=take(await ask(link));
+    if(!video&&fbId&&/\/share\//i.test(link)) video=take(await ask('https://www.facebook.com/reel/'+fbId+'/'));
+    if(video) return {video, images:[], login:false};
   }catch(e){}
   const shareText=await radarSharePageText(link);
   const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
@@ -3241,7 +3251,7 @@ async function radarFbShareMedia(link){
     if(extra.length>images.length) images=extra;
   }
   images=images.map(radarFbLargestImage);
-  return {video, images};
+  return {video, images, login:loginOnly&&!video&&!images.length};
 }
 async function radarShareSaveBlob(blob,ext,kind){
   try{
@@ -3313,6 +3323,7 @@ async function radarIngestShare(raw){
   const direct=[...new Set(links.filter(u=>radarShareIsVideoUrl(u)||/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(u)))];
   direct.sort((a,b)=>radarShareVideoScore(b)-radarShareVideoScore(a));
   const files=[];
+  let fbLogin=false;
   if(direct.length){
     direct.slice(0,6).forEach(u=>files.push(radarShareIsVideoUrl(u)?{url:u,ext:'mp4',kind:'video'}:{url:typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u,ext:'jpg',kind:'image'}));
   }
@@ -3343,6 +3354,7 @@ async function radarIngestShare(raw){
       }
     }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link)){
       const media=await radarFbShareMedia(link);
+      if(media.login) fbLogin=true;
       if(/\/share\/p\/|photo\.php|\/photos?\//i.test(link)){
         if(media.images.length) media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
         else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
@@ -3388,6 +3400,10 @@ async function radarIngestShare(raw){
   }catch(e){}
   }
   if(!files.length){
+    if(fbLogin){
+      say('⚠️ فيسبوك لا يسلّم هذا الفيديو إلا لحساب مسجّل. رابط المشاركة ما يحتوي الملف، فما نقدر نحمّله من رادار.');
+      return;
+    }
     const longIg=/instagram\.com/i.test(link)&&((radarIgCanon(link).match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'').length>15;
     say(longIg?'⚠️ رابط المشاركة من تطبيق إنستغرام طويل وما فيه رمز الريل. إنستغرام ما يرجّع فيديو لهذا الشكل. افتح الريل في كروم وانسخ الرابط القصير من شريط العنوان.':'⚠️ وصل الرابط، وما لقينا فيديو أو صورة بأعلى جودة.');
     return;
