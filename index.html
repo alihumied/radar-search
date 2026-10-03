@@ -3183,12 +3183,67 @@ async function radarFbShareBest(link){
   return media.video||'';
 }
 function radarFbLargestImage(url){
-  const s=String(url||'');
-  const max=s.match(/[?&]cstp=mx(\d{3,4})x(\d{3,4})/i);
+  let s=String(url||'');
+  if(!s) return s;
+  s=s.replace(/_s\.(jpe?g|png|webp)(?=$|[?#])/i,'_n.$1');
+  const max=s.match(/[?&]cstp=mx(\d{2,4})x(\d{2,4})/i);
   if(!max) return s;
-  const full='ctp=p'+max[1]+'x'+max[2];
-  if(/[?&]ctp=p\d+x\d+/i.test(s)) return s.replace(/ctp=p\d+x\d+/ig, full);
-  return s+(s.includes('?')?'&':'?')+full;
+  const w=+max[1], h=+max[2];
+  if(w<80||h<80) return s;
+  const full='ctp=s'+w+'x'+h;
+  if(/[?&]ctp=[spc]\d+x\d+/i.test(s)) s=s.replace(/([?&])ctp=[spc]\d+x\d+/ig,'$1'+full);
+  else s+=(s.includes('?')?'&':'?')+full;
+  return s;
+}
+function radarFbImageCandidates(url){
+  const raw=String(url||'');
+  const out=[];
+  const add=u=>{if(u&&!out.includes(u)) out.push(u)};
+  add(radarFbLargestImage(raw));
+  if(/stp=c[\d.]+a_/i.test(raw)){
+    add(radarFbLargestImage(raw.replace(/stp=c[\d.]+a_(?:cp\d+_)?/i,'stp=')));
+  }
+  const ctp=raw.match(/[?&]ctp=[spc](\d{2,4})x(\d{2,4})/i);
+  if(ctp && Math.max(+ctp[1],+ctp[2])<1200 && !/[?&]cstp=mx/i.test(raw)){
+    add(raw.replace(/([?&])ctp=[spc]\d+x\d+/ig,'$1ctp=s2048x2048'));
+  }
+  const stp=raw.match(/stp=dst-jpg_[sp](\d{2,4})x(\d{2,4})/i);
+  if(stp && Math.max(+stp[1],+stp[2])<1200){
+    add(raw.replace(/stp=dst-jpg_[sp]\d+x\d+/ig,'stp=dst-jpg_s2048x2048'));
+  }
+  add(raw);
+  return out.slice(0,4);
+}
+function radarFbRankImages(list){
+  const rows=(list||[]).map(u=>({u, s:radarShareImageScore(radarFbLargestImage(u))})).filter(x=>x.s>=40000);
+  rows.sort((a,b)=>b.s-a.s);
+  const big=rows.filter(x=>x.s>=200000);
+  return (big.length?big:rows).map(x=>x.u);
+}
+async function radarFbDeliverImage(url){
+  let best=null;
+  const better=(a,b)=>{
+    if(!b) return true;
+    const wide=x=>x.w&&x.h&&Math.abs(x.w-x.h)/Math.max(x.w,x.h)>=0.08;
+    if(wide(a)!==wide(b) && Math.min(a.w||0,a.h||0)>=700 && Math.min(b.w||0,b.h||0)>=700) return wide(a);
+    return a.area>b.area;
+  };
+  for(const u of radarFbImageCandidates(url)){
+    let blob=null;
+    try{ blob=await hxFetchMediaBlob(u,'image'); }catch(e){}
+    if(!blob) continue;
+    let w=0,h=0;
+    try{
+      const bmp=await createImageBitmap(blob);
+      w=bmp.width||0; h=bmp.height||0;
+      if(bmp.close) bmp.close();
+    }catch(e){}
+    const area=(w>=80&&h>=80)?w*h:blob.size;
+    const cur={url:u, blob, area, w, h};
+    if(better(cur, best)) best=cur;
+  }
+  if(best) return {url:best.url, blob:best.blob, ext:'jpg', kind:'image'};
+  return {url:radarFbLargestImage(url), ext:'jpg', kind:'image'};
 }
 function radarFbPostFromText(text){
   const s=String(text||'');
@@ -3207,7 +3262,7 @@ async function radarFbEmbedImages(id, link){
   for(const href of hrefs){
     const plugin='https://www.facebook.com/plugins/post.php?href='+encodeURIComponent(href)+'&show_text=1';
     const picked=radarSharePickFromText(await radarSharePageText(plugin));
-    const use=picked.images.map(radarFbLargestImage).filter(u=>radarShareImageScore(u)>=40000);
+    const use=radarFbRankImages(picked.images);
     if(use.length>images.length) images=use;
     if(images.length) break;
   }
@@ -3242,15 +3297,14 @@ async function radarFbShareMedia(link){
   for(const p of pages){
     const picked=radarSharePickFromText(p===link?shareText:await radarSharePageText(p));
     if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
-    const big=picked.images.map(radarFbLargestImage).filter(u=>radarShareImageScore(u)>=200000);
-    const use=big.length?big:picked.images.map(radarFbLargestImage).filter(u=>radarShareImageScore(u)>=40000);
+    const use=radarFbRankImages(picked.images);
     if(use.length>images.length) images=use;
   }
   if(!video && !images.some(u=>/cstp=mx1[0-9]{3}/i.test(u))){
     const extra=await radarFbEmbedImages(fbId, post||link);
     if(extra.length>images.length) images=extra;
   }
-  images=images.map(radarFbLargestImage);
+  images=radarFbRankImages(images).slice(0,6);
   return {video, images, login:loginOnly&&!video&&!images.length};
 }
 async function radarShareSaveBlob(blob,ext,kind){
@@ -3383,10 +3437,13 @@ async function radarIngestShare(raw){
       const media=await radarFbShareMedia(link);
       if(media.login) fbLogin=true;
       if(/\/share\/p\/|photo\.php|\/photos?\//i.test(link)){
-        if(media.images.length) media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-        else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
+        if(media.images.length){
+          for(const u of media.images.slice(0,6)) files.push(await radarFbDeliverImage(u));
+        }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
       }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
-      else media.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+      else {
+        for(const u of media.images.slice(0,6)) files.push(await radarFbDeliverImage(u));
+      }
     }else if(/instagram\.com/i.test(link)){
       const got=await radarIgShareFiles(link);
       if(got.length) got.forEach(f=>files.push(f));
@@ -4381,7 +4438,9 @@ function radarHighestImageUrl(url){
     try{s=hxSetTwimgName(s,'orig')}catch(e){s=s.replace(/([?&])name=[^&]*/i,'$1name=orig')}
     s=s.replace(/:(?:small|thumb|medium|large|360x360)(?=$|[?#])/i,':orig');
   }
-  if(/fbcdn\.net|scontent|cdninstagram/i.test(s)){
+  if(/fbcdn\.net|scontent/i.test(s) && !/cdninstagram/i.test(s)){
+    s=radarFbLargestImage(s);
+  }else if(/cdninstagram/i.test(s)){
     s=hxFbCdnUrl(s,2048);
   }
   if(/img\.youtube\.com/i.test(s)) s=s.replace(/\/(?:default|mqdefault|hqdefault|sddefault|hq720)\.jpg/i,'/maxresdefault.jpg');
