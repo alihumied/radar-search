@@ -3322,7 +3322,7 @@ async function radarFbShareMedia(link){
   let loginOnly=false;
   const take=j=>{
     const detail=typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||j.message||j.error||'');
-    if(/login\/\?next|registered users|only available for registered|private video|login required/i.test(detail)) loginOnly=true;
+    if(/login\/\?next|registered users|only available for registered|private video|login required|cannot parse data|video unavailable|don'?t have permission|no longer exist/i.test(detail)) loginOnly=true;
     const found=(detail.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||(detail.match(/story_fbid(?:=|%3D)(\d{8,})/i)||[])[1]||'';
     if(found) fbId=found;
     const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
@@ -3549,21 +3549,12 @@ async function radarIngestShare(raw){
   }catch(e){}
   }
   if(!files.length){
-    if(/facebook\.com|fb\.watch|fb\.com/i.test(link) && /\/share\/v\/|\/reels?\/|\/videos\/|\/watch|fb\.watch/i.test(link)){
-      say('⏳ فيسبوك ما سلّم الملف من الرابط. فتح الصفحة حتى ينتزعها السكربت من الحساب...');
-      const grabbed=await radarFbScriptGrab(link);
-      if(grabbed===true){
-        say('⬇️ بدأ تنزيل 1 ملف بأعلى جودة');
-        if(navigator.vibrate) navigator.vibrate(30);
-        return;
-      }
-      if(grabbed==='blocked'){
-        radarFbAskOpen(link);
-        return;
-      }
+    if(radarOpenInQuetta(link)){
+      say('⏳ ما انحمّل من رادار. جارٍ فتح الرابط في Quetta...');
+      return;
     }
     if(fbLogin){
-      say('⚠️ فيسبوك لا يسلّم هذا الفيديو إلا لحساب مسجّل. حدّث سكربت رادار في Quetta وشارك الرابط من نفس المتصفح وأنت داخل فيسبوك.');
+      say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
       return;
     }
     const longIg=/instagram\.com/i.test(link)&&((radarIgCanon(link).match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'').length>15;
@@ -3578,8 +3569,21 @@ async function radarIngestShare(raw){
     if(r&&r.ok) ok++;
     await new Promise(res=>setTimeout(res,350));
   }
-  say(ok?`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`:'⚠️ تعذّر حفظ الملف على الجهاز.');
-  if(ok&&navigator.vibrate) navigator.vibrate(30);
+  if(ok){
+    say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
+    if(navigator.vibrate) navigator.vibrate(30);
+  }else if(radarOpenInQuetta(link)){
+    say('⏳ تعذّر الحفظ من رادار. جارٍ فتح الرابط في Quetta...');
+  }else say('⚠️ تعذّر حفظ الملف على الجهاز.');
+}
+function radarOpenInQuetta(link){
+  const raw=String(link||'').trim();
+  if(!/^https?:\/\//i.test(raw)) return false;
+  if(!/Android/i.test(navigator.userAgent||'')) return false;
+  let target=raw.split('#')[0];
+  if(/facebook\.com|fb\.watch|fb\.com/i.test(target)) target+='#radar_grab=1';
+  const intent='intent:#Intent;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=net.quetta.browser;data='+encodeURIComponent(target)+';end';
+  try{ location.href=intent; return true; }catch(e){ return false; }
 }
 function radarShareQueryValue(name){
   const q=String(location.search||'').replace(/^\?/,'');
