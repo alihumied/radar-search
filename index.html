@@ -3267,9 +3267,22 @@ async function radarIgHostFile(code,n){
 }
 async function radarIgShareFiles(link){
   const canon=radarIgCanon(link);
-  const code=(canon.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'';
+  const m=canon.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
+  const kind=m?(m[1].toLowerCase()==='reels'?'reel':m[1].toLowerCase()):'reel';
+  const code=m?m[2]:'';
   if(!code) return [];
   const files=[];
+  if(code.length<=15){
+    const pages=['https://fxinstagram.com/'+kind+'/'+code+'/'];
+    if(kind!=='p') pages.push('https://fxinstagram.com/p/'+code+'/');
+    if(kind!=='reel') pages.push('https://fxinstagram.com/reel/'+code+'/');
+    for(const page of pages){
+      const picked=radarSharePickFromText(await radarSharePageText(page));
+      if(picked.video){files.push({url:picked.video,ext:'mp4',kind:'video'}); break}
+      if(picked.images.length){picked.images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'})); break}
+    }
+  }
+  if(files.length) return files;
   for(let n=1;n<=6;n++){
     const f=await radarIgHostFile(code,n);
     if(!f) break;
