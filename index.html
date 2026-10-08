@@ -3631,6 +3631,61 @@ function radarTikTokImageList(data){
   const raw=Array.isArray(data&&data.images)?data.images:[];
   return raw.map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u&&u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
 }
+function radarCrc32(bytes){
+  if(!radarCrc32.table){
+    const table=new Uint32Array(256);
+    for(let n=0;n<256;n++){
+      let c=n;
+      for(let k=0;k<8;k++) c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1);
+      table[n]=c>>>0;
+    }
+    radarCrc32.table=table;
+  }
+  let c=0xffffffff;
+  const table=radarCrc32.table;
+  for(let i=0;i<bytes.length;i++) c=table[(c^bytes[i])&255]^(c>>>8);
+  return (c^0xffffffff)>>>0;
+}
+async function radarStoreZip(entries){
+  const enc=new TextEncoder();
+  const parts=[];
+  const central=[];
+  let offset=0;
+  for(const entry of entries){
+    const name=enc.encode(entry.name);
+    const data=new Uint8Array(await entry.blob.arrayBuffer());
+    const crc=radarCrc32(data);
+    const local=new DataView(new ArrayBuffer(30));
+    local.setUint32(0,0x04034b50,true);
+    local.setUint16(4,20,true);
+    local.setUint16(8,0,true);
+    local.setUint32(14,crc,true);
+    local.setUint32(18,data.length,true);
+    local.setUint32(22,data.length,true);
+    local.setUint16(26,name.length,true);
+    const cen=new DataView(new ArrayBuffer(46));
+    cen.setUint32(0,0x02014b50,true);
+    cen.setUint16(4,20,true);
+    cen.setUint16(6,20,true);
+    cen.setUint16(10,0,true);
+    cen.setUint32(16,crc,true);
+    cen.setUint32(20,data.length,true);
+    cen.setUint32(24,data.length,true);
+    cen.setUint16(28,name.length,true);
+    cen.setUint32(42,offset,true);
+    parts.push(new Uint8Array(local.buffer),name,data);
+    central.push(new Uint8Array(cen.buffer),name);
+    offset+=30+name.length+data.length;
+  }
+  const cdSize=central.reduce((sum,part)=>sum+part.length,0);
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);
+  end.setUint16(8,entries.length,true);
+  end.setUint16(10,entries.length,true);
+  end.setUint32(12,cdSize,true);
+  end.setUint32(16,offset,true);
+  return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/zip'});
+}
 async function radarFetchImageBlob(url){
   const raw=String(url||'');
   const load=async u=>{
@@ -3680,15 +3735,14 @@ async function radarIngestShare(raw, ytMode){
       if(images.length){
         const blobs=[];
         for(const u of images.slice(0,20)){
-          const b=await radarFetchImageBlob(u);
-          if(b) blobs.push(b);
+          let blob=null;
+          for(let n=0;n<3 && !blob;n++) blob=await radarFetchImageBlob(u);
+          if(blob) blobs.push(blob);
         }
-        if(blobs.length>1&&typeof JSZip!=='undefined'){
-          const zip=new JSZip();
-          blobs.forEach((b,i)=>zip.file(who+'-'+(i+1)+'.jpg', b));
-          files.push({blob:await zip.generateAsync({type:'blob'}),ext:'zip',kind:'image',name:who});
+        if(blobs.length>1){
+          const packed=await radarStoreZip(blobs.map((blob,i)=>({name:who+'-'+(i+1)+'.jpg',blob})));
+          files.push({blob:packed,ext:'zip',kind:'image',name:who});
         }else if(blobs.length===1) files.push({blob:blobs[0],ext:'jpg',kind:'image',name:who});
-        else if(blobs.length) blobs.forEach((b,i)=>files.push({blob:b,ext:'jpg',kind:'image',name:blobs.length>1?who+'-'+(i+1):who}));
         else images.slice(0,20).forEach((u,i)=>{
           const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
           files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image',name:images.length>1?who+'-'+(i+1):who});
@@ -3768,7 +3822,7 @@ async function radarIngestShare(raw, ytMode){
   }
   if(!files.length){
     if(/tiktok\.com/i.test(link||'')){
-      say('⚠️ تيك توك ما رجّع الصور. أعد المشاركة بعد إيقاف VPN لحظة واحدة.');
+      say('');
       return;
     }
     if(radarOfferQuetta(link)) return;
@@ -3796,7 +3850,7 @@ async function radarIngestShare(raw, ytMode){
   if(ok){
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
-  }else if(/tiktok\.com/i.test(link||'')) say('⚠️ وصلت بيانات تيك توك لكن الحفظ على الجهاز ما اكتمل.');
+  }else if(/tiktok\.com/i.test(link||'')) say('');
   else if(!radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
 function radarQuettaIntent(link){
