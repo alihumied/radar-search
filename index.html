@@ -3604,21 +3604,39 @@ async function radarSnapShareFiles(link){
   }
   return files;
 }
-async function radarTikTokData(link){
-  const urls=[
-    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
-    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
-  ];
-  for(const u of urls){
-    try{
-      const res=await fetch(u,{credentials:'omit',signal:AbortSignal.timeout(12000)});
-      if(!res.ok) continue;
-      const j=await res.json();
+function radarTikTokRead(url){
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=v=>{ if(done) return; done=true; clearTimeout(timer); resolve(v||null); };
+    const ctrl=typeof AbortController==='function'?new AbortController():null;
+    const timer=setTimeout(()=>{ try{ctrl&&ctrl.abort();}catch(e){} finish(null); }, 8000);
+    const opt={credentials:'omit'};
+    if(ctrl) opt.signal=ctrl.signal;
+    fetch(url,opt).then(r=>r.ok?r.json():null).then(j=>{
       const data=j&&j.data;
-      if(data&&(data.id||data.images||data.play||data.hdplay)) return data;
-    }catch(e){}
-  }
-  return null;
+      finish(data&&(data.id||data.images||data.play||data.hdplay)?data:null);
+    }).catch(()=>finish(null));
+  });
+}
+async function radarTikTokData(link){
+  const q=encodeURIComponent(link);
+  const urls=[
+    'https://www.tikwm.com/api/?hd=1&url='+q,
+    'https://tikwm.com/api/?hd=1&url='+q
+  ];
+  return await new Promise(resolve=>{
+    let left=urls.length, best=null, done=false;
+    const end=v=>{ if(done) return; done=true; resolve(v||null); };
+    urls.forEach(u=>{
+      radarTikTokRead(u).then(data=>{
+        if(done||!data) return;
+        const images=Array.isArray(data.images)&&data.images.length;
+        const play=data.hdplay||data.play||'';
+        if(images||(play&&!/ies-music|music\.tiktokcdn/i.test(play))){ best=data; end(data); }
+        else if(!best) best=data;
+      }).finally(()=>{ if(--left===0) end(best); });
+    });
+  });
 }
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
@@ -3855,7 +3873,10 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
-    if(/tiktok\.com/i.test(link||'')) return;
+    if(/tiktok\.com/i.test(link||'')){
+      say('');
+      return;
+    }
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
