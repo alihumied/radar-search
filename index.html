@@ -3234,7 +3234,7 @@ async function radarSharePageText(link){
       if(!res.ok) continue;
       const t=await res.text();
       if(!t||t.length<180) continue;
-      if(/Error Facebook|something went wrong/i.test(t)&&!/scontent/i.test(t)) continue;
+      if(!/snapchat\.com/i.test(link)&&/Error Facebook|something went wrong/i.test(t)&&!/scontent/i.test(t)) continue;
       return t;
     }catch(e){}
   }
@@ -3539,21 +3539,13 @@ async function radarYtShareFiles(link, want){
   return [];
 }
 async function radarSnapShareFiles(link){
-  let page=String(link||'');
-  try{
-    const x=new URL(page);
-    if(/snapchat\.com$/i.test(x.hostname)&&/\/spotlight\/[^/]+$/i.test(x.pathname)){
-      x.pathname=x.pathname.replace(/\/$/,'')+'/embed';
-      x.search='';
-      page=x.toString();
-    }
-  }catch(e){}
+  const id=(String(link).match(/\/spotlight\/([A-Za-z0-9_-]{8,})/i)||[])[1]||'';
+  const page=id?('https://www.snapchat.com/spotlight/'+id+'/embed'):String(link||'');
   const html=await radarSharePageText(page);
   if(!html) return [];
   const block=(html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)||[])[1]||'';
   let data=null;
   try{ if(block) data=JSON.parse(block); }catch(e){}
-  const id=(String(link).match(/\/spotlight\/([A-Za-z0-9_-]{8,})/i)||[])[1]||'';
   const lists=[];
   (function walk(o){
     if(!o||typeof o!=='object') return;
