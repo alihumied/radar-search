@@ -3605,13 +3605,15 @@ async function radarSnapShareFiles(link){
   return files;
 }
 async function radarTikTokData(link){
+  const q='https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link);
   const urls=[
-    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
-    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
+    q,
+    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(q)
   ];
   for(const u of urls){
     try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
       if(!res.ok) continue;
       const j=await res.json();
       const data=j&&j.data;
@@ -3630,19 +3632,18 @@ function radarTikTokImageList(data){
   return raw.map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u&&u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
 }
 async function radarFetchImageBlob(url){
-  const tries=[String(url||'')];
-  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(url||'')){
-    tries.push('https://wsrv.nl/?url='+encodeURIComponent(String(url).replace(/^https?:\/\//i,''))+'&n=-1');
-    tries.push('https://corsmirror.com/v1?url='+encodeURIComponent(url));
-  }
-  for(const u of tries){
-    try{
-      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) continue;
-      const blob=await res.blob();
-      if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
-    }catch(e){}
-  }
+  const raw=String(url||'');
+  const load=async u=>{
+    const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
+    if(!res.ok) throw 0;
+    const blob=await res.blob();
+    if(!(blob&&blob.size>800&&await radarBlobOk(blob,'image'))) throw 0;
+    return blob;
+  };
+  const jobs=[load(raw)];
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) jobs.push(load('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1'));
+  try{ return await Promise.any(jobs); }catch(e){}
+  try{ return await load('https://corsmirror.com/v1?url='+encodeURIComponent(raw)); }catch(e){}
   return null;
 }
 async function radarIngestShare(raw, ytMode){
@@ -3658,6 +3659,7 @@ async function radarIngestShare(raw, ytMode){
     direct.slice(0,6).forEach(u=>files.push(radarShareIsVideoUrl(u)?{url:u,ext:'mp4',kind:'video'}:{url:typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u,ext:'jpg',kind:'image'}));
   }
   const link=links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtube\.com|youtu\.be|snapchat\.com/i.test(u))||links[0]||'';
+  if(/tiktok\.com|vt\.tiktok|vm\.tiktok/i.test(link)) files.length=0;
   if(!files.length&&link){
   try{
     if(/youtube\.com|youtu\.be/i.test(link)){
@@ -3765,6 +3767,10 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
+    if(/tiktok\.com/i.test(link||'')){
+      say('⚠️ تيك توك ما رجّع الصور. أعد المشاركة بعد إيقاف VPN لحظة واحدة.');
+      return;
+    }
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
@@ -3790,7 +3796,8 @@ async function radarIngestShare(raw, ytMode){
   if(ok){
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
-  }else if(!radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
+  }else if(/tiktok\.com/i.test(link||'')) say('⚠️ وصلت بيانات تيك توك لكن الحفظ على الجهاز ما اكتمل.');
+  else if(!radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
 function radarQuettaIntent(link){
   const raw=String(link||'').trim();
