@@ -3488,7 +3488,7 @@ function radarFileTitle(name, ext){
 }
 async function radarShareSave(url,ext,kind,post,name){
   try{
-    const src=(kind==='video'||kind==='audio')?url:radarFbLargestImage(url);
+    const src=(kind==='video'||kind==='audio'||/tiktokcdn|tiktokv|byteimg|muscdn/i.test(url||''))?url:radarFbLargestImage(url);
     const fetchKind=kind==='audio'?'audio':kind==='video'?'video':'image';
     const blob=await hxFetchMediaBlob(src,fetchKind);
     if(blob){
@@ -3763,7 +3763,7 @@ async function radarIngestShare(raw, ytMode){
       const playUrl=data.hdplay||data.play||'';
       const who=radarTikTokHandle(data);
       const music=/ies-music|music\.tiktokcdn/i.test(playUrl);
-      if(images.length){
+      if(images.length&&(music||!playUrl||!Number(data.duration))){
         say('⏳ جارٍ جلب صور تيك توك...');
         const blobs=(await Promise.all(images.slice(0,20).map(u=>radarFetchImageBlob(u)))).filter(Boolean);
         if(blobs.length>1){
@@ -3775,14 +3775,15 @@ async function radarIngestShare(raw, ytMode){
           radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
           return;
         }
-      }
-      if(playUrl&&!music){
+        images.slice(0,20).forEach((u,i)=>files.push({url:u,ext:'jpg',kind:'image',name:images.length>1?who+'-'+(i+1):who}));
+      }else if(playUrl&&!music){
         say('⏳ جارٍ جلب فيديو تيك توك...');
         const blob=await radarTikTokVideoBlob(playUrl);
         if(blob){
           radarOfferFile(blob, radarFileTitle(who,'mp4'));
           return;
         }
+        files.push({url:playUrl,ext:'mp4',kind:'video',name:who});
       }
     }else if(/(?:x|twitter)\.com/i.test(link)){
       const got=await radarXShareFiles(link);
@@ -3854,7 +3855,7 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
-    if(/tiktok\.com/i.test(link||'')){ say(''); return; }
+    if(/tiktok\.com/i.test(link||'')) return;
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
