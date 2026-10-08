@@ -3605,25 +3605,19 @@ async function radarSnapShareFiles(link){
   return files;
 }
 async function radarTikTokData(link){
-  const q='https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link);
   const urls=[
-    q,
-    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
-    'https://api.allorigins.win/raw?url='+encodeURIComponent(q)
+    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
+    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
   ];
-  return await new Promise(resolve=>{
-    let left=urls.length, done=false, video=null;
-    urls.forEach(u=>{
-      fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).then(j=>{
-        const data=j&&j.data;
-        if(done||!data) return;
-        if(Array.isArray(data.images)&&data.images.length){
-          done=true;
-          resolve(data);
-        }else if(data.hdplay||data.play) video=data;
-      }).catch(()=>{}).finally(()=>{ if(--left===0 && !done) resolve(video); });
-    });
-  });
+  for(const u of urls){
+    try{
+      const res=await fetch(u,{credentials:'omit'});
+      if(!res.ok) continue;
+      const j=await res.json();
+      if(j&&j.data) return j.data;
+    }catch(e){}
+  }
+  return null;
 }
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
@@ -3691,13 +3685,14 @@ async function radarStoreZip(entries){
 }
 async function radarFetchImageBlob(url){
   const raw=String(url||'');
-  const list=[];
-  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) list.push('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1');
-  list.push(raw);
-  if(!/corsmirror\.com/i.test(raw)) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(raw));
+  const list=[raw];
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)){
+    list.push('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1');
+    list.push('https://corsmirror.com/v1?url='+encodeURIComponent(raw));
+  }
   for(const u of list){
     try{
-      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(10000)});
+      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
       if(!res.ok) continue;
       const blob=await res.blob();
       if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
@@ -3752,19 +3747,19 @@ async function radarIngestShare(raw, ytMode){
       if(images.length){
         const blobs=[];
         for(const u of images.slice(0,20)){
-          let blob=null;
-          for(let n=0;n<3 && !blob;n++) blob=await radarFetchImageBlob(u);
+          const blob=await radarFetchImageBlob(u);
           if(blob) blobs.push(blob);
         }
         if(blobs.length>1){
           const packed=await radarStoreZip(blobs.map((blob,i)=>({name:who+'-'+(i+1)+'.jpg',blob})));
           radarOfferFile(packed, radarFileTitle(who,'zip'));
           return;
-        }else if(blobs.length===1){
+        }
+        if(blobs.length===1){
           radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
           return;
         }
-        else images.slice(0,20).forEach((u,i)=>{
+        images.slice(0,20).forEach((u,i)=>{
           const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
           files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image',name:images.length>1?who+'-'+(i+1):who});
         });
@@ -3842,6 +3837,7 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
+    if(/tiktok\.com/i.test(link||'')) return;
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
