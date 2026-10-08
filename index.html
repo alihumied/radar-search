@@ -3410,12 +3410,15 @@ async function radarFbShareMedia(link){
   images=radarFbRankImages(images).slice(0,6);
   return {video, silent:video, images, login:loginOnly&&!video&&!images.length};
 }
-async function radarShareSaveBlob(blob,ext,kind){
+async function radarShareSaveBlob(blob,ext,kind,name){
   try{
     if(kind==='video') blob=await radarMp4FastStart(blob);
-    if(!(await radarBlobOk(blob,kind))) return {ok:false};
+    if(ext==='zip'){
+      const head=await radarBytesText(blob,2);
+      if(head!=='PK'||!blob||blob.size<500) return {ok:false};
+    }else if(!(await radarBlobOk(blob,kind))) return {ok:false};
     const u=URL.createObjectURL(blob),a=document.createElement('a');
-    a.href=u;a.download=`radar-${kind}-${Date.now()}.${ext}`;
+    a.href=u;a.download=name?radarFileTitle(name,ext):`radar-${kind}-${Date.now()}.${ext}`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(u),20000);
     return {ok:true};
@@ -3601,6 +3604,47 @@ async function radarSnapShareFiles(link){
   }
   return files;
 }
+async function radarTikTokData(link){
+  const urls=[
+    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
+    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
+  ];
+  for(const u of urls){
+    try{
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const j=await res.json();
+      const data=j&&j.data;
+      if(data&&(data.id||data.images||data.play||data.hdplay)) return data;
+    }catch(e){}
+  }
+  return null;
+}
+function radarTikTokHandle(data){
+  const a=data&&data.author||{};
+  const h=String(a.unique_id||a.uniqueId||a.nickname||'').replace(/^@/,'').trim();
+  return h||String(data&&data.id||'tiktok');
+}
+function radarTikTokImageList(data){
+  const raw=Array.isArray(data&&data.images)?data.images:[];
+  return raw.map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u&&u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
+}
+async function radarFetchImageBlob(url){
+  const tries=[String(url||'')];
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(url||'')){
+    tries.push('https://wsrv.nl/?url='+encodeURIComponent(String(url).replace(/^https?:\/\//i,''))+'&n=-1');
+    tries.push('https://corsmirror.com/v1?url='+encodeURIComponent(url));
+  }
+  for(const u of tries){
+    try{
+      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const blob=await res.blob();
+      if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
+    }catch(e){}
+  }
+  return null;
+}
 async function radarIngestShare(raw, ytMode){
   const status=document.getElementById('imageSearchStatus');
   const say=t=>{if(status)status.textContent=t};
@@ -3626,24 +3670,31 @@ async function radarIngestShare(raw, ytMode){
       const got=await radarSnapShareFiles(link);
       got.forEach(f=>files.push(f));
     }else if(/tiktok\.com|vt\.tiktok|vm\.tiktok/i.test(link)){
-      const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),{credentials:'omit'});
-      const j=await res.json();
-      const data=j&&j.data||{};
-      const images=(Array.isArray(data.images)?data.images:[]).map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
+      say('⏳ جارٍ جلب صور تيك توك...');
+      const data=await radarTikTokData(link)||{};
+      const images=radarTikTokImageList(data);
       const playUrl=data.hdplay||data.play||'';
-      const photoPost=images.length>0;
-      const pushImages=()=>images.slice(0,20).forEach(u=>{
-        const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
-        files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image'});
-      });
-      if(photoPost){
-        say('⏳ جارٍ جلب صور تيك توك...');
-        pushImages();
-      }else if(playUrl){
+      const who=radarTikTokHandle(data);
+      if(images.length){
+        const blobs=[];
+        for(const u of images.slice(0,20)){
+          const b=await radarFetchImageBlob(u);
+          if(b) blobs.push(b);
+        }
+        if(blobs.length>1&&typeof JSZip!=='undefined'){
+          const zip=new JSZip();
+          blobs.forEach((b,i)=>zip.file(who+'-'+(i+1)+'.jpg', b));
+          files.push({blob:await zip.generateAsync({type:'blob'}),ext:'zip',kind:'image',name:who});
+        }else if(blobs.length===1) files.push({blob:blobs[0],ext:'jpg',kind:'image',name:who});
+        else if(blobs.length) blobs.forEach((b,i)=>files.push({blob:b,ext:'jpg',kind:'image',name:blobs.length>1?who+'-'+(i+1):who}));
+        else images.slice(0,20).forEach((u,i)=>{
+          const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
+          files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image',name:images.length>1?who+'-'+(i+1):who});
+        });
+      }else if(playUrl&&!/ies-music|music\.tiktokcdn/i.test(playUrl)){
         const play=await radarTikTokPlayUrl(playUrl,{ms:45000,noMirror:true});
         if(play) files.push({url:play,ext:'mp4',kind:'video'});
-        else pushImages();
-      }else pushImages();
+      }
     }else if(/(?:x|twitter)\.com/i.test(link)){
       const got=await radarXShareFiles(link);
       if(got.length) got.forEach(f=>files.push(f));
@@ -3732,7 +3783,7 @@ async function radarIngestShare(raw, ytMode){
   try{ if(radarFbGrabWin && !radarFbGrabWin.closed) radarFbGrabWin.close(); }catch(e){}
   radarFbGrabWin=null;
   for(const f of files){
-    const r=f.blob?await radarShareSaveBlob(f.blob,f.ext,f.kind):await radarShareSave(f.url,f.ext,f.kind,link,f.name);
+    const r=f.blob?await radarShareSaveBlob(f.blob,f.ext,f.kind,f.name):await radarShareSave(f.url,f.ext,f.kind,link,f.name);
     if(r&&r.ok) ok++;
     await new Promise(res=>setTimeout(res,350));
   }
@@ -3763,7 +3814,7 @@ function radarOfferQuetta(link){
     a.style.cssText='display:inline-block;margin-inline-start:8px;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
     status.appendChild(a);
   }
-  try{ location.href=intent; }catch(e){}
+  try{ if(!/tiktok\.com/i.test(String(link||''))) location.href=intent; }catch(e){}
   return true;
 }
 function radarShareQueryValue(name){
