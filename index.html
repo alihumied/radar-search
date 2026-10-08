@@ -3611,16 +3611,19 @@ async function radarTikTokData(link){
     'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
     'https://api.allorigins.win/raw?url='+encodeURIComponent(q)
   ];
-  for(const u of urls){
-    try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
-      if(!res.ok) continue;
-      const j=await res.json();
-      const data=j&&j.data;
-      if(data&&(data.id||data.images||data.play||data.hdplay)) return data;
-    }catch(e){}
-  }
-  return null;
+  return await new Promise(resolve=>{
+    let left=urls.length, done=false, video=null;
+    urls.forEach(u=>{
+      fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).then(j=>{
+        const data=j&&j.data;
+        if(done||!data) return;
+        if(Array.isArray(data.images)&&data.images.length){
+          done=true;
+          resolve(data);
+        }else if(data.hdplay||data.play) video=data;
+      }).catch(()=>{}).finally(()=>{ if(--left===0 && !done) resolve(video); });
+    });
+  });
 }
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
@@ -3688,18 +3691,32 @@ async function radarStoreZip(entries){
 }
 async function radarFetchImageBlob(url){
   const raw=String(url||'');
-  const load=async u=>{
-    const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
-    if(!res.ok) throw 0;
-    const blob=await res.blob();
-    if(!(blob&&blob.size>800&&await radarBlobOk(blob,'image'))) throw 0;
-    return blob;
-  };
-  const jobs=[load(raw)];
-  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) jobs.push(load('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1'));
-  try{ return await Promise.any(jobs); }catch(e){}
-  try{ return await load('https://corsmirror.com/v1?url='+encodeURIComponent(raw)); }catch(e){}
+  const list=[];
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) list.push('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1');
+  list.push(raw);
+  if(!/corsmirror\.com/i.test(raw)) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(raw));
+  for(const u of list){
+    try{
+      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(10000)});
+      if(!res.ok) continue;
+      const blob=await res.blob();
+      if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
+    }catch(e){}
+  }
   return null;
+}
+function radarOfferFile(blob, filename){
+  const status=document.getElementById('imageSearchStatus');
+  if(!status) return false;
+  const u=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=u;
+  a.download=filename;
+  a.textContent=filename;
+  a.style.cssText='display:inline-block;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
+  status.replaceChildren(a);
+  a.click();
+  return true;
 }
 async function radarIngestShare(raw, ytMode){
   const status=document.getElementById('imageSearchStatus');
@@ -3741,8 +3758,12 @@ async function radarIngestShare(raw, ytMode){
         }
         if(blobs.length>1){
           const packed=await radarStoreZip(blobs.map((blob,i)=>({name:who+'-'+(i+1)+'.jpg',blob})));
-          files.push({blob:packed,ext:'zip',kind:'image',name:who});
-        }else if(blobs.length===1) files.push({blob:blobs[0],ext:'jpg',kind:'image',name:who});
+          radarOfferFile(packed, radarFileTitle(who,'zip'));
+          return;
+        }else if(blobs.length===1){
+          radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
+          return;
+        }
         else images.slice(0,20).forEach((u,i)=>{
           const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
           files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image',name:images.length>1?who+'-'+(i+1):who});
@@ -3821,10 +3842,6 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
-    if(/tiktok\.com/i.test(link||'')){
-      say('');
-      return;
-    }
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
@@ -3850,8 +3867,7 @@ async function radarIngestShare(raw, ytMode){
   if(ok){
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
-  }else if(/tiktok\.com/i.test(link||'')) say('');
-  else if(!radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
+  }else if(!/tiktok\.com/i.test(link||'') && !radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
 function radarQuettaIntent(link){
   const raw=String(link||'').trim();
