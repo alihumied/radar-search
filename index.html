@@ -3538,6 +3538,39 @@ async function radarYtShareFiles(link, want){
   }
   return [];
 }
+async function radarSnapShareFiles(link){
+  const html=await radarSharePageText(link);
+  if(!html) return [];
+  const block=(html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)||[])[1]||'';
+  let data=null;
+  try{ if(block) data=JSON.parse(block); }catch(e){}
+  const id=(String(link).match(/\/(?:spotlight|highlight)\/([A-Za-z0-9_-]{8,})/i)||[])[1]||'';
+  const lists=[];
+  (function walk(o){
+    if(!o||typeof o!=='object') return;
+    if(Array.isArray(o.snapList)&&o.snapList.some(s=>s&&s.snapUrls&&s.snapUrls.mediaUrl)) lists.push(o.snapList);
+    (Array.isArray(o)?o:Object.values(o)).forEach(walk);
+  })(data||{});
+  let snaps=lists.find(a=>id&&a.some(s=>String((s.snapId&&s.snapId.value)||'')===id));
+  if(!snaps&&/spotlight|story\.snapchat|\/t\/|\/p\//i.test(link)) snaps=lists[0];
+  const files=[], seen=new Set();
+  (snaps||[]).slice(0,12).forEach(s=>{
+    const urls=s.snapUrls||{};
+    const media=typeof urls.mediaUrl==='string'?urls.mediaUrl:'';
+    const prev=urls.mediaPreviewUrl&&(urls.mediaPreviewUrl.value||urls.mediaPreviewUrl);
+    const video=s.snapMediaType===1||/\.27\./.test(media);
+    const src=video?media:(media||(typeof prev==='string'?prev:''));
+    if(!src||seen.has(src)) return;
+    seen.add(src);
+    const name=String(s.snapTitle||'').trim();
+    files.push(video?{url:src,ext:'mp4',kind:'video',name}:{url:src,ext:'jpg',kind:'image',name});
+  });
+  if(files.length) return files;
+  const raw=radarShareUnescape(html);
+  const bolt=(raw.match(/https?:\/\/(?:bolt-gcdn|cf-st)\.sc-cdn\.net\/[^"'\s<>]+?\.27\.[A-Za-z0-9]+\?[^"'\s<>]+/i)||[])[0];
+  if(bolt) return [{url:bolt,ext:'mp4',kind:'video'}];
+  return radarSharePickFromText(raw).images.filter(u=>/sc-cdn|story\.snapchat/i.test(u)).slice(0,6).map(u=>({url:u,ext:'jpg',kind:'image'}));
+}
 async function radarIngestShare(raw, ytMode){
   const status=document.getElementById('imageSearchStatus');
   const say=t=>{if(status)status.textContent=t};
@@ -3550,13 +3583,17 @@ async function radarIngestShare(raw, ytMode){
   if(direct.length){
     direct.slice(0,6).forEach(u=>files.push(radarShareIsVideoUrl(u)?{url:u,ext:'mp4',kind:'video'}:{url:typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u,ext:'jpg',kind:'image'}));
   }
-  const link=links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtube\.com|youtu\.be/i.test(u))||links[0]||'';
+  const link=links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtube\.com|youtu\.be|snapchat\.com/i.test(u))||links[0]||'';
   if(!files.length&&link){
   try{
     if(/youtube\.com|youtu\.be/i.test(link)){
       const want=ytMode==='ytmp3'?'audio':'video';
       say(want==='audio'?'⏳ جارٍ جلب MP3 من موسيقى يوتيوب...':'⏳ جارٍ جلب أعلى فيديو فيه صوت...');
       const got=await radarYtShareFiles(link, want);
+      got.forEach(f=>files.push(f));
+    }else if(/snapchat\.com/i.test(link)){
+      say('⏳ جارٍ جلب سناب شات بأعلى جودة...');
+      const got=await radarSnapShareFiles(link);
       got.forEach(f=>files.push(f));
     }else if(/tiktok\.com|vt\.tiktok|vm\.tiktok/i.test(link)){
       const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),{credentials:'omit'});
@@ -3799,7 +3836,7 @@ async function radarFbScriptGrab(link){
 }
 function radarSharePageLink(raw){
   const links=[...String(raw||'').matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m=>unwrapFacebookLink(m[0].replace(/[),.;]+$/,'')));
-  return links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu/i.test(u)&&!radarShareIsVideoUrl(u))
+  return links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu|snapchat\.com/i.test(u)&&!radarShareIsVideoUrl(u))
     || links.find(u=>/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(u))
     || links[0]
     || '';
@@ -3839,6 +3876,7 @@ function radarSharePlatformName(link){
   if(/facebook\.com|fb\.watch|fb\.com/i.test(u)) return 'فيسبوك';
   if(/tiktok\.com/i.test(u)) return 'تيك توك';
   if(/(?:^|\/\/|\.)(?:x|twitter)\.com/i.test(u)) return 'X';
+  if(/snapchat\.com/i.test(u)) return 'سناب شات';
   if(/youtu\.?be/i.test(u)) return 'يوتيوب';
   return '';
 }
@@ -5461,7 +5499,7 @@ async function hxFetchMediaBlob(src, kind){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
     if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
-  }else if(kind==='video'&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com/i.test(u)){
+  }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
   if(/savenow\.to/i.test(u)) urls.unshift('https://corsmirror.com/v1?url='+encodeURIComponent(u));
