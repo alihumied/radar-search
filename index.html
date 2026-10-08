@@ -3605,23 +3605,26 @@ async function radarSnapShareFiles(link){
   return files;
 }
 async function radarTikTokData(link){
+  const q=encodeURIComponent(link);
   const endpoints=[
-    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
-    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
+    'https://www.tikwm.com/api/?hd=1&url='+q,
+    'https://tikwm.com/api/?hd=1&url='+q
   ];
-  for(let attempt=0; attempt<3; attempt++){
-    try{
-      const r=await fetchWithTimeout(endpoints[attempt%endpoints.length], 20000, {credentials:'omit'});
-      if(!r.ok) throw 0;
-      const j=await r.json();
-      if(j&&j.code===-1){ await new Promise(res=>setTimeout(res,1400)); continue; }
-      const d=j&&j.data;
-      if(d&&(d.id||d.images||d.play||d.hdplay)) return d;
-    }catch(e){
-      await new Promise(res=>setTimeout(res,800));
-    }
+  const load=async u=>{
+    const r=await radarFetchTimed(u, 10000);
+    if(!r.ok) throw 0;
+    const j=await r.json();
+    if(j&&j.code===-1) throw 0;
+    const d=j&&j.data;
+    if(d&&(d.id||d.images||d.play||d.hdplay)) return d;
+    throw 0;
+  };
+  try{
+    return await Promise.any(endpoints.map(load));
+  }catch(e){
+    await new Promise(r=>setTimeout(r,1400));
+    try{ return await load(endpoints[0]); }catch(e2){ return null; }
   }
-  return null;
 }
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
@@ -3713,10 +3716,10 @@ async function radarTikTokVideoBlob(data){
   const play=data&&data.play&&!/ies-music|music\.tiktokcdn/i.test(data.play)?data.play:'';
   const hd=data&&data.hdplay&&!/ies-music|music\.tiktokcdn/i.test(data.hdplay)?data.hdplay:'';
   const urls=[];
-  if(id) urls.push('https://www.tikwm.com/video/media/play/'+id+'.mp4');
-  if(play) urls.push(play);
   if(id) urls.push('https://www.tikwm.com/video/media/hdplay/'+id+'.mp4');
   if(hd) urls.push(hd);
+  if(id) urls.push('https://www.tikwm.com/video/media/play/'+id+'.mp4');
+  if(play) urls.push(play);
   for(const u of urls){
     try{
       const res=await radarFetchTimed(u, 25000);
