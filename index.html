@@ -220,6 +220,14 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
         <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M24 7v18" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M15 19.5 24 28.5 33 19.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 36.5h24" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg></span>
         <span><b>تحميل فيديو</b><small>أعلى جودة فيها صوت</small></span>
       </button>
+      <button type="button" class="radar-share-opt download" id="radarShareFbSilent" hidden onclick="radarShareChoose('fbsilent')">
+        <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M24 7v18" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M15 19.5 24 28.5 33 19.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 36.5h24" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg></span>
+        <span><b>أعلى صيغة بلا صوت</b><small>أعلى دقة حتى لو الملف بلا صوت</small></span>
+      </button>
+      <button type="button" class="radar-share-opt audio" id="radarShareFbSound" hidden onclick="radarShareChoose('fbsound')">
+        <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M24 7v18" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M15 19.5 24 28.5 33 19.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 36.5h24" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/><path d="M33 12v6M36 10.5v9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+        <span><b>أعلى صيغة مع صوت</b><small>أعلى ملف فيه صورة وصوت معاً</small></span>
+      </button>
       <button type="button" class="radar-share-opt audio" id="radarShareYtAudio" hidden onclick="radarShareChoose('ytmp3')">
         <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M18 30V14l16-4v16" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="14" cy="30" r="4.2" fill="currentColor"/><circle cx="30" cy="26" r="4.2" fill="currentColor"/></svg></span>
         <span><b>تحميل MP3</b><small>من موسيقى يوتيوب لنفس الأغنية</small></span>
@@ -3152,8 +3160,10 @@ function radarFbVideoInfo(url){
     }
   }catch(e){}
   const hm=text.match(/\.(\d{3,4})\./)||text.match(/(\d{3,4})p/i);
+  const br=(text.match(/"bitrate":(\d+)/)||[])[1];
   return {
     h:hm?+hm[1]:0,
+    br:br?+br:0,
     audio:/heaac|_audio|audio_only/i.test(text),
     dash:/dash_/i.test(text)&&!/progressive/i.test(text),
     progressive:/progressive/i.test(text)
@@ -3174,6 +3184,17 @@ function radarBestProgressiveMp4(urls){
   const prog=rows.filter(r=>r.progressive&&!r.dash);
   const pool=prog.length?prog:rows;
   pool.sort((a,b)=>(b.h-a.h)||(radarShareVideoScore(b.url)-radarShareVideoScore(a.url)));
+  return pool[0]?pool[0].url:'';
+}
+function radarFbFmt(url, quality){
+  const info=radarFbVideoInfo(url);
+  const q=String(quality||'').match(/(\d{3,4})/);
+  return {url, h:Math.max(info.h||0, q?+q[1]:0), br:info.br||0, dash:!!info.dash, progressive:!!(info.progressive&&!info.dash), audio:!!info.audio};
+}
+function radarFbRank(rows, silent){
+  const vids=(rows||[]).filter(r=>r&&r.url&&!r.audio);
+  const pool=silent?vids:vids.filter(r=>r.progressive&&!r.dash);
+  pool.sort((a,b)=>(b.h-a.h)||((b.br||0)-(a.br||0)));
   return pool[0]?pool[0].url:'';
 }
 function radarShareVideoList(text){
@@ -3333,14 +3354,16 @@ async function radarFbEmbedImages(id, link){
 async function radarFbShareMedia(link){
   let fbId='';
   let loginOnly=false;
+  const rows=[];
   const take=j=>{
     const detail=typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||j.message||j.error||'');
     if(/login\/\?next|registered users|only available for registered|private video|login required|cannot parse data|video unavailable|don'?t have permission|no longer exist/i.test(detail)) loginOnly=true;
     const found=(detail.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||(detail.match(/story_fbid(?:=|%3D)(\d{8,})/i)||[])[1]||'';
     if(found) fbId=found;
-    const fmts=(Array.isArray(j.available_formats)?j.available_formats:[]).filter(f=>f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url));
-    const urls=[j.download_url].concat(fmts.map(f=>f.url));
-    return radarBestProgressiveMp4(urls);
+    if(j.download_url) rows.push(radarFbFmt(j.download_url, ''));
+    (Array.isArray(j.available_formats)?j.available_formats:[]).forEach(f=>{
+      if(f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url)) rows.push(radarFbFmt(f.url, f.quality));
+    });
   };
   const ask=async(url)=>{
     const res=await fetch('https://fdown.isuru.eu.org/download',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({url,quality:'best'})});
@@ -3348,25 +3371,27 @@ async function radarFbShareMedia(link){
   };
   try{
     const urls=[];
-    const first=take(await ask(link));
-    if(first) urls.push(first);
-    if(fbId && radarFbVideoInfo(radarBestProgressiveMp4(urls)).h<1080){
+    take(await ask(link));
+    if(fbId && (radarFbVideoInfo(radarFbRank(rows,false)).h||0)<1080){
       for(const alt of ['https://www.facebook.com/reel/'+fbId+'/','https://www.facebook.com/watch/?v='+fbId]){
-        try{ const more=take(await ask(alt)); if(more) urls.push(more); }catch(e){}
-        if(radarFbVideoInfo(radarBestProgressiveMp4(urls)).h>=1080) break;
+        try{ take(await ask(alt)); }catch(e){}
+        if((radarFbVideoInfo(radarFbRank(rows,false)).h||0)>=1080) break;
       }
     }
-    let video=radarBestProgressiveMp4(urls);
-    if(video && radarFbVideoInfo(video).h>=720) return {video, images:[], login:false};
-    const shareText=await radarSharePageText(link);
-    const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
-    const pages=[post, link, fbId?('https://www.facebook.com/plugins/video.php?href='+encodeURIComponent('https://www.facebook.com/reel/'+fbId+'/')):''].filter(Boolean);
-    for(const p of pages){
-      const text=p===link?shareText:await radarSharePageText(p);
-      radarShareVideoList(text).forEach(u=>urls.push(u));
+    let video=radarFbRank(rows,false);
+    let silent=radarFbRank(rows,true)||video;
+    if(!(video && radarFbVideoInfo(video).h>=720)){
+      const shareText=await radarSharePageText(link);
+      const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
+      const pages=[post, link, fbId?('https://www.facebook.com/plugins/video.php?href='+encodeURIComponent('https://www.facebook.com/reel/'+fbId+'/')):''].filter(Boolean);
+      for(const p of pages){
+        const text=p===link?shareText:await radarSharePageText(p);
+        radarShareVideoList(text).forEach(u=>rows.push(radarFbFmt(u,'')));
+      }
+      video=radarFbRank(rows,false)||video;
+      silent=radarFbRank(rows,true)||silent||video;
     }
-    video=radarBestProgressiveMp4(urls);
-    if(video) return {video, images:[], login:false};
+    if(video||silent) return {video:video||'', silent:silent||video||'', images:[], login:false};
   }catch(e){}
   const shareText=await radarSharePageText(link);
   const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
@@ -3383,7 +3408,7 @@ async function radarFbShareMedia(link){
     if(extra.length>images.length) images=extra;
   }
   images=radarFbRankImages(images).slice(0,6);
-  return {video, images, login:loginOnly&&!video&&!images.length};
+  return {video, silent:video, images, login:loginOnly&&!video&&!images.length};
 }
 async function radarShareSaveBlob(blob,ext,kind){
   try{
@@ -3631,7 +3656,15 @@ async function radarIngestShare(raw, ytMode){
     }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link)){
       const media=await radarFbShareMedia(link);
       if(media.login) fbLogin=true;
-      if(/\/share\/p\/|photo\.php|\/photos?\//i.test(link)){
+      if(ytMode==='fbsilent'){
+        say('⏳ جارٍ جلب أعلى صيغة حتى لو بلا صوت...');
+        const src=media.silent||media.video;
+        if(src) files.push({url:src,ext:'mp4',kind:'video'});
+      }else if(ytMode==='fbsound'){
+        say('⏳ جارٍ جلب أعلى صيغة فيها صوت...');
+        if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
+        else for(const u of media.images.slice(0,6)) files.push(await radarFbDeliverImage(u));
+      }else if(/\/share\/p\/|photo\.php|\/photos?\//i.test(link)){
         if(media.images.length){
           for(const u of media.images.slice(0,6)) files.push(await radarFbDeliverImage(u));
         }else if(media.video) files.push({url:media.video,ext:'mp4',kind:'video'});
@@ -3853,7 +3886,7 @@ function radarShareChoose(mode){
   document.body.style.overflow='';
   radarSharePending='';
   if(!raw||mode==='dismiss') return;
-  if(mode==='download'){
+  if(mode==='download'||mode==='fbsound'||mode==='fbsilent'){
     const page=radarSharePageLink(raw);
     if(/facebook\.com|fb\.watch|fb\.com/i.test(page) && /\/share\/v\/|\/reels?\/|\/videos\/|\/watch|fb\.watch/i.test(page)){
       try{ if(radarFbGrabWin && !radarFbGrabWin.closed) radarFbGrabWin.close(); }catch(e){}
@@ -3869,7 +3902,7 @@ function radarShareChoose(mode){
     runImageSearch();
     return;
   }
-  if(mode==='ytvideo'||mode==='ytmp3'){
+  if(mode==='ytvideo'||mode==='ytmp3'||mode==='fbsilent'||mode==='fbsound'){
     radarIngestShare(raw, mode);
     return;
   }
@@ -3898,13 +3931,19 @@ function handleSharedLink(){
   const plat=radarSharePlatformName(link);
   if(kick) kick.textContent=plat?('مشاركة من '+plat):'وصلت مشاركة إلى RADAR';
   const yt=/youtube\.com|youtu\.be/i.test(link);
+  const fb=/facebook\.com|fb\.watch|fb\.com/i.test(link);
   const gen=document.getElementById('radarShareDownload');
   const yv=document.getElementById('radarShareYtVideo');
   const ya=document.getElementById('radarShareYtAudio');
-  if(gen) gen.hidden=yt;
+  const fs=document.getElementById('radarShareFbSilent');
+  const fa=document.getElementById('radarShareFbSound');
+  if(gen) gen.hidden=yt||fb;
   if(yv) yv.hidden=!yt;
   if(ya) ya.hidden=!yt;
+  if(fs) fs.hidden=!fb;
+  if(fa) fa.hidden=!fb;
   if(kick&&yt) kick.textContent='تحميل يوتيوب للفيديو أو صوت MP3';
+  if(kick&&fb) kick.textContent='تحميل فيسبوك';
   const box=document.getElementById('radarShareChoice');
   if(box) box.hidden=false;
   document.body.style.overflow='hidden';
