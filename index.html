@@ -3614,7 +3614,8 @@ async function radarTikTokData(link){
       const res=await fetch(u,{credentials:'omit',signal:AbortSignal.timeout(12000)});
       if(!res.ok) continue;
       const j=await res.json();
-      if(j&&j.data) return j.data;
+      const data=j&&j.data;
+      if(data&&(data.id||data.images||data.play||data.hdplay)) return data;
     }catch(e){}
   }
   return null;
@@ -3700,6 +3701,23 @@ async function radarFetchImageBlob(url){
   if(got.length) return got[0].b;
   try{ return await load('https://corsmirror.com/v1?url='+encodeURIComponent(raw)); }catch(e){ return null; }
 }
+async function radarTikTokVideoBlob(playUrl){
+  const list=[String(playUrl||'')];
+  if(list[0]&&!/corsmirror\.com/i.test(list[0])) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(list[0]));
+  const load=async u=>{
+    const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
+    if(!res.ok) throw 0;
+    let blob=await res.blob();
+    if(!blob||blob.size<20000) throw 0;
+    const head=String.fromCharCode(...new Uint8Array(await blob.slice(0,24).arrayBuffer()));
+    if(/ftypM4A/i.test(head)) throw 0;
+    if(!head.includes('ftyp')) throw 0;
+    try{ blob=await radarMp4FastStart(blob); }catch(e){}
+    return blob;
+  };
+  const got=await Promise.all(list.map(u=>load(u).catch(()=>null)));
+  return got.find(Boolean)||null;
+}
 function radarOfferFile(blob, filename){
   const status=document.getElementById('imageSearchStatus');
   if(!status) return false;
@@ -3745,8 +3763,7 @@ async function radarIngestShare(raw, ytMode){
       const playUrl=data.hdplay||data.play||'';
       const who=radarTikTokHandle(data);
       const music=/ies-music|music\.tiktokcdn/i.test(playUrl);
-      const photo=images.length>0&&(!Number(data.duration)||music);
-      if(photo){
+      if(images.length){
         say('⏳ جارٍ جلب صور تيك توك...');
         const blobs=(await Promise.all(images.slice(0,20).map(u=>radarFetchImageBlob(u)))).filter(Boolean);
         if(blobs.length>1){
@@ -3758,20 +3775,13 @@ async function radarIngestShare(raw, ytMode){
           radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
           return;
         }
-      }else if(playUrl&&!music){
+      }
+      if(playUrl&&!music){
         say('⏳ جارٍ جلب فيديو تيك توك...');
-        const play=await radarTikTokPlayUrl(playUrl,{ms:20000});
-        if(play){
-          try{
-            const res=await fetch(play);
-            let blob=await res.blob();
-            if(blob&&blob.size>8000){
-              try{ blob=await radarMp4FastStart(blob); }catch(e){}
-              radarOfferFile(blob, radarFileTitle(who,'mp4'));
-              return;
-            }
-          }catch(e){}
-          files.push({url:play,ext:'mp4',kind:'video',name:who});
+        const blob=await radarTikTokVideoBlob(playUrl);
+        if(blob){
+          radarOfferFile(blob, radarFileTitle(who,'mp4'));
+          return;
         }
       }
     }else if(/(?:x|twitter)\.com/i.test(link)){
