@@ -3354,12 +3354,16 @@ async function radarFbEmbedImages(id, link){
 async function radarFbShareMedia(link){
   let fbId='';
   let loginOnly=false;
+  let page='', desc='';
   const rows=[];
   const take=j=>{
     const detail=typeof j.detail==='string'?j.detail:JSON.stringify(j.detail||j.message||j.error||'');
     if(/login\/\?next|registered users|only available for registered|private video|login required|cannot parse data|video unavailable|don'?t have permission|no longer exist/i.test(detail)) loginOnly=true;
     const found=(detail.match(/\[facebook\]\s+(\d{8,})/)||[])[1]||(detail.match(/story_fbid(?:=|%3D)(\d{8,})/i)||[])[1]||'';
     if(found) fbId=found;
+    const info=j.video_info||{};
+    if(!page && info.uploader) page=String(info.uploader);
+    if(!desc && info.title) desc=String(info.title);
     if(j.download_url) rows.push(radarFbFmt(j.download_url, ''));
     (Array.isArray(j.available_formats)?j.available_formats:[]).forEach(f=>{
       if(f&&f.url&&/\.mp4|mp4/i.test(String(f.ext||'')+f.url)) rows.push(radarFbFmt(f.url, f.quality));
@@ -3391,7 +3395,7 @@ async function radarFbShareMedia(link){
       video=radarFbRank(rows,false)||video;
       silent=radarFbRank(rows,true)||silent||video;
     }
-    if(video||silent) return {video:video||'', silent:silent||video||'', images:[], login:false};
+    if(video||silent) return {video:video||'', silent:silent||video||'', images:[], login:false, page, desc};
   }catch(e){}
   const shareText=await radarSharePageText(link);
   const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
@@ -3408,7 +3412,9 @@ async function radarFbShareMedia(link){
     if(extra.length>images.length) images=extra;
   }
   images=radarFbRankImages(images).slice(0,6);
-  return {video, silent:video, images, login:loginOnly&&!video&&!images.length};
+  if(!page) page=radarMeta(shareText,'og:title');
+  if(!desc) desc=radarMeta(shareText,'og:description');
+  return {video, silent:video, images, login:loginOnly&&!video&&!images.length, page, desc};
 }
 async function radarShareSaveBlob(blob,ext,kind,name){
   try{
@@ -3442,6 +3448,14 @@ async function radarIgShareFiles(link){
   const code=m?m[2]:'';
   if(!code) return [];
   const files=[];
+  let label='';
+  const note=text=>{
+    if(label||!text) return;
+    const title=radarMeta(text,'og:title').replace(/\s*[•|]\s*Instagram.*$/i,'').trim();
+    const user=(title.match(/^(.+?)\s+on Instagram/i)||[])[1]||'';
+    const cap=(title.match(/on Instagram:\s*"?([\s\S]+?)"?$/i)||[])[1]||'';
+    label=radarShareClipName(user, cap||radarMeta(text,'og:description')||title);
+  };
   const pushFile=(url,fileKind)=>{
     if(!url) return;
     let ext='jpg';
@@ -3455,7 +3469,9 @@ async function radarIgShareFiles(link){
   if(code.length<=15 && kind==='p'){
     const seen=new Set();
     for(let i=1;i<=20;i++){
-      const picked=radarSharePickFromText(await radarSharePageText('https://fxinstagram.com/p/'+code+'/?img_index='+i));
+      const text=await radarSharePageText('https://fxinstagram.com/p/'+code+'/?img_index='+i);
+      note(text);
+      const picked=radarSharePickFromText(text);
       const url=picked.video||picked.images[0]||'';
       if(!url) break;
       const key=(url.match(/\/(\d{6,})_/)||[])[1]||url.split('?')[0];
@@ -3468,19 +3484,41 @@ async function radarIgShareFiles(link){
     if(kind!=='p') pages.push('https://fxinstagram.com/p/'+code+'/');
     if(kind!=='reel') pages.push('https://fxinstagram.com/reel/'+code+'/');
     for(const page of pages){
-      const picked=radarSharePickFromText(await radarSharePageText(page));
+      const text=await radarSharePageText(page);
+      note(text);
+      const picked=radarSharePickFromText(text);
       if(picked.video){pushFile(picked.video,'video'); break}
       if(picked.images.length){picked.images.slice(0,6).forEach(u=>pushFile(u,'image')); break}
     }
   }
-  if(files.length) return files;
+  if(files.length){ radarNameFiles(files, label); return files; }
   for(let n=1;n<=6;n++){
     const f=await radarIgHostFile(code,n);
     if(!f) break;
     files.push(f);
     if(f.kind==='video') break;
   }
+  radarNameFiles(files, label);
   return files;
+}
+function radarMeta(text, key){
+  const s=String(text||'');
+  const a=s.match(new RegExp('<meta[^>]*(?:property|name)=["\']'+key+'["\'][^>]*content=["\']([^"\']*)','i'));
+  const b=s.match(new RegExp('<meta[^>]*content=["\']([^"\']*)["\'][^>]*(?:property|name)=["\']'+key+'["\']','i'));
+  const raw=(a&&a[1])||(b&&b[1])||'';
+  const el=document.createElement('textarea');
+  el.innerHTML=raw;
+  return el.value;
+}
+function radarShareClipName(who, desc){
+  const h=String(who||'').replace(/^@/,'').replace(/\s+/g,' ').trim();
+  let d=String(desc||'').replace(/\s+/g,' ').trim();
+  if(h&&d.toLowerCase().startsWith(h.toLowerCase())) d=d.slice(h.length).replace(/^[\s\-–:|]+/,'').trim();
+  return [h,d].filter(Boolean).join(' - ');
+}
+function radarNameFiles(list, label){
+  if(!label||!list.length) return;
+  list.forEach((f,i)=>{ if(!f.name) f.name=list.length>1?label+' '+(i+1):label; });
 }
 function radarFileTitle(name, ext){
   const base=String(name||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,90);
@@ -3774,6 +3812,7 @@ async function radarIngestShare(raw, ytMode){
       const data=await radarTikTokData(link)||{};
       const images=radarTikTokImageList(data);
       const who=radarTikTokHandle(data);
+      const clip=radarShareClipName(who, data.title);
       if(images.length){
         say('⏳ جارٍ جلب صور تيك توك...');
         const blobs=[];
@@ -3782,19 +3821,19 @@ async function radarIngestShare(raw, ytMode){
           if(blob) blobs.push(blob);
         }
         if(blobs.length>1){
-          const packed=await radarStoreZip(blobs.map((blob,i)=>({name:who+'-'+(i+1)+'.jpg',blob})));
-          radarOfferFile(packed, radarFileTitle(who,'zip'));
+          const packed=await radarStoreZip(blobs.map((blob,i)=>({name:radarFileTitle(blobs.length>1?clip+' '+(i+1):clip,'jpg'),blob})));
+          radarOfferFile(packed, radarFileTitle(clip,'zip'));
           return;
         }
         if(blobs.length===1){
-          radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
+          radarOfferFile(blobs[0], radarFileTitle(clip,'jpg'));
           return;
         }
         return;
       }
       say('⏳ جارٍ جلب فيديو تيك توك...');
       const blob=await radarTikTokVideoBlob(data);
-      if(blob) radarOfferFile(blob, radarFileTitle(who,'mp4'));
+      if(blob) radarOfferFile(blob, radarFileTitle(clip,'mp4'));
       return;
     }else if(/(?:x|twitter)\.com/i.test(link)){
       const got=await radarXShareFiles(link);
@@ -3826,6 +3865,7 @@ async function radarIngestShare(raw, ytMode){
       else {
         for(const u of media.images.slice(0,6)) files.push(await radarFbDeliverImage(u));
       }
+      radarNameFiles(files, radarShareClipName(media.page, media.desc));
     }else if(/instagram\.com/i.test(link)){
       const got=await radarIgShareFiles(link);
       if(got.length) got.forEach(f=>files.push(f));
@@ -3833,14 +3873,22 @@ async function radarIngestShare(raw, ytMode){
         const canon=radarIgCanon(link);
         const pages=[canon];
         try{const u=new URL(canon); if(!/\/embed\//.test(u.pathname)) pages.push(u.origin+u.pathname.replace(/\/$/,'')+'/embed/captioned/')}catch(e){}
-        let video='',images=[];
+        let video='',images=[],label='';
         for(const p of pages){
-          const picked=radarSharePickFromText(await radarSharePageText(p));
+          const text=await radarSharePageText(p);
+          if(!label){
+            const title=radarMeta(text,'og:title').replace(/\s*[•|]\s*Instagram.*$/i,'').trim();
+            const user=(title.match(/^(.+?)\s+on Instagram/i)||[])[1]||'';
+            const cap=(title.match(/on Instagram:\s*"?([\s\S]+?)"?$/i)||[])[1]||'';
+            label=radarShareClipName(user, cap||radarMeta(text,'og:description')||title);
+          }
+          const picked=radarSharePickFromText(text);
           if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
           if(picked.images.length>images.length) images=picked.images;
         }
         if(video) files.push({url:video,ext:'mp4',kind:'video'});
         else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+        radarNameFiles(files, label);
       }
     }else if(radarShareIsVideoUrl(link)){
       files.push({url:link,ext:'mp4',kind:'video'});
@@ -4700,8 +4748,15 @@ async function radarXShareFiles(link){
     }catch(e){}
   }
   if(!text) return [];
+  let label='';
+  try{
+    const j=JSON.parse(text);
+    const tw=j.tweet||{};
+    const author=tw.author||{};
+    label=radarShareClipName(author.screen_name||author.name||'', tw.text||tw.raw_text||'');
+  }catch(e){}
   const mp4=radarXBestMp4(text,'');
-  if(mp4) return [{url:mp4,ext:'mp4',kind:'video'}];
+  if(mp4) return [{url:mp4,ext:'mp4',kind:'video',name:label}];
   const files=[];
   const seen=new Set();
   const push=raw=>{
@@ -4723,6 +4778,7 @@ async function radarXShareFiles(link){
     const re=/https:\/\/pbs\.twimg\.com\/media\/[A-Za-z0-9_-]+(?:\.(?:jpe?g|png|webp))?(?:\?[^"'\s]*)?/gi;
     let m; while((m=re.exec(raw))) push(m[0]);
   }
+  radarNameFiles(files, label);
   return files.slice(0,6);
 }
 function openInlineSavedFocus(src, preview, savedId, album, index){
