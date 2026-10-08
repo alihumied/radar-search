@@ -3629,15 +3629,17 @@ async function radarIngestShare(raw, ytMode){
       const res=await fetch('https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),{credentials:'omit'});
       const j=await res.json();
       const data=j&&j.data||{};
-      const images=(Array.isArray(data.images)?data.images:[]).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
+      const images=(Array.isArray(data.images)?data.images:[]).map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
       const playUrl=data.hdplay||data.play||'';
-      const photoPost=images.length&&(!Number(data.duration)||/\/photo\//i.test(link)||/ies-music|music\.tiktokcdn/i.test(playUrl));
+      const photoPost=images.length>0;
       const pushImages=()=>images.slice(0,20).forEach(u=>{
         const e=(u.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg';
         files.push({url:u,ext:/jpeg/i.test(e)?'jpg':e.toLowerCase(),kind:'image'});
       });
-      if(photoPost) pushImages();
-      else if(playUrl){
+      if(photoPost){
+        say('⏳ جارٍ جلب صور تيك توك...');
+        pushImages();
+      }else if(playUrl){
         const play=await radarTikTokPlayUrl(playUrl,{ms:45000,noMirror:true});
         if(play) files.push({url:play,ext:'mp4',kind:'video'});
         else pushImages();
@@ -4844,7 +4846,8 @@ async function radarTikTokPlayUrl(url, opt){
       const head=await res.clone().arrayBuffer().then(b=>new Uint8Array(b.slice(0,32))).catch(()=>null);
       let blob=await res.blob();
       if(!blob||blob.size<80000) continue;
-      const mark=head?String.fromCharCode(...head.slice(0,16)):'';
+      const mark=head?String.fromCharCode(...head.slice(0,24)):'';
+      if(/ftypM4A|ftypisom/i.test(mark)&&/audio\/mp4|audio\/m4a/i.test(res.headers.get('content-type')||blob.type||'')) continue;
       if(!mark.includes('ftyp')&&!/video/i.test(res.headers.get('content-type')||blob.type||'')) continue;
       try{ if(typeof radarMp4FastStart==='function') blob=await radarMp4FastStart(blob); }catch(e){}
       const out=URL.createObjectURL(blob);
@@ -5542,7 +5545,7 @@ async function hxFetchMediaBlob(src, kind){
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
-    if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
+    if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com|tiktokcdn|tiktokv\.com|muscdn|byteimg/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
