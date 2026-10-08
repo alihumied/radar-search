@@ -3689,37 +3689,38 @@ async function radarStoreZip(entries){
 }
 async function radarFetchImageBlob(url){
   const raw=String(url||'');
-  const load=async u=>{
-    const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});
-    if(!res.ok) throw 0;
-    const blob=await res.blob();
-    if(!(blob&&blob.size>800&&await radarBlobOk(blob,'image'))) throw 0;
-    return blob;
-  };
-  const jobs=[load(raw).then(b=>({b,rank:0})).catch(()=>null)];
-  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)){
-    jobs.push(load('https://wsrv.nl/?url='+encodeURIComponent(raw.replace(/^https?:\/\//i,''))+'&n=-1').then(b=>({b,rank:1})).catch(()=>null));
+  const list=[];
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) list.push('https://wsrv.nl/?url='+encodeURIComponent(raw)+'&n=-1');
+  list.push(raw);
+  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(raw));
+  for(const u of list){
+    try{
+      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const blob=await res.blob();
+      if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
+    }catch(e){}
   }
-  const got=(await Promise.all(jobs)).filter(Boolean).sort((a,b)=>a.rank-b.rank);
-  if(got.length) return got[0].b;
-  try{ return await load('https://corsmirror.com/v1?url='+encodeURIComponent(raw)); }catch(e){ return null; }
+  return null;
 }
 async function radarTikTokVideoBlob(playUrl){
-  const list=[String(playUrl||'')];
-  if(list[0]&&!/corsmirror\.com/i.test(list[0])) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(list[0]));
-  const load=async u=>{
-    const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(12000)});
-    if(!res.ok) throw 0;
-    let blob=await res.blob();
-    if(!blob||blob.size<20000) throw 0;
-    const head=String.fromCharCode(...new Uint8Array(await blob.slice(0,24).arrayBuffer()));
-    if(/ftypM4A/i.test(head)) throw 0;
-    if(!head.includes('ftyp')) throw 0;
-    try{ blob=await radarMp4FastStart(blob); }catch(e){}
-    return blob;
-  };
-  const got=await Promise.all(list.map(u=>load(u).catch(()=>null)));
-  return got.find(Boolean)||null;
+  const raw=String(playUrl||'');
+  const list=[raw];
+  if(raw&&!/corsmirror\.com/i.test(raw)) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(raw));
+  for(const u of list){
+    try{
+      const res=await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      let blob=await res.blob();
+      if(!blob||blob.size<20000) continue;
+      const head=String.fromCharCode(...new Uint8Array(await blob.slice(0,16).arrayBuffer()));
+      if(/ftypM4A/i.test(head)) continue;
+      if(!head.includes('ftyp')) continue;
+      try{ blob=await radarMp4FastStart(blob); }catch(e){}
+      return blob;
+    }catch(e){}
+  }
+  return null;
 }
 function radarOfferFile(blob, filename){
   const status=document.getElementById('imageSearchStatus');
@@ -3768,7 +3769,11 @@ async function radarIngestShare(raw, ytMode){
       const music=/ies-music|music\.tiktokcdn/i.test(playUrl);
       if(images.length){
         say('⏳ جارٍ جلب صور تيك توك...');
-        const blobs=(await Promise.all(images.slice(0,20).map(u=>radarFetchImageBlob(u)))).filter(Boolean);
+        const blobs=[];
+        for(const u of images.slice(0,20)){
+          const blob=await radarFetchImageBlob(u);
+          if(blob) blobs.push(blob);
+        }
         if(blobs.length>1){
           const packed=await radarStoreZip(blobs.map((blob,i)=>({name:who+'-'+(i+1)+'.jpg',blob})));
           radarOfferFile(packed, radarFileTitle(who,'zip'));
@@ -3778,7 +3783,6 @@ async function radarIngestShare(raw, ytMode){
           radarOfferFile(blobs[0], radarFileTitle(who,'jpg'));
           return;
         }
-        images.slice(0,20).forEach((u,i)=>files.push({url:u,ext:'jpg',kind:'image',name:images.length>1?who+'-'+(i+1):who}));
       }else if(playUrl&&!music){
         say('⏳ جارٍ جلب فيديو تيك توك...');
         const blob=await radarTikTokVideoBlob(playUrl);
@@ -3786,8 +3790,8 @@ async function radarIngestShare(raw, ytMode){
           radarOfferFile(blob, radarFileTitle(who,'mp4'));
           return;
         }
-        files.push({url:playUrl,ext:'mp4',kind:'video',name:who});
       }
+      return;
     }else if(/(?:x|twitter)\.com/i.test(link)){
       const got=await radarXShareFiles(link);
       if(got.length) got.forEach(f=>files.push(f));
@@ -5654,6 +5658,8 @@ async function hxDownloadToDevice(src,ext,label,fallbackPostUrl,name){
     // HLS متعددة الأجزاء) ما بتفتح كفيديو مباشر بالتنقل العادي، فبهاي الحالة نرجع لفتح رابط المنشور.
     const deadT2=/\/o1\/v\/t2\//i.test(src||'')&&!/\.mp4(?:\?|$)/i.test(src||'');
     const isDirectMp4=/\.mp4(?:\?|$)/i.test(src||'')&&!deadT2&&!xvid;
+    const tiktokPage=/tiktok\.com/i.test(String(fallbackPostUrl||'')+' '+String(src||''));
+    if(tiktokPage) return {ok:false,openedPost:false};
     if(deadT2){
       if(fallbackPostUrl){window.open(fallbackPostUrl,'_blank','noopener');return {ok:false,openedPost:true}}
       return {ok:false,openedPost:false};
