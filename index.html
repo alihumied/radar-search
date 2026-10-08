@@ -3605,20 +3605,21 @@ async function radarSnapShareFiles(link){
   return files;
 }
 async function radarTikTokData(link){
-  const clean=(String(link||'').match(/https?:\/\/(?:[\w-]+\.)?tiktok\.com\/[^\s#]+/i)||[])[0]||String(link||'');
-  const q=encodeURIComponent(clean.replace(/[),.;]+$/,'').split('#')[0]);
-  const urls=[
-    'https://www.tikwm.com/api/?hd=1&url='+q,
-    'https://tikwm.com/api/?hd=1&url='+q
+  const endpoints=[
+    'https://www.tikwm.com/api/?hd=1&url='+encodeURIComponent(link),
+    'https://tikwm.com/api/?hd=1&url='+encodeURIComponent(link)
   ];
-  for(let i=0;i<urls.length;i++){
-    if(i) await new Promise(r=>setTimeout(r,1200));
+  for(let attempt=0; attempt<3; attempt++){
     try{
-      const res=await fetch(urls[i],{credentials:'omit',cache:'no-store'});
-      const j=await res.json();
-      const data=j&&j.data;
-      if(data&&(data.id||(Array.isArray(data.images)&&data.images.length)||data.play||data.hdplay)) return data;
-    }catch(e){}
+      const r=await fetchWithTimeout(endpoints[attempt%endpoints.length], 20000, {credentials:'omit'});
+      if(!r.ok) throw 0;
+      const j=await r.json();
+      if(j&&j.code===-1){ await new Promise(res=>setTimeout(res,1400)); continue; }
+      const d=j&&j.data;
+      if(d&&(d.id||d.images||d.play||d.hdplay)) return d;
+    }catch(e){
+      await new Promise(res=>setTimeout(res,800));
+    }
   }
   return null;
 }
@@ -3765,7 +3766,7 @@ async function radarIngestShare(raw, ytMode){
       const playUrl=data.hdplay||data.play||'';
       const who=radarTikTokHandle(data);
       const music=/ies-music|music\.tiktokcdn/i.test(playUrl);
-      if(images.length&&(music||!playUrl||!Number(data.duration))){
+      if(images.length){
         say('⏳ جارٍ جلب صور تيك توك...');
         const blobs=(await Promise.all(images.slice(0,20).map(u=>radarFetchImageBlob(u)))).filter(Boolean);
         if(blobs.length>1){
@@ -3857,10 +3858,7 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
-    if(/tiktok\.com/i.test(link||'')){
-      say('');
-      return;
-    }
+    if(/tiktok\.com/i.test(link||'')) return;
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
