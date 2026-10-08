@@ -3687,10 +3687,6 @@ async function radarIngestShare(raw, ytMode){
   }catch(e){}
   }
   if(!files.length){
-    if(/snapchat\.com/i.test(link||'')){
-      say('⚠️ سناب ما رجّع ملف هذا السبوتلايت. الصفحة العامة فاضية، فما في فيديو نحمّله.');
-      return;
-    }
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
@@ -3723,7 +3719,7 @@ function radarQuettaIntent(link){
   if(!/^https?:\/\//i.test(raw)) return '';
   let u;
   try{ u=new URL(raw.split('#')[0]); }catch(e){ return ''; }
-  if(/facebook\.com|fb\.watch|fb\.com/i.test(u.hostname)) u.searchParams.set('radar_grab','1');
+  if(/facebook\.com|fb\.watch|fb\.com|snapchat\.com/i.test(u.hostname)) u.searchParams.set('radar_grab','1');
   const scheme=u.protocol.replace(':','');
   return 'intent://'+u.host+u.pathname+u.search+'#Intent;scheme='+scheme+';package=net.quetta.browser;end';
 }
