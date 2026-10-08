@@ -3604,37 +3604,23 @@ async function radarSnapShareFiles(link){
   }
   return files;
 }
-function radarTikTokRead(url){
-  return new Promise(resolve=>{
-    let settled=false;
-    const done=v=>{ if(settled) return; settled=true; resolve(v||null); };
-    setTimeout(()=>done(null), 20000);
-    fetch(url,{credentials:'omit'}).then(r=>r.json()).then(j=>{
-      const data=j&&j.data;
-      done(data&&(data.id||(Array.isArray(data.images)&&data.images.length)||data.play||data.hdplay)?data:null);
-    }).catch(()=>done(null));
-  });
-}
 async function radarTikTokData(link){
-  const clean=String(link||'').replace(/[),.;]+$/,'').split('#')[0];
-  const q=encodeURIComponent(clean);
+  const clean=(String(link||'').match(/https?:\/\/(?:[\w-]+\.)?tiktok\.com\/[^\s#]+/i)||[])[0]||String(link||'');
+  const q=encodeURIComponent(clean.replace(/[),.;]+$/,'').split('#')[0]);
   const urls=[
     'https://www.tikwm.com/api/?hd=1&url='+q,
     'https://tikwm.com/api/?hd=1&url='+q
   ];
-  return await new Promise(resolve=>{
-    let left=urls.length, best=null, done=false;
-    const end=v=>{ if(done) return; done=true; resolve(v||null); };
-    urls.forEach(u=>{
-      radarTikTokRead(u).then(data=>{
-        if(done||!data) return;
-        const images=Array.isArray(data.images)&&data.images.length;
-        const play=data.hdplay||data.play||'';
-        if(images||(play&&!/ies-music|music\.tiktokcdn/i.test(play))){ best=data; end(data); }
-        else if(!best) best=data;
-      }).finally(()=>{ if(--left===0) end(best); });
-    });
-  });
+  for(let i=0;i<urls.length;i++){
+    if(i) await new Promise(r=>setTimeout(r,1200));
+    try{
+      const res=await fetch(urls[i],{credentials:'omit',cache:'no-store'});
+      const j=await res.json();
+      const data=j&&j.data;
+      if(data&&(data.id||(Array.isArray(data.images)&&data.images.length)||data.play||data.hdplay)) return data;
+    }catch(e){}
+  }
+  return null;
 }
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
