@@ -4134,6 +4134,10 @@ async function radarIngestShare(raw, ytMode){
   }
   if(!files.length){
     if(/tiktok\.com/i.test(link||'')) return;
+    if(ytMode==='fbsilent'||ytMode==='fbsound'){
+      radarOfferQuetta(link, ytMode==='fbsilent'?'فيسبوك ما سلّم نسخة بلا صوت. هذا الرابط يطلب تسجيل الدخول. ':'فيسبوك ما سلّم الفيديو. هذا الرابط يطلب تسجيل الدخول. ');
+      return;
+    }
     if(radarOfferQuetta(link)) return;
     if(fbLogin){
       say('⚠️ فيسبوك لا يسلّم هذا الريل إلا وأنت داخل الحساب. رابط المشاركة ما فيه الملف، فما يقدر رادار يحمّله.');
@@ -4172,20 +4176,20 @@ function radarQuettaIntent(link){
   const scheme=u.protocol.replace(':','');
   return 'intent://'+u.host+u.pathname+u.search+'#Intent;scheme='+scheme+';package=net.quetta.browser;end';
 }
-function radarOfferQuetta(link){
+function radarOfferQuetta(link, note){
   const intent=radarQuettaIntent(link);
   if(!intent || !/Android/i.test(navigator.userAgent||'')) return false;
+  radarClearProgress();
   const status=document.getElementById('imageSearchStatus');
   if(status){
     status.replaceChildren();
-    status.append('ما انحمّل من رادار. ');
+    status.append(note||'ما انحمّل من رادار. ');
     const a=document.createElement('a');
     a.href=intent;
     a.textContent='افتح في Quetta';
     a.style.cssText='display:inline-block;margin-inline-start:8px;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
     status.appendChild(a);
   }
-  try{ if(!/tiktok\.com/i.test(String(link||''))) location.href=intent; }catch(e){}
   return true;
 }
 function radarShareQueryValue(name){
@@ -4310,13 +4314,6 @@ function radarShareChoose(mode){
   document.body.style.overflow='';
   radarSharePending='';
   if(!raw||mode==='dismiss') return;
-  if(mode==='download'||mode==='fbsound'||mode==='fbsilent'){
-    const page=radarSharePageLink(raw);
-    if(/facebook\.com|fb\.watch|fb\.com/i.test(page) && /\/share\/v\/|\/reels?\/|\/videos\/|\/watch|fb\.watch/i.test(page)){
-      try{ if(radarFbGrabWin && !radarFbGrabWin.closed) radarFbGrabWin.close(); }catch(e){}
-      try{ radarFbGrabWin=window.open('about:blank','radar_fb_grab'); }catch(e){ radarFbGrabWin=null; }
-    }
-  }
   if(mode==='search'){
     const link=radarSharePageLink(raw);
     const input=document.getElementById('imageUrlInput');
