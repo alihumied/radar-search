@@ -3741,7 +3741,7 @@ async function radarFetchImageBlob(url){
     try{
       const res=await radarFetchRace(u, 15000);
       if(!res.ok) continue;
-      const blob=await res.blob();
+      const blob=await radarBlobFromResponse(res);
       if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
     }catch(e){}
   }
@@ -3759,7 +3759,7 @@ async function radarTikTokVideoBlob(data){
     try{
       const res=await radarFetchRace(u, 30000);
       if(!res.ok) continue;
-      let blob=await res.blob();
+      let blob=await radarBlobFromResponse(res);
       if(!blob||blob.size<20000) continue;
       const head=String.fromCharCode(...new Uint8Array(await blob.slice(0,32).arrayBuffer()));
       if(!head.includes('ftyp')||/ftypM4A/i.test(head)) continue;
@@ -3769,22 +3769,102 @@ async function radarTikTokVideoBlob(data){
   }
   return null;
 }
+let radarProgTimer=0, radarProgValue=0, radarProgLock=false;
+function radarPaintProgress(n){
+  const v=Math.max(0, Math.min(100, Math.round(Number(n)||0)));
+  radarProgValue=v;
+  const line=document.getElementById('radarFetchPct');
+  const fill=document.getElementById('radarFetchFill');
+  if(line) line.textContent='نسبة التحميل '+v+'%';
+  if(fill) fill.style.width=v+'%';
+}
+function radarShowProgress(text){
+  const status=document.getElementById('imageSearchStatus');
+  if(!status) return;
+  status.textContent='';
+  const msg=document.createElement('div');
+  msg.id='radarFetchMsg';
+  msg.textContent=text||'';
+  const line=document.createElement('div');
+  line.id='radarFetchPct';
+  line.style.cssText='margin-top:6px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:#9eecd2';
+  const track=document.createElement('div');
+  track.id='radarFetchTrack';
+  track.style.cssText='margin-top:6px;height:8px;border-radius:99px;background:#182230;overflow:hidden';
+  const fill=document.createElement('div');
+  fill.id='radarFetchFill';
+  fill.style.cssText='height:100%;width:0;background:linear-gradient(90deg,#3fd4ff,#3CBA86)';
+  track.appendChild(fill);
+  status.append(msg, line, track);
+  radarProgLock=false;
+  radarPaintProgress(1);
+  clearInterval(radarProgTimer);
+  radarProgTimer=setInterval(()=>{ if(!radarProgLock && radarProgValue<30) radarPaintProgress(radarProgValue+1); }, 450);
+}
+function radarNoteProgress(loaded, total){
+  radarProgLock=true;
+  const n=total>0?30+Math.round((loaded/total)*70):Math.min(96, radarProgValue+1);
+  radarPaintProgress(n);
+}
+function radarDoneProgress(){
+  clearInterval(radarProgTimer);
+  radarProgLock=true;
+  radarPaintProgress(100);
+}
+function radarClearProgress(){
+  clearInterval(radarProgTimer);
+  const line=document.getElementById('radarFetchPct');
+  const track=document.getElementById('radarFetchTrack');
+  if(line) line.remove();
+  if(track) track.remove();
+}
+async function radarBlobFromResponse(res){
+  const total=Number(res.headers.get('content-length'))||0;
+  if(!res.body||typeof res.body.getReader!=='function'){
+    const blob=await res.blob();
+    radarNoteProgress(blob.size, blob.size||total||1);
+    return blob;
+  }
+  const reader=res.body.getReader();
+  const chunks=[];
+  let loaded=0;
+  while(true){
+    const step=await reader.read();
+    if(step.done) break;
+    chunks.push(step.value);
+    loaded+=step.value.length;
+    radarNoteProgress(loaded, total);
+  }
+  return new Blob(chunks,{type:res.headers.get('content-type')||''});
+}
 function radarOfferFile(blob, filename){
   const status=document.getElementById('imageSearchStatus');
   if(!status) return false;
+  radarDoneProgress();
+  const msg=document.getElementById('radarFetchMsg');
   const u=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=u;
   a.download=filename;
   a.textContent=filename;
-  a.style.cssText='display:inline-block;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
-  status.replaceChildren(a);
+  a.style.cssText='display:inline-block;margin-top:8px;padding:8px 14px;border-radius:999px;background:#13301c;color:#d8ffe6;border:1px solid #7ee787;text-decoration:none;font:inherit';
+  if(msg){
+    msg.textContent='';
+    msg.appendChild(a);
+  }else if(status){
+    status.replaceChildren(a);
+  }
   a.click();
   return true;
 }
 async function radarIngestShare(raw, ytMode){
   const status=document.getElementById('imageSearchStatus');
-  const say=t=>{if(status)status.textContent=t};
+  const say=t=>{
+    const msg=document.getElementById('radarFetchMsg');
+    if(!msg) radarShowProgress(t);
+    else msg.textContent=t;
+    if(!t||String(t).includes('⚠️')) radarClearProgress();
+  };
   say('⏳ جارٍ جلب أعلى جودة من المشاركة...');
   const links=[...String(raw||'').matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m=>unwrapFacebookLink(m[0].replace(/[),.;]+$/,'')));
   const direct=[...new Set(links.filter(u=>radarShareIsVideoUrl(u)||/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(u)))];
@@ -3938,6 +4018,7 @@ async function radarIngestShare(raw, ytMode){
     await new Promise(res=>setTimeout(res,350));
   }
   if(ok){
+    radarDoneProgress();
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
   }else if(!/tiktok\.com/i.test(link||'') && !radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
@@ -5770,7 +5851,7 @@ async function hxFetchMediaBlob(src, kind){
       try{
         const res=await fetch(url,opt);
         if(!res.ok) continue;
-        const blob=await res.blob();
+        const blob=await radarBlobFromResponse(res);
         if(kind==='video'){
           const probe=new Uint8Array(await blob.slice(40,4040).arrayBuffer());
           let bad=0;
