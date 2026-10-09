@@ -3351,6 +3351,53 @@ async function radarFbEmbedImages(id, link){
   }
   return images;
 }
+async function radarFbSnapSave(link){
+  const src='https://snapsave.app/action.php?lang=en&url='+encodeURIComponent(link);
+  let captured='';
+  const code=await new Promise(resolve=>{
+    let settled=false;
+    const prevDec=decodeURIComponent;
+    const prevEval=window.eval;
+    const finish=()=>{
+      if(settled) return;
+      settled=true;
+      try{ decodeURIComponent=prevDec; }catch(e){}
+      try{ window.eval=prevEval; }catch(e){}
+      resolve(captured);
+    };
+    decodeURIComponent=function(s){
+      const out=prevDec(s);
+      if(typeof out==='string' && out.includes('rapidcdn.app')) captured=out;
+      return out;
+    };
+    window.eval=function(c){
+      const s=String(c||'');
+      if(s.includes('rapidcdn.app')) captured=s;
+      return 0;
+    };
+    const el=document.createElement('script');
+    el.src=src;
+    el.async=true;
+    el.onload=()=>setTimeout(finish, 400);
+    el.onerror=()=>finish();
+    document.head.appendChild(el);
+    setTimeout(()=>{ try{el.remove()}catch(e){} finish(); }, 18000);
+  });
+  const text=String(code||'');
+  const urls=[...text.matchAll(/https:\/\/d\.rapidcdn\.app\/v2\?token=[A-Za-z0-9_.\-]+/g)].map(m=>m[0]);
+  const labels=[...text.matchAll(/video-quality\\?"?>([^<\\]+)/g)].map(m=>m[1]);
+  const rows=[];
+  const seen=new Set();
+  urls.forEach((url,i)=>{
+    if(seen.has(url)) return;
+    seen.add(url);
+    const label=labels[i]||'';
+    const q=(label.match(/(\d{3,4})/)||[])[1];
+    const silent=/no\s*audio|without\s*sound|video only/i.test(label);
+    rows.push({url, h:q?+q:0, br:0, dash:silent, progressive:!silent, audio:false});
+  });
+  return rows;
+}
 async function radarFbShareMedia(link){
   let fbId='';
   let loginOnly=false;
@@ -3384,6 +3431,12 @@ async function radarFbShareMedia(link){
     }
     let video=radarFbRank(rows,false);
     let silent=radarFbRank(rows,true)||video;
+    if(!video && !silent){
+      try{ (await radarFbSnapSave(link)).forEach(r=>rows.push(r)); }catch(e){}
+      video=radarFbRank(rows,false)||video;
+      silent=radarFbRank(rows,true)||silent||video;
+      if(video||silent) return {video:video||'', silent:silent||video||'', images:[], login:false, page, desc, via:'snap'};
+    }
     if(!(video && radarFbVideoInfo(video).h>=720)){
       const shareText=await radarSharePageText(link);
       const post=radarFbPostFromText(shareText)||radarFbPostFromText(link);
@@ -4010,6 +4063,7 @@ async function radarIngestShare(raw, ytMode){
   direct.sort((a,b)=>radarShareVideoScore(b)-radarShareVideoScore(a));
   const files=[];
   let fbLogin=false;
+  let fbVia='';
   if(direct.length){
     direct.slice(0,6).forEach(u=>files.push(radarShareIsVideoUrl(u)?{url:u,ext:'mp4',kind:'video'}:{url:typeof radarHighestImageUrl==='function'?radarHighestImageUrl(u):u,ext:'jpg',kind:'image'}));
   }
@@ -4067,6 +4121,7 @@ async function radarIngestShare(raw, ytMode){
       }
     }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link)){
       const media=await radarFbShareMedia(link);
+      fbVia=media.via||'';
       if(media.login) fbLogin=true;
       if(ytMode==='fbsilent'){
         say('⏳ جارٍ جلب أعلى صيغة حتى لو بلا صوت...');
@@ -4164,6 +4219,24 @@ async function radarIngestShare(raw, ytMode){
     radarDoneProgress();
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
+  }else if(/facebook\.com|fb\.watch|fb\.com/i.test(link||'') && (ytMode==='fbsilent'||ytMode==='fbsound') && fbVia!=='snap'){
+    say('⏳ المصدر الأول لم يكتمل. جارٍ المصدر الثاني...');
+    let src='';
+    try{
+      const rows=await radarFbSnapSave(link);
+      const withSound=radarFbRank(rows,false);
+      const noSound=radarFbRank(rows,true)||withSound;
+      src=ytMode==='fbsilent'?(noSound||withSound):withSound;
+    }catch(e){}
+    if(src){
+      const r=await radarShareSave(src,'mp4','video',link);
+      if(r&&r.ok){
+        radarDoneProgress();
+        say('⬇️ بدأ تنزيل 1 ملف');
+        return;
+      }
+    }
+    radarOfferQuetta(link, 'المصدران لم يسلّما الملف.');
   }else if(/youtube\.com|youtu\.be/i.test(link||'')) say('⚠️ انقطع تحميل الملف الطويل قبل أن يكتمل. أعد المحاولة واترك النسبة حتى يكتمل الملف.');
   else if(!/tiktok\.com/i.test(link||'') && !radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
