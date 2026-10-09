@@ -3578,20 +3578,38 @@ function radarYtSongName(artist, title){
   return t||a;
 }
 async function radarYtReleaseInfo(id){
-  const html=await radarSharePageText('https://music.youtube.com/watch?v='+id);
-  const title=radarMeta(html,'og:title');
-  const desc=radarMeta(html,'og:description');
-  const year=(desc.match(/Released on:\s*(20\d{2})/)||[])[1]||'';
+  const html=await radarSharePageText('https://www.youtube.com/watch?v='+id);
+  const text=String(html||'').replace(/\\u00b7/g,'·');
+  const year=(text.match(/Released on:\s*(20\d{2})/)||text.match(/"publishDate"\s*:\s*"(20\d{2})/)||[])[1]||'';
+  let title=radarMeta(text,'og:title');
+  if(!title){
+    const m=text.match(/<title>([^<]{1,140})/i);
+    title=m?m[1].replace(/\s*[-–]\s*YouTube\s*$/i,'').trim():'';
+  }
   let artist='';
   if(title){
-    const at=desc.indexOf(title+' · ');
-    if(at>=0){
-      let rest=desc.slice(at+title.length+3).split('℗')[0].split('Released on')[0].trim();
+    const re=new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*·\\s*([^℗\\n"<]{2,80})');
+    const hit=text.match(re);
+    if(hit){
+      let rest=hit[1].trim();
       if(rest.toLowerCase().endsWith(title.toLowerCase())) rest=rest.slice(0, rest.length-title.length).trim();
       artist=rest;
     }
   }
   if(/^(release|topic)$/i.test(artist)) artist='';
+  if(!artist || !title){
+    try{
+      const res=await fetch('https://api.piped.private.coffee/search?filter=music_songs&q='+encodeURIComponent(title||id),{credentials:'omit'});
+      if(res.ok){
+        const j=await res.json();
+        const items=(j&&j.items)||[];
+        const hit=items.find(it=>it&&String(it.url||'').includes(id))||items[0];
+        const who=radarYtPerson(hit&&(hit.uploaderName||hit.uploader));
+        if(!artist && who) artist=who;
+        if(!title && hit&&hit.title) title=hit.title;
+      }
+    }catch(e){}
+  }
   return {title, artist, year};
 }
 function radarYtPerson(name){
@@ -3652,7 +3670,7 @@ async function radarYtAlbumPack(listId){
   const album=String(data.title||'').replace(/^album\s*-\s*/i,'').trim();
   const first=videos[0]||{};
   const info=first.videoId?await radarYtReleaseInfo(first.videoId):{};
-  const artist=info.artist||radarYtPerson(first.author)||'';
+  const artist=info.artist||radarYtPerson(data.author)||radarYtPerson(first.author)||'';
   const year=info.year||'';
   const entries=[];
   for(let i=0;i<Math.min(videos.length,20);i++){
@@ -3808,6 +3826,7 @@ async function radarStoreZip(entries){
     const local=new DataView(new ArrayBuffer(30));
     local.setUint32(0,0x04034b50,true);
     local.setUint16(4,20,true);
+    local.setUint16(6,0x800,true);
     local.setUint16(8,0,true);
     local.setUint32(14,crc,true);
     local.setUint32(18,data.length,true);
@@ -3817,6 +3836,7 @@ async function radarStoreZip(entries){
     cen.setUint32(0,0x02014b50,true);
     cen.setUint16(4,20,true);
     cen.setUint16(6,20,true);
+    cen.setUint16(8,0x800,true);
     cen.setUint16(10,0,true);
     cen.setUint32(16,crc,true);
     cen.setUint32(20,data.length,true);
