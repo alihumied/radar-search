@@ -3603,14 +3603,26 @@ async function radarYtReleaseInfo(id){
       if(res.ok){
         const j=await res.json();
         const items=(j&&j.items)||[];
-        const hit=items.find(it=>it&&String(it.url||'').includes(id))||items[0];
+        const hit=items.find(it=>it&&String(it.url||'').includes(id));
         const who=radarYtPerson(hit&&(hit.uploaderName||hit.uploader));
-        if(!artist && who) artist=who;
-        if(!title && hit&&hit.title) title=hit.title;
+        if(hit&&!artist&&who) artist=who;
+        if(hit&&!title&&hit.title) title=hit.title;
       }
     }catch(e){}
   }
   return {title, artist, year};
+}
+function radarYtSplitTitle(author, title){
+  let t=String(title||'').replace(/\s+/g,' ').trim();
+  t=t.replace(/\s*[\[(][^)\]]*(official|video|audio|lyrics|lyric|visualizer|mv|hd|4k)[^)\]]*[)\]]/ig,'').trim();
+  const authorClean=String(author||'').replace(/\s*-\s*topic$/i,'').trim();
+  const cut=t.match(/^(.+?)\s+[-–]\s+(.+)$/);
+  if(cut){
+    const left=cut[1].trim(), right=cut[2].trim();
+    const foldLeft=radarFold(left), foldA=radarFold(authorClean);
+    if(right&&left&&(!foldA||foldLeft.includes(foldA)||foldA.includes(foldLeft))) return {artist:/^(release|topic)$/i.test(left)?'':left, song:right};
+  }
+  return {artist:/^(release|topic)$/i.test(authorClean)?'':authorClean, song:t};
 }
 function radarYtPerson(name){
   const raw=String(name||'').replace(/\s*-\s*topic$/i,'').trim();
@@ -3702,20 +3714,16 @@ async function radarYtShareFiles(link, want){
   const page='https://www.youtube.com/watch?v='+id;
   if(want==='audio'){
     const info=await radarYtReleaseInfo(id);
-    let artist=info.artist, song=info.title, year=info.year, pageUrl=page;
-    if(!artist){
-      const music=await radarYtMusicUrl(page);
-      if(music.url){
-        pageUrl=music.url;
-        const mid=(music.url.match(/v=([A-Za-z0-9_-]{11})/)||[])[1]||'';
-        const info2=mid?await radarYtReleaseInfo(mid):{};
-        artist=info2.artist||radarYtPerson(music.artist);
-        song=info2.title||music.title||song;
-        year=info2.year||year;
-      }
-    }
-    let got=await radarYtLoader(pageUrl,'mp3');
-    if(!got.url && pageUrl!==page) got=await radarYtLoader(page,'mp3');
+    let oTitle='', oAuthor='';
+    try{
+      const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(page)),{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(res.ok){ const o=await res.json(); oTitle=o.title||''; oAuthor=o.author_name||''; }
+    }catch(e){}
+    const split=radarYtSplitTitle(oAuthor, oTitle||info.title||'');
+    const artist=(split.artist&&split.artist.length>(info.artist||'').length)?split.artist:(info.artist||split.artist);
+    const song=split.song||info.title||'';
+    const year=info.year||'';
+    const got=await radarYtLoader(page,'mp3');
     const base=radarYtSongName(artist, song||got.title);
     const name=year?base+' ('+year+')':base;
     return got.url?[{url:got.url,ext:'mp3',kind:'audio',name}]:[];
