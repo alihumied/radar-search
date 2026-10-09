@@ -3821,8 +3821,15 @@ function radarShowProgress(text){
 }
 function radarNoteProgress(loaded, total){
   radarProgLock=true;
-  const n=total>0?30+Math.round((loaded/total)*70):Math.min(96, radarProgValue+1);
+  const line=document.getElementById('radarFetchPct');
+  if(total>0){
+    radarPaintProgress(30+Math.round((loaded/total)*70));
+    return;
+  }
+  const mb=loaded/1048576;
+  const n=Math.min(95, 30+Math.round(Math.log2(mb+1)*16));
   radarPaintProgress(n);
+  if(line) line.textContent='جاري التحميل '+mb.toFixed(1)+' ميغابايت';
 }
 function radarDoneProgress(){
   clearInterval(radarProgTimer);
@@ -4039,7 +4046,8 @@ async function radarIngestShare(raw, ytMode){
     radarDoneProgress();
     say(`⬇️ بدأ تنزيل ${ok} ملف بأعلى جودة`);
     if(navigator.vibrate) navigator.vibrate(30);
-  }else if(!/tiktok\.com/i.test(link||'') && !radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
+  }else if(/youtube\.com|youtu\.be/i.test(link||'')) say('⚠️ انقطع تحميل الملف الطويل قبل أن يكتمل. أعد المحاولة واترك النسبة حتى يكتمل الملف.');
+  else if(!/tiktok\.com/i.test(link||'') && !radarOfferQuetta(link)) say('⚠️ تعذّر حفظ الملف على الجهاز.');
 }
 function radarQuettaIntent(link){
   const raw=String(link||'').trim();
@@ -5860,7 +5868,7 @@ async function hxFetchMediaBlob(src, kind){
   }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
-  if(/savenow\.to/i.test(u)) urls.unshift('https://corsmirror.com/v1?url='+encodeURIComponent(u));
+  if(/savenow\.to/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   const opts=kind==='video'
     ?[{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'},{mode:'cors',credentials:'omit'}]
     :[{mode:'cors',credentials:'omit'},{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'}];
