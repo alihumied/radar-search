@@ -3570,12 +3570,47 @@ function radarFold(s){return String(s||'').toLowerCase().normalize('NFD').replac
 function radarYtSongName(artist, title){
   let a=String(artist||'').replace(/\s*-\s*topic$/i,'').replace(/\s+/g,' ').trim();
   let t=String(title||'').replace(/\s+/g,' ').trim();
-  t=t.replace(/\s*[([].*?(official|video|audio|lyrics|lyric|visualizer|mv|hd|4k).*?[)\]]/ig,'').trim();
+  t=t.replace(/\s*[\[(][^)\]]*(official|video|audio|lyrics|lyric|visualizer|mv|hd|4k)[^)\]]*[)\]]/ig,'').trim();
   t=t.replace(/\s*-\s*(official music video|official video|official audio|lyrics|lyric video|audio).*$/i,'').trim();
+  if(/^release$/i.test(a)||/^topic$/i.test(a)) a='';
   if(a&&t.toLowerCase().startsWith(a.toLowerCase())) t=t.slice(a.length).replace(/^[\s\-–:|]+/,'').trim();
-  if(/^topic$/i.test(a)) a='';
   if(a&&t) return a+' - '+t;
   return t||a;
+}
+async function radarYtReleaseInfo(id){
+  const html=await radarSharePageText('https://music.youtube.com/watch?v='+id);
+  const title=radarMeta(html,'og:title');
+  const desc=radarMeta(html,'og:description');
+  const year=(desc.match(/Released on:\s*(20\d{2})/)||[])[1]||'';
+  let artist='';
+  if(title){
+    const at=desc.indexOf(title+' · ');
+    if(at>=0){
+      let rest=desc.slice(at+title.length+3).split('℗')[0].split('Released on')[0].trim();
+      if(rest.toLowerCase().endsWith(title.toLowerCase())) rest=rest.slice(0, rest.length-title.length).trim();
+      artist=rest;
+    }
+  }
+  if(/^(release|topic)$/i.test(artist)) artist='';
+  return {title, artist, year};
+}
+function radarYtPerson(name){
+  const raw=String(name||'').replace(/\s*-\s*topic$/i,'').trim();
+  const parts=raw.split('|').map(s=>s.trim()).filter(Boolean);
+  const latin=parts.find(s=>/[A-Za-z]/.test(s)&&!/^(release|topic)$/i.test(s));
+  const pick=latin||parts.find(s=>!/^(release|topic)$/i.test(s))||'';
+  return /^(release|topic)$/i.test(pick)?'':pick;
+}
+function radarYtTitleHit(videoTitle, artist, musicTitle){
+  let v=String(videoTitle||'').replace(/\s*[\[(][^)\]]*(official|video|audio|lyrics|lyric|visualizer|mv|hd|4k)[^)\]]*[)\]]/ig,' ');
+  v=v.replace(/\s*-\s*(official music video|official video|official audio|lyrics|lyric video|audio).*$/i,' ');
+  const a=String(artist||'').replace(/\s*-\s*topic$/i,'').trim();
+  if(a&&v.toLowerCase().startsWith(a.toLowerCase())) v=v.slice(a.length).replace(/^[\s\-–:|]+/,'');
+  const left=radarFold(v).replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').replace(/\s+/g,' ').trim();
+  const right=radarFold(musicTitle).replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!left||!right||right.length<5) return false;
+  if(left===right||(left.includes(right)&&right.length>=6)) return true;
+  return right.includes(left)&&left.length>=6&&right.length-left.length<=8;
 }
 async function radarYtMusicUrl(watchUrl){
   let title='', author='';
@@ -3591,11 +3626,12 @@ async function radarYtMusicUrl(watchUrl){
     if(!res.ok) return {url:'',title,artist};
     const j=await res.json();
     const items=(j&&j.items)||[];
-    const qt=radarFold(title);
+    const whoFold=radarFold(artist);
     const song=items.find(it=>{
-      const itTitle=radarFold(it&&it.title||'');
-      if(!it||!/watch\?v=/.test(it.url||'')||itTitle.length<12||qt.length<12) return false;
-      return qt.includes(itTitle)||itTitle.includes(qt.slice(0,28));
+      if(!it||!/watch\?v=/.test(it.url||'')) return false;
+      const up=radarFold(it.uploaderName||it.uploader||'').replace(/\btopic\b/g,'').trim();
+      const artistOk=whoFold&&up&&(whoFold.includes(up)||up.includes(whoFold));
+      return artistOk&&radarYtTitleHit(title, artist, it.title||'');
     });
     const id=song&&(String(song.url).match(/v=([A-Za-z0-9_-]{11})/)||[])[1];
     if(id){
@@ -3605,15 +3641,65 @@ async function radarYtMusicUrl(watchUrl){
   }catch(e){}
   return {url:'',title,artist};
 }
+async function radarYtAlbumPack(listId){
+  let data=null;
+  try{
+    const res=await fetch('https://inv.nadeko.net/api/v1/playlists/'+encodeURIComponent(listId),{credentials:'omit'});
+    if(res.ok) data=await res.json();
+  }catch(e){}
+  const videos=(data&&data.videos)||[];
+  if(videos.length<2) return null;
+  const album=String(data.title||'').replace(/^album\s*-\s*/i,'').trim();
+  const first=videos[0]||{};
+  const info=first.videoId?await radarYtReleaseInfo(first.videoId):{};
+  const artist=info.artist||radarYtPerson(first.author)||'';
+  const year=info.year||'';
+  const entries=[];
+  for(let i=0;i<Math.min(videos.length,20);i++){
+    const v=videos[i];
+    if(!v||!v.videoId) continue;
+    const msg=document.getElementById('radarFetchMsg');
+    if(msg) msg.textContent='⏳ جارٍ جلب الألبوم '+(i+1)+'/'+Math.min(videos.length,20)+'...';
+    const got=await radarYtLoader('https://music.youtube.com/watch?v='+v.videoId,'mp3');
+    if(!got.url) continue;
+    const blob=await hxFetchMediaBlob(got.url,'audio');
+    if(!blob) continue;
+    const who=radarYtPerson(v.author)||artist;
+    const base=radarYtSongName(who, v.title||got.title);
+    entries.push({name:String(i+1).padStart(2,'0')+' '+radarFileTitle(year?base+' ('+year+')':base,'mp3'), blob});
+  }
+  if(entries.length<2) return null;
+  const packed=await radarStoreZip(entries);
+  const label=radarYtSongName(artist, album||'album');
+  return {blob:packed, ext:'zip', kind:'audio', name:year?label+' ('+year+')':label};
+}
 async function radarYtShareFiles(link, want){
+  const list=(String(link).match(/[?&]list=(OLAK5uy_[A-Za-z0-9_-]+)/)||[])[1]||'';
+  if(want==='audio' && list && /playlist|\/browse\//i.test(link)){
+    const packed=await radarYtAlbumPack(list);
+    if(packed) return [packed];
+  }
   const id=radarYtId(link);
   if(!id) return [];
   const page='https://www.youtube.com/watch?v='+id;
   if(want==='audio'){
-    const music=await radarYtMusicUrl(page);
-    let got=music.url?await radarYtLoader(music.url,'mp3'):{url:'',title:''};
-    if(!got.url) got=await radarYtLoader(page,'mp3');
-    const name=radarYtSongName(music.artist, music.title||got.title);
+    const info=await radarYtReleaseInfo(id);
+    let artist=info.artist, song=info.title, year=info.year, pageUrl=page;
+    if(!artist){
+      const music=await radarYtMusicUrl(page);
+      if(music.url){
+        pageUrl=music.url;
+        const mid=(music.url.match(/v=([A-Za-z0-9_-]{11})/)||[])[1]||'';
+        const info2=mid?await radarYtReleaseInfo(mid):{};
+        artist=info2.artist||radarYtPerson(music.artist);
+        song=info2.title||music.title||song;
+        year=info2.year||year;
+      }
+    }
+    let got=await radarYtLoader(pageUrl,'mp3');
+    if(!got.url && pageUrl!==page) got=await radarYtLoader(page,'mp3');
+    const base=radarYtSongName(artist, song||got.title);
+    const name=year?base+' ('+year+')':base;
     return got.url?[{url:got.url,ext:'mp3',kind:'audio',name}]:[];
   }
   for(const fmt of ['1440','1080','720']){
