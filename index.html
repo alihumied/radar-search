@@ -3567,25 +3567,39 @@ async function radarYtLoader(page, format){
   return {url:'',title};
 }
 function radarFold(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i')}
+function radarYtSongName(artist, title){
+  let a=String(artist||'').replace(/\s*-\s*topic$/i,'').replace(/\s+/g,' ').trim();
+  let t=String(title||'').replace(/\s+/g,' ').trim();
+  t=t.replace(/\s*[([].*?(official|video|audio|lyrics|lyric|visualizer|mv|hd|4k).*?[)\]]/ig,'').trim();
+  t=t.replace(/\s*-\s*(official music video|official video|official audio|lyrics|lyric video|audio).*$/i,'').trim();
+  if(a&&t.toLowerCase().startsWith(a.toLowerCase())) t=t.slice(a.length).replace(/^[\s\-–:|]+/,'').trim();
+  if(/^topic$/i.test(a)) a='';
+  if(a&&t) return a+' - '+t;
+  return t||a;
+}
 async function radarYtMusicUrl(watchUrl){
   let title='', author='';
   try{
     const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(watchUrl)),{credentials:'omit',referrerPolicy:'no-referrer'});
     if(res.ok){ const o=await res.json(); title=o.title||''; author=o.author_name||''; }
   }catch(e){}
+  const artist=String(author||'').replace(/\s*-\s*topic$/i,'').trim();
   const q=((author+' '+title).replace(/\([^)]*\)/g,' ').replace(/official music video|official video|lyrics|audio/ig,' ')).replace(/\s+/g,' ').trim();
-  if(!q) return {url:'',title};
+  if(!q) return {url:'',title,artist};
   try{
     const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent('https://api.piped.private.coffee/search?filter=music_songs&q='+encodeURIComponent(q)),{credentials:'omit',referrerPolicy:'no-referrer'});
-    if(!res.ok) return {url:'',title};
+    if(!res.ok) return {url:'',title,artist};
     const j=await res.json();
     const items=(j&&j.items)||[];
     const fold=radarFold(title+' '+author);
-    const song=items.find(it=>it&&/watch\?v=/.test(it.url||'')&&fold.includes(radarFold(it.title||'').slice(0,6)))||items.find(it=>it&&/watch\?v=/.test(it.url||'')&&radarFold(author).includes(radarFold(it.uploaderName||'').slice(0,4)));
+    const song=items.find(it=>it&&/watch\?v=/.test(it.url||'')&&fold.includes(radarFold(it.title||'').slice(0,6)))||items.find(it=>it&&/watch\?v=/.test(it.url||'')&&radarFold(author).includes(radarFold(it.uploaderName||it.uploader||'').slice(0,4)));
     const id=song&&(String(song.url).match(/v=([A-Za-z0-9_-]{11})/)||[])[1];
-    if(id) return {url:'https://music.youtube.com/watch?v='+id, title:song.title||title};
+    if(id){
+      const who=String(song.uploaderName||song.uploader||artist).replace(/\s*-\s*topic$/i,'').trim();
+      return {url:'https://music.youtube.com/watch?v='+id, title:song.title||title, artist:who||artist};
+    }
   }catch(e){}
-  return {url:'',title};
+  return {url:'',title,artist};
 }
 async function radarYtShareFiles(link, want){
   const id=radarYtId(link);
@@ -3595,7 +3609,7 @@ async function radarYtShareFiles(link, want){
     const music=await radarYtMusicUrl(page);
     let got=music.url?await radarYtLoader(music.url,'mp3'):{url:'',title:''};
     if(!got.url) got=await radarYtLoader(page,'mp3');
-    const name=got.title||music.title;
+    const name=radarYtSongName(music.artist, music.title||got.title);
     return got.url?[{url:got.url,ext:'mp3',kind:'audio',name}]:[];
   }
   for(const fmt of ['1440','1080','720']){
