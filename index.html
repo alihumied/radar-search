@@ -3591,8 +3591,12 @@ async function radarYtMusicUrl(watchUrl){
     if(!res.ok) return {url:'',title,artist};
     const j=await res.json();
     const items=(j&&j.items)||[];
-    const fold=radarFold(title+' '+author);
-    const song=items.find(it=>it&&/watch\?v=/.test(it.url||'')&&fold.includes(radarFold(it.title||'').slice(0,6)))||items.find(it=>it&&/watch\?v=/.test(it.url||'')&&radarFold(author).includes(radarFold(it.uploaderName||it.uploader||'').slice(0,4)));
+    const qt=radarFold(title);
+    const song=items.find(it=>{
+      const itTitle=radarFold(it&&it.title||'');
+      if(!it||!/watch\?v=/.test(it.url||'')||itTitle.length<12||qt.length<12) return false;
+      return qt.includes(itTitle)||itTitle.includes(qt.slice(0,28));
+    });
     const id=song&&(String(song.url).match(/v=([A-Za-z0-9_-]{11})/)||[])[1];
     if(id){
       const who=String(song.uploaderName||song.uploader||artist).replace(/\s*-\s*topic$/i,'').trim();
