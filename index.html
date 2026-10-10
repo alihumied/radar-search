@@ -3462,21 +3462,6 @@ async function radarIgHostFile(code,n){
   if(head.charCodeAt(0)===0xFF||head.startsWith('\x89P')||head.startsWith('RIFF')||head.startsWith('GIF')) return {blob,ext:'jpg',kind:'image'};
   return null;
 }
-async function radarIgOembedName(code){
-  if(!code) return '';
-  const api='https://www.instagram.com/api/v1/oembed/?url='+encodeURIComponent('https://www.instagram.com/reel/'+code+'/');
-  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(api), api]){
-    try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) continue;
-      const j=await res.json();
-      const user=String(j.author_name||'').replace(/^@/,'').trim();
-      const cap=String(j.title||'').replace(/\s+/g,' ').trim();
-      if(user||cap) return radarShareClipName(user, cap);
-    }catch(e){}
-  }
-  return '';
-}
 async function radarIgShareFiles(link){
   const canon=radarIgCanon(link);
   const m=canon.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
@@ -3526,10 +3511,6 @@ async function radarIgShareFiles(link){
       if(picked.video){pushFile(picked.video,'video'); break}
       if(picked.images.length){picked.images.slice(0,6).forEach(u=>pushFile(u,'image')); break}
     }
-  }
-  if(code){
-    const named=await radarIgOembedName(code);
-    if(named) label=named;
   }
   if(files.length){ radarNameFiles(files, label); return files; }
   for(let n=1;n<=6;n++){
@@ -3831,9 +3812,45 @@ function radarTikTokHandle(data){
   const h=String(a.unique_id||a.uniqueId||a.nickname||'').replace(/^@/,'').trim();
   return h||String(data&&data.id||'tiktok');
 }
+function radarTikTokPickUrl(list){
+  const urls=(list||[]).filter(u=>typeof u==='string'&&/^https?:/i.test(u)&&!/avatar|emoji|sticker/i.test(u));
+  const score=u=>/shrink|cropcenter|:q\d+/i.test(u)?0:(/photomode-image|origin\.image/i.test(u)?3:1);
+  urls.sort((a,b)=>score(b)-score(a)||b.length-a.length);
+  return urls[0]||'';
+}
 function radarTikTokImageList(data){
   const raw=Array.isArray(data&&data.images)?data.images:[];
-  return raw.map(u=>typeof u==='string'?u:(u&&(u.url||u.src||(Array.isArray(u&&u.url_list)?u.url_list[0]:'')))).filter(u=>typeof u==='string'&&/^https?:/i.test(u));
+  return raw.map(u=>{
+    if(typeof u==='string') return u;
+    const lists=[];
+    if(u&&Array.isArray(u.url_list)) lists.push(...u.url_list);
+    if(u&&Array.isArray(u.urlList)) lists.push(...u.urlList);
+    if(u&&u.url) lists.push(u.url);
+    if(u&&u.src) lists.push(u.src);
+    return radarTikTokPickUrl(lists);
+  }).filter(u=>/^https?:/i.test(u||''));
+}
+function radarTikTokImageUrls(url){
+  const raw=String(url||'');
+  const out=[];
+  const add=u=>{ if(u&&/^https?:/i.test(u)&&!out.includes(u)) out.push(u); };
+  add(raw.replace(/~tplv-[a-z0-9]+-(?:shrink|cropcenter(?:-q)?)[^~/?]*/i,'~tplv-photomode-image'));
+  add(raw);
+  return out;
+}
+function radarJpegArea(bytes){
+  const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+  let i=2;
+  while(i<b.length-9){
+    if(b[i]!==255){ i++; continue; }
+    const m=b[i+1];
+    if(m===192||m===193||m===194) return ((b[i+5]<<8)|b[i+6])*((b[i+7]<<8)|b[i+8]);
+    if(m===216||m===217){ i+=2; continue; }
+    const len=(b[i+2]<<8)|b[i+3];
+    if(!len) break;
+    i+=2+len;
+  }
+  return 0;
 }
 function radarCrc32(bytes){
   if(!radarCrc32.table){
@@ -3894,18 +3911,29 @@ async function radarStoreZip(entries){
 }
 async function radarFetchImageBlob(url){
   const raw=String(url||'');
+  const tiktok=/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw);
+  const bases=tiktok?radarTikTokImageUrls(raw):[raw];
   const list=[];
-  if(/tiktokcdn|tiktokv|byteimg|muscdn/i.test(raw)) list.push('https://wsrv.nl/?url='+encodeURIComponent(raw)+'&n=-1');
-  list.push(raw);
+  bases.forEach(u=>{
+    list.push(u);
+    if(tiktok) list.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
+  });
+  if(tiktok) list.push('https://wsrv.nl/?url='+encodeURIComponent(raw)+'&n=-1');
+  let best=null, bestArea=-1;
   for(const u of list){
     try{
       const res=await radarFetchRace(u, 15000);
       if(!res.ok) continue;
       const blob=await radarBlobFromResponse(res);
-      if(blob&&blob.size>800&&await radarBlobOk(blob,'image')) return blob;
+      if(!blob||blob.size<800||!(await radarBlobOk(blob,'image'))) continue;
+      const head=new Uint8Array(await blob.slice(0,65536).arrayBuffer());
+      const area=radarJpegArea(head)||blob.size;
+      const proxy=/wsrv\.nl/i.test(u);
+      if(area>bestArea){ best=blob; bestArea=area; }
+      if(!proxy&&area>800*800) return blob;
     }catch(e){}
   }
-  return null;
+  return best;
 }
 async function radarTikTokVideoBlob(data){
   const id=String(data&&data.id||'');
@@ -4155,10 +4183,6 @@ async function radarIngestShare(raw, ytMode){
         }
         if(video) files.push({url:video,ext:'mp4',kind:'video'});
         else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-        if(!label){
-          const code=(canon.match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'';
-          label=await radarIgOembedName(code);
-        }
         radarNameFiles(files, label);
       }
     }else if(radarShareIsVideoUrl(link)){
@@ -5784,8 +5808,9 @@ async function hxFetchMediaBlob(src, kind){
   const urls=[u];
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
+    if(/tiktokcdn|tiktokv\.com|muscdn|byteimg/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
-    if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com|tiktokcdn|tiktokv\.com|muscdn|byteimg/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
+    if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
