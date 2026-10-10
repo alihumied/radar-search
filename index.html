@@ -3462,6 +3462,21 @@ async function radarIgHostFile(code,n){
   if(head.charCodeAt(0)===0xFF||head.startsWith('\x89P')||head.startsWith('RIFF')||head.startsWith('GIF')) return {blob,ext:'jpg',kind:'image'};
   return null;
 }
+async function radarIgOembedName(code){
+  if(!code) return '';
+  const api='https://www.instagram.com/api/v1/oembed/?url='+encodeURIComponent('https://www.instagram.com/reel/'+code+'/');
+  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(api), api]){
+    try{
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const j=await res.json();
+      const user=String(j.author_name||'').replace(/^@/,'').trim();
+      const cap=String(j.title||'').replace(/\s+/g,' ').trim();
+      if(user||cap) return radarShareClipName(user, cap);
+    }catch(e){}
+  }
+  return '';
+}
 async function radarIgShareFiles(link){
   const canon=radarIgCanon(link);
   const m=canon.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
@@ -3511,6 +3526,10 @@ async function radarIgShareFiles(link){
       if(picked.video){pushFile(picked.video,'video'); break}
       if(picked.images.length){picked.images.slice(0,6).forEach(u=>pushFile(u,'image')); break}
     }
+  }
+  if(code){
+    const named=await radarIgOembedName(code);
+    if(named) label=named;
   }
   if(files.length){ radarNameFiles(files, label); return files; }
   for(let n=1;n<=6;n++){
@@ -4136,6 +4155,10 @@ async function radarIngestShare(raw, ytMode){
         }
         if(video) files.push({url:video,ext:'mp4',kind:'video'});
         else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
+        if(!label){
+          const code=(canon.match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'';
+          label=await radarIgOembedName(code);
+        }
         radarNameFiles(files, label);
       }
     }else if(radarShareIsVideoUrl(link)){
