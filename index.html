@@ -232,6 +232,10 @@ body.light-theme .core,body.light-theme .plat,body.light-theme .result-card{box-
         <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M18 30V14l16-4v16" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="14" cy="30" r="4.2" fill="currentColor"/><circle cx="30" cy="26" r="4.2" fill="currentColor"/></svg></span>
         <span><b>تحميل MP3</b><small>من موسيقى يوتيوب لنفس الأغنية</small></span>
       </button>
+      <button type="button" class="radar-share-opt audio" id="radarShareTtAudio" hidden onclick="radarShareChoose('ttmp3')">
+        <span class="radar-share-ico" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 48 48" fill="none"><path d="M18 30V14l16-4v16" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="14" cy="30" r="4.2" fill="currentColor"/><circle cx="30" cy="26" r="4.2" fill="currentColor"/></svg></span>
+        <span><b>تحميل MP3</b><small>مصدر الأغنية</small></span>
+      </button>
     </div>
   </div>
 </div>
@@ -3851,6 +3855,32 @@ async function radarTikTokData(link){
   }
   return null;
 }
+async function radarTikTokMusic(link){
+  const q=encodeURIComponent(link);
+  const endpoints=[
+    'https://tikwm.com/api/music/info/?url='+q,
+    'https://www.tikwm.com/api/?hd=1&url='+q,
+    'https://tikwm.com/api/?hd=1&url='+q
+  ];
+  for(const api of endpoints){
+    try{
+      const r=await radarFetchRace(api, 12000);
+      if(!r.ok) continue;
+      const j=await r.json();
+      const d=j&&j.data;
+      if(!d||j.code===-1) continue;
+      const info=d.music_info&&(d.music_info.play||d.music_info.title)?d.music_info:d;
+      const play=info.play||d.music||'';
+      if(!/^https?:/i.test(play)) continue;
+      const author=String(info.author||'').trim();
+      let title=String(info.title||'').trim();
+      if(/^original sound\s*-\s*/i.test(title)) title='original sound';
+      const name=[author, title].filter(Boolean).join(' - ')||'tiktok';
+      return {url:play, name};
+    }catch(e){}
+  }
+  return null;
+}
 function radarTikTokHandle(data){
   const a=data&&data.author||{};
   const h=String(a.unique_id||a.uniqueId||a.nickname||'').replace(/^@/,'').trim();
@@ -4081,6 +4111,24 @@ async function radarIngestShare(raw, ytMode){
       const got=await radarSnapShareFiles(link);
       got.forEach(f=>files.push(f));
     }else if(/tiktok\.com|vt\.tiktok|vm\.tiktok/i.test(link)){
+      if(ytMode==='ttmp3'){
+        say('⏳ جارٍ جلب MP3...');
+        const song=await radarTikTokMusic(link);
+        if(song&&song.url){
+          try{
+            const res=await radarFetchRace(song.url, 30000);
+            if(res.ok){
+              const blob=await radarBlobFromResponse(res);
+              if(blob&&blob.size>1000){
+                radarOfferFile(blob, radarFileTitle(song.name,'mp3'));
+                return;
+              }
+            }
+          }catch(e){}
+        }
+        say('⚠️ ما لقينا مصدر الأغنية.');
+        return;
+      }
       say('⏳ جارٍ جلب تيك توك...');
       const data=await radarTikTokData(link)||{};
       const images=radarTikTokImageList(data);
@@ -4396,7 +4444,7 @@ function radarShareChoose(mode){
     runImageSearch();
     return;
   }
-  if(mode==='ytvideo'||mode==='ytmp3'||mode==='fbsilent'||mode==='fbsound'){
+  if(mode==='ytvideo'||mode==='ytmp3'||mode==='fbsilent'||mode==='fbsound'||mode==='ttmp3'){
     radarIngestShare(raw, mode);
     return;
   }
@@ -4429,14 +4477,30 @@ function handleSharedLink(){
   const gen=document.getElementById('radarShareDownload');
   const yv=document.getElementById('radarShareYtVideo');
   const ya=document.getElementById('radarShareYtAudio');
+  const ta=document.getElementById('radarShareTtAudio');
   const fs=document.getElementById('radarShareFbSilent');
   const fa=document.getElementById('radarShareFbSound');
+  const tt=/tiktok\.com/i.test(link);
   if(gen) gen.hidden=yt||fb;
   if(yv) yv.hidden=!yt;
   if(ya) ya.hidden=!yt;
+  if(ta){
+    ta.hidden=true;
+    const note=ta.querySelector('small');
+    if(note) note.textContent='مصدر الأغنية';
+  }
   if(fs) fs.hidden=!fb;
   if(fa) fa.hidden=!fb;
   if(kick&&yt) kick.textContent='تحميل يوتيوب للفيديو أو صوت MP3';
+  if(tt&&ta){
+    const token=shared;
+    radarTikTokMusic(link).then(song=>{
+      if(radarSharePending!==token||!song||!song.url) return;
+      ta.hidden=false;
+      const note=ta.querySelector('small');
+      if(note) note.textContent=song.name;
+    }).catch(()=>{});
+  }
   if(kick&&fb) kick.textContent='تحميل فيسبوك';
   const box=document.getElementById('radarShareChoice');
   if(box) box.hidden=false;
