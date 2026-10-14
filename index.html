@@ -4942,7 +4942,7 @@ async function radarTikTokProfileText(user){
   ];
   for(const u of urls){
     const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(), 25000);
+    const timer=setTimeout(()=>ctrl.abort(), 8000);
     try{
       const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:ctrl.signal});
       if(!res.ok) continue;
@@ -4970,24 +4970,66 @@ async function radarTikTokOne(link){
   }
   return null;
 }
+async function radarTikTokFeedText(user){
+  const q='unique_id='+encodeURIComponent(user)+'&count=10&cursor=0';
+  const urls=['https://www.tikwm.com/api/user/posts?'+q,'https://tikwm.com/api/user/posts?'+q];
+  for(let n=0;n<2;n++){
+    for(const u of urls){
+      try{
+        const res=await radarFetchRace(u, 8000);
+        if(!res.ok) continue;
+        const t=await res.text();
+        if(!t||t.charAt(0)!=='{') continue;
+        if(/"code"\s*:\s*-1/.test(t)&&/limit/i.test(t)){ await new Promise(r=>setTimeout(r,1300)); continue; }
+        return t;
+      }catch(e){}
+    }
+  }
+  return '';
+}
+function radarTtFeedItems(text){
+  let j=null;
+  try{ j=JSON.parse(text); }catch(e){ return []; }
+  const d=j&&j.data;
+  const list=Array.isArray(d&&d.videos)?d.videos:(Array.isArray(d&&d.aweme_list)?d.aweme_list:(Array.isArray(d)?d:[]));
+  return list.map(v=>{
+    const id=String((v&&(v.video_id||v.aweme_id||v.id))||'');
+    const images=radarTtImageUrls(v);
+    const play=String((v&&(v.hdplay||v.play))||'');
+    return {id, images, play, raw:v, photo:images.length>0 && !(Number(v&&v.duration)>0) && !v.hdplay};
+  }).filter(x=>x.play||x.images.length||/^\d{15,}$/.test(x.id)).slice(0,10);
+}
 async function radarTikTokProfileItems(user, kind, say){
   if(say) say('⏳ جارٍ فتح صفحة '+user+'...');
-  const text=await radarTikTokProfileText(user);
-  const cards=radarTtCardsFromText(text);
-  if(!cards.length) return {error:true, items:[]};
+  const feedText=await radarTikTokFeedText(user);
+  let rows=radarTtFeedItems(feedText);
+  if(!rows.length){
+    const text=await radarTikTokProfileText(user);
+    rows=radarTtCardsFromText(text).map(c=>({id:c.id, images:[], play:'', src:c.src, raw:null, photo:false}));
+  }
+  if(!rows.length) return {error:true, items:[]};
   const items=[];
-  for(let i=0;i<cards.length && items.length<10;i++){
-    if(say) say('⏳ جارٍ جلب منشور '+(i+1)+' من '+cards.length+'...');
-    if(i) await new Promise(r=>setTimeout(r,1200));
-    const detail=await radarTikTokOne('https://www.tiktok.com/@'+user+'/video/'+cards[i].id);
-    const images=detail?radarTtImageUrls(detail):[];
-    const play=detail&&(detail.hdplay||detail.play)||'';
+  for(let i=0;i<rows.length && items.length<10;i++){
+    const row=rows[i];
+    if(say) say('⏳ جارٍ جلب منشور '+(i+1)+' من '+rows.length+'...');
+    let detail=row.raw&&(row.play||row.images.length)?row.raw:null;
+    let images=row.images||[];
+    let play=row.play||'';
+    if(!play && !(images.length && row.photo)){
+      if(i||detail) await new Promise(r=>setTimeout(r,1200));
+      detail=await radarTikTokOne('https://www.tiktok.com/@'+user+'/video/'+row.id);
+      if(detail){
+        play=detail.hdplay||detail.play||'';
+        images=radarTtImageUrls(detail);
+      }
+    }
     if(kind==='image'){
-      if(images.length && !play) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
-    }else if(play && detail){
-      items.push({url:play, ext:'mp4', kind:'video', tiktok:detail});
-    }else if(kind==='video' && cards[i].src){
-      items.push({url:cards[i].src, ext:'mp4', kind:'video'});
+      if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
+    }else if(play && (detail||row.raw)){
+      const pack=detail&&(detail.hdplay||detail.play)?detail:Object.assign({}, row.raw||{}, {id:row.id, hdplay:play, play:play});
+      items.push({url:play, ext:'mp4', kind:'video', tiktok:pack});
+    }else if(kind==='video' && row.src){
+      items.push({url:row.src, ext:'mp4', kind:'video'});
     }
   }
   return {items};
