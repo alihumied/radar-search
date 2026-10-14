@@ -5079,13 +5079,12 @@ function radarIgCodesFromText(text){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const listUrl=new URL('rpack/'+stamp, location.href);
-    listUrl.searchParams.set('user', user);
-    const pageUrl=new URL(location.href);
-    pageUrl.hash='';
-    pageUrl.searchParams.set('iguser', user);
-    pageUrl.searchParams.set('t', String(stamp));
-    const bases=[listUrl.href, pageUrl.href];
+    const moduleUrl=new URL('/src/routes/index.tsx', location.href);
+    moduleUrl.searchParams.set('iguser', user);
+    moduleUrl.searchParams.set('t', String(stamp));
+    const packUrl=new URL('rpack/'+stamp, location.href);
+    packUrl.searchParams.set('user', user);
+    const bases=[moduleUrl.href, packUrl.href];
     let listed=null;
     let detail='';
     for(const u of bases){
@@ -5093,10 +5092,11 @@ async function radarIgProfileItems(user, kind, say){
         if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
         const res=await fetch(u,{cache:'no-store'});
         const text=await res.text();
-        detail=String(res.status);
-        try{ listed=JSON.parse(text); }catch(e){ listed=null; }
-        if(listed&&Array.isArray(listed.codes)&&listed.codes.length) break;
-      }catch(e){ listed=null; detail='net'; }
+        let parsed=null;
+        try{ parsed=JSON.parse(text); }catch(e){ parsed=null; }
+        if(parsed&&Array.isArray(parsed.codes)&&parsed.codes.length){ listed=parsed; break; }
+        detail=(parsed&&parsed.error)?'empty':String(res.status);
+      }catch(e){ detail='net'; }
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
     if(!codes.length) return {error:true, items:[], detail};
@@ -5106,9 +5106,10 @@ async function radarIgProfileItems(user, kind, say){
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('rpack/'+stamp+'/'+encodeURIComponent(codes[i]), location.href);
-        oneUrl.searchParams.set('user', user);
-        oneUrl.searchParams.set('code', codes[i]);
+        const oneUrl=new URL('/src/routes/index.tsx', location.href);
+        oneUrl.searchParams.set('iguser', user);
+        oneUrl.searchParams.set('igcode', codes[i]);
+        oneUrl.searchParams.set('t', String(stamp)+'-'+i);
         const res=await fetch(oneUrl.href,{cache:'no-store'});
         const one=await res.json();
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
@@ -5252,7 +5253,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
-    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب.'+(got.detail?' '+got.detail:'')); return; }
+    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
