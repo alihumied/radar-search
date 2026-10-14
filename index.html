@@ -5076,7 +5076,30 @@ function radarIgCodesFromText(text){
   while((m=re2.exec(s))) add(m[1]);
   return ids.slice(0,24);
 }
-async function radarIgProfileItems(user, kind){
+async function radarIgProfileItems(user, kind, say){
+  if(kind==='video'){
+    try{
+      if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
+      const res=await fetch('/api/ig-reels?user='+encodeURIComponent(user));
+      if(res.ok){
+        const j=await res.json();
+        const codes=Array.isArray(j&&j.codes)?j.codes:[];
+        if(codes.length){
+          const items=[];
+          for(let i=0;i<codes.length && items.length<30;i++){
+            if(say) say('⏳ جارٍ جلب ريل '+(i+1)+' من '+codes.length+'...');
+            const files=await radarIgShareFiles('https://www.instagram.com/reel/'+codes[i]+'/');
+            files.forEach(f=>{
+              if(f.kind!=='video') return;
+              const name=f.name && f.name.toLowerCase().indexOf(user.toLowerCase())===0 ? f.name : radarShareClipName(user, f.name||'');
+              items.push({url:f.url, ext:f.ext||'mp4', kind:'video', name});
+            });
+          }
+          if(items.length) return {items};
+        }
+      }
+    }catch(e){}
+  }
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
   let userData=null;
   for(const u of [api, 'https://corsmirror.com/v1?url='+encodeURIComponent(api)]){
@@ -5206,7 +5229,7 @@ async function radarPagePack(link, kind){
   }
   else if(target.platform==='snapchat') items=await radarSnapProfileItems(target.user, kind);
   else if(target.platform==='instagram'){
-    const got=await radarIgProfileItems(target.user, kind);
+    const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
     if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
     items=got.items||[];
