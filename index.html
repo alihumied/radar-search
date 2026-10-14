@@ -4972,7 +4972,7 @@ async function radarTikTokOne(link){
 }
 async function radarTikTokFeedText(user){
   const q='unique_id='+encodeURIComponent(user)+'&count=10&cursor=0';
-  const urls=['https://www.tikwm.com/api/user/posts?'+q,'https://tikwm.com/api/user/posts?'+q];
+  const urls=['https://www.tikwm.com/api/user/Posts?'+q,'https://tikwm.com/api/user/Posts?'+q];
   for(let n=0;n<2;n++){
     for(const u of urls){
       try{
@@ -5026,8 +5026,8 @@ async function radarTikTokProfileItems(user, kind, say){
     if(kind==='image'){
       if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
     }else if(play && (detail||row.raw)){
-      const pack=detail&&(detail.hdplay||detail.play)?detail:Object.assign({}, row.raw||{}, {id:row.id, hdplay:play, play:play});
-      items.push({url:play, ext:'mp4', kind:'video', tiktok:pack});
+      const pack=Object.assign({}, detail&&(detail.hdplay||detail.play)?detail:(row.raw||{}), {id:row.id||detail&&detail.id||'', play:play, hdplay:(detail&&detail.hdplay)||play});
+      items.push({url:pack.hdplay||play, ext:'mp4', kind:'video', tiktok:pack});
     }else if(kind==='video' && row.src){
       items.push({url:row.src, ext:'mp4', kind:'video'});
     }
