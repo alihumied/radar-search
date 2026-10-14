@@ -3478,13 +3478,7 @@ async function radarIgShareFiles(link){
   if(!code) return [];
   const files=[];
   let label='';
-  const note=text=>{
-    if(label||!text) return;
-    const title=radarMeta(text,'og:title').replace(/\s*[•|]\s*Instagram.*$/i,'').trim();
-    const user=(title.match(/^(.+?)\s+on Instagram/i)||[])[1]||'';
-    const cap=(title.match(/on Instagram:\s*"?([\s\S]+?)"?$/i)||[])[1]||'';
-    label=radarShareClipName(user, cap||radarMeta(text,'og:description')||title);
-  };
+  const note=text=>{ if(!label && text) label=radarIgLabelFromText(text); };
   const pushFile=(url,fileKind)=>{
     if(!url) return;
     let ext='jpg';
@@ -3520,14 +3514,50 @@ async function radarIgShareFiles(link){
       if(picked.images.length){picked.images.slice(0,6).forEach(u=>pushFile(u,'image')); break}
     }
   }
-  if(files.length){ radarNameFiles(files, label); return files; }
+  if(files.length) return radarIgNamed(files, label, code);
   for(let n=1;n<=6;n++){
     const f=await radarIgHostFile(code,n);
     if(!f) break;
     files.push(f);
     if(f.kind==='video') break;
   }
-  radarNameFiles(files, label);
+  return radarIgNamed(files, label, code);
+}
+function radarIgLabelFromText(text){
+  const title=radarMeta(text,'og:title').replace(/\s*[•|]\s*Instagram.*$/i,'').trim();
+  const desc=radarMeta(text,'og:description');
+  const user=(title.match(/@([A-Za-z0-9._]{2,30})/)||desc.match(/@([A-Za-z0-9._]{2,30})/)||[])[1]
+    ||(title.match(/^(.+?)\s+on Instagram/i)||[])[1]
+    ||'';
+  let cap=(title.match(/on Instagram:\s*"?([\s\S]+?)"?$/i)||[])[1]||'';
+  if(!cap && desc){
+    cap=desc.split(/\n\s*\n/)[0].replace(/\s+/g,' ').trim();
+    cap=cap.replace(/\s*[❤♥]\s*[\d.,]+[KMB]?\s*💬.*$/i,'').trim();
+  }
+  return radarShareClipName(user, cap);
+}
+async function radarIgOembed(code){
+  const api='https://www.instagram.com/api/v1/oembed/?url='+encodeURIComponent('https://www.instagram.com/p/'+code+'/');
+  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(api), api]){
+    try{
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const j=await res.json();
+      if(j&&(j.author_name||j.title)) return j;
+    }catch(e){}
+  }
+  return null;
+}
+async function radarIgNamed(files, label, code){
+  let name=label||'';
+  if(code && !/^[A-Za-z0-9._]{2,30}(?:\s+[-–]|$)/.test(name)){
+    const o=await radarIgOembed(code);
+    if(o&&o.author_name){
+      const cap=String(o.title||'').split('\n')[0].trim();
+      name=radarShareClipName(String(o.author_name).replace(/^@/,''), cap||name);
+    }
+  }
+  radarNameFiles(files, name);
   return files;
 }
 function radarMeta(text, key){
@@ -4132,19 +4162,15 @@ async function radarIngestShare(raw, ytMode){
         let video='',images=[],label='';
         for(const p of pages){
           const text=await radarSharePageText(p);
-          if(!label){
-            const title=radarMeta(text,'og:title').replace(/\s*[•|]\s*Instagram.*$/i,'').trim();
-            const user=(title.match(/^(.+?)\s+on Instagram/i)||[])[1]||'';
-            const cap=(title.match(/on Instagram:\s*"?([\s\S]+?)"?$/i)||[])[1]||'';
-            label=radarShareClipName(user, cap||radarMeta(text,'og:description')||title);
-          }
+          if(!label) label=radarIgLabelFromText(text);
           const picked=radarSharePickFromText(text);
           if(picked.video&&radarShareVideoScore(picked.video)>=radarShareVideoScore(video)) video=picked.video;
           if(picked.images.length>images.length) images=picked.images;
         }
         if(video) files.push({url:video,ext:'mp4',kind:'video'});
         else images.slice(0,6).forEach(u=>files.push({url:u,ext:'jpg',kind:'image'}));
-        radarNameFiles(files, label);
+        const code=(canon.match(/\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i)||[])[1]||'';
+        await radarIgNamed(files, label, code);
       }
     }else if(radarShareIsVideoUrl(link)){
       files.push({url:link,ext:'mp4',kind:'video'});
@@ -5039,6 +5065,17 @@ async function radarTikTokProfileItems(user, kind, say){
   }
   return {items};
 }
+function radarIgCodesFromText(text){
+  const s=String(text||'');
+  const ids=[];
+  const add=c=>{ const id=String(c||'').replace(/[^A-Za-z0-9_-]/g,''); if(id.length>=5 && id.length<=15 && !ids.includes(id)) ids.push(id); };
+  let m;
+  const re1=/"shortcode"\s*:\s*"([A-Za-z0-9_-]{5,15})"/g;
+  while((m=re1.exec(s))) add(m[1]);
+  const re2=/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]{5,15})/g;
+  while((m=re2.exec(s))) add(m[1]);
+  return ids.slice(0,24);
+}
 async function radarIgProfileItems(user, kind){
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
   let userData=null;
@@ -5052,17 +5089,35 @@ async function radarIgProfileItems(user, kind){
   }
   if(userData&&userData.is_private) return {locked:true, items:[]};
   const edges=userData&&userData.edge_owner_to_timeline_media&&userData.edge_owner_to_timeline_media.edges||[];
-  const items=[];
-  for(const edge of edges){
-    if(items.length>=12) break;
+  const codes=[];
+  edges.forEach(edge=>{
     const node=edge&&edge.node||{};
-    if(!node.shortcode) continue;
-    if(!!node.is_video!==(kind==='video')) continue;
-    const link=node.is_video?('https://www.instagram.com/reel/'+node.shortcode+'/'):('https://www.instagram.com/p/'+node.shortcode+'/');
-    const files=await radarIgShareFiles(link);
-    files.forEach(f=>{ if(f.kind===kind) items.push({url:f.url, ext:f.ext||(kind==='video'?'mp4':'jpg'), kind}); });
+    if(!node.shortcode) return;
+    if(!!node.is_video!==(kind==='video')) return;
+    codes.push(node.shortcode);
+  });
+  if(!codes.length){
+    for(const page of [
+      'https://www.instagram.com/'+encodeURIComponent(user)+'/',
+      'https://www.instagram.com/'+encodeURIComponent(user)+'/reels/'
+    ]){
+      radarIgCodesFromText(await radarSharePageText(page)).forEach(c=>{ if(!codes.includes(c)) codes.push(c); });
+      if(codes.length) break;
+    }
   }
-  return {items:items.slice(0,30)};
+  if(!userData && !codes.length) return {error:true, items:[]};
+  const items=[];
+  for(const code of codes.slice(0,24)){
+    if(items.length>=24) break;
+    const link='https://www.instagram.com/'+(kind==='video'?'reel':'p')+'/'+code+'/';
+    const files=await radarIgShareFiles(link);
+    files.forEach(f=>{
+      if(f.kind!==kind) return;
+      const name=f.name && f.name.toLowerCase().indexOf(user.toLowerCase())===0 ? f.name : radarShareClipName(user, f.name||'');
+      items.push({url:f.url, ext:f.ext||(kind==='video'?'mp4':'jpg'), kind, name});
+    });
+  }
+  return {items};
 }
 async function radarSnapProfileItems(user, kind){
   let html='';
@@ -5153,6 +5208,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
+    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
