@@ -4925,33 +4925,76 @@ function radarTtImageUrls(v){
   const raw=Array.isArray(v&&v.images)?v.images:[];
   return raw.map(x=>typeof x==='string'?x:(x&&(x.url||x.imageURL||''))).filter(u=>/^https?:/i.test(String(u||'')));
 }
-async function radarTikTokEmbedCards(user){
-  const html=await radarSharePageText('https://www.tiktok.com/embed/@'+encodeURIComponent(user));
-  if(!html) return [];
-  const text=html.replace(/&/g,'&');
+function radarTtIdsFromText(text){
   const ids=[];
-  const re=/tiktok\.com\/@[^/"'\s]+\/(?:video|photo)\/(\d+)/g;
+  const add=id=>{ if(/^\d{15,}$/.test(id)&&!ids.includes(id)) ids.push(id); };
+  const s=String(text||'').replace(/&/g,'&').replace(/\\\//g,'/');
   let m;
-  while((m=re.exec(text))){ if(!ids.includes(m[1])) ids.push(m[1]); }
-  const srcs=[...text.matchAll(/<video[^>]*\ssrc="([^"]+)"/gi)].map(x=>x[1]);
-  return ids.slice(0,10).map((id,i)=>({id, src:srcs[i]||'', photo:/\/photo\//.test(text.slice(Math.max(0, text.indexOf(id)-80), text.indexOf(id)+20))}));
+  const re1=/tiktok\.com\/@[^/"'\s]+\/(?:video|photo)\/(\d{15,})/g;
+  while((m=re1.exec(s))) add(m[1]);
+  const re2=/"(?:video_id|aweme_id)"\s*:\s*"?(\d{15,})"?/g;
+  while((m=re2.exec(s))) add(m[1]);
+  return ids.slice(0,10);
+}
+function radarTtPostsFromText(text){
+  let j=null;
+  try{ j=JSON.parse(text); }catch(e){ return []; }
+  const items=[];
+  const seen=new Set();
+  const walk=o=>{
+    if(!o||typeof o!=='object'||items.length>=10) return;
+    const id=String(o.video_id||o.aweme_id||'');
+    const play=String(o.hdplay||o.play||'');
+    const images=radarTtImageUrls(o);
+    if(/^\d{15,}$/.test(id)&&!seen.has(id)&&(play||images.length)){
+      seen.add(id);
+      items.push({id, play, images, raw:o});
+    }
+    (Array.isArray(o)?o:Object.values(o)).forEach(walk);
+  };
+  walk(j);
+  return items;
 }
 async function radarTikTokProfileItems(user, kind, say){
-  const cards=await radarTikTokEmbedCards(user);
-  if(!cards.length) return {error:true, items:[]};
+  const q='unique_id='+encodeURIComponent(user)+'&count=10&cursor=0';
+  const embed='https://www.tiktok.com/embed/@'+encodeURIComponent(user);
+  const urls=[
+    'https://www.tikwm.com/api/user/posts?'+q,
+    'https://tikwm.com/api/user/posts?'+q,
+    'https://corsmirror.com/v1?url='+encodeURIComponent('https://www.tikwm.com/api/user/posts?'+q),
+    'https://corsmirror.com/v1?url='+encodeURIComponent(embed)
+  ];
+  let text='';
+  for(const u of urls){
+    try{
+      const res=await radarFetchRace(u, 12000);
+      if(!res.ok) continue;
+      const t=await res.text();
+      if(radarTtIdsFromText(t).length||radarTtPostsFromText(t).length){ text=t; break; }
+    }catch(e){}
+  }
+  if(!text) return {error:true, items:[]};
+  const parsed=radarTtPostsFromText(text);
+  const ids=(parsed.length?parsed.map(p=>p.id):radarTtIdsFromText(text)).slice(0,10);
   const items=[];
-  for(let i=0;i<cards.length && items.length<10;i++){
-    if(say) say('⏳ جارٍ قراءة منشور '+(i+1)+' من '+cards.length+'...');
-    const page='https://www.tiktok.com/@'+user+'/'+(cards[i].photo?'photo':'video')+'/'+cards[i].id;
-    const detail=await radarTikTokData(page);
-    const images=detail?radarTtImageUrls(detail):[];
-    const play=detail&&(detail.hdplay||detail.play)||'';
+  for(let i=0;i<ids.length && items.length<10;i++){
+    if(say) say('⏳ جارٍ قراءة منشور '+(i+1)+' من '+ids.length+'...');
+    const known=parsed.find(p=>p.id===ids[i]);
+    let detail=known&&known.raw&&(known.play||known.images.length)?known.raw:null;
+    let images=known?known.images:[];
+    let play=known?known.play:'';
+    if(!play && !(images.length && !play)){
+      detail=await radarTikTokData('https://www.tiktok.com/@'+user+'/video/'+ids[i]);
+      if(detail){
+        play=detail.hdplay||detail.play||'';
+        images=radarTtImageUrls(detail);
+      }
+    }
     if(kind==='image'){
       if(images.length && !play) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
-    }else if(play && detail){
-      items.push({url:play, ext:'mp4', kind:'video', tiktok:detail});
-    }else if(!cards[i].photo && cards[i].src){
-      items.push({url:cards[i].src, ext:'mp4', kind:'video'});
+    }else if(play){
+      const pack=detail&&(detail.hdplay||detail.play)?detail:Object.assign({}, known&&known.raw||{}, {id:ids[i], hdplay:play, play:play});
+      items.push({url:play, ext:'mp4', kind:'video', tiktok:pack});
     }
   }
   return {items};
