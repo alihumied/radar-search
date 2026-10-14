@@ -4278,9 +4278,22 @@ window.addEventListener('message', ev=>{
 });
 
 
+function radarShareIsPost(u){
+  return /\/status\/\d{6,}/i.test(u)
+    || /tiktok\.com\/@[^/?#]+\/(?:video|photo)\//i.test(u)
+    || /(?:^|\/\/)(?:vt|vm|t)\.tiktok\.com\//i.test(u)
+    || /tiktok\.com\/t\//i.test(u)
+    || /instagram\.com\/(?:p|reel|reels|tv|stories)\//i.test(u)
+    || /instagram\.com\/[^/?#]+\/(?:p|reel|reels|tv)\//i.test(u)
+    || /facebook\.com\/(?:share\/|reel|reels|watch|videos|video\/|photo|posts\/)|fb\.watch|\/videos?\//i.test(u)
+    || /snapchat\.com\/(?:spotlight|t)\//i.test(u)
+    || /youtu\.?be|youtube\.com\/(?:watch|shorts|live)/i.test(u);
+}
 function radarSharePageLink(raw){
   const links=[...String(raw||'').matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m=>unwrapFacebookLink(m[0].replace(/[),.;]+$/,'')));
-  return links.find(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu|snapchat\.com/i.test(u)&&!radarShareIsVideoUrl(u))
+  const platform=links.filter(u=>/facebook\.com|fb\.watch|instagram\.com|tiktok\.com|(?:x|twitter)\.com|youtu|snapchat\.com/i.test(u));
+  return platform.find(radarShareIsPost)
+    || platform.find(u=>!radarShareIsVideoUrl(u))
     || links.find(u=>/\.(?:jpe?g|png|webp)(?:\?|$)/i.test(u))
     || links[0]
     || '';
@@ -4344,22 +4357,21 @@ function handleSharedLink(){
   const xv=document.getElementById('radarShareXVideos');
   const xp=document.getElementById('radarShareXPhotos');
   const tt=/tiktok\.com/i.test(link);
-  const page=radarPageTarget(link);
-  const fbPost=fb&&!page;
-  if(gen) gen.hidden=yt||fbPost||!!page;
+  const page=radarShareIsPost(link)?null:radarPageTarget(link);
+  if(gen) gen.hidden=yt||fb;
   if(yv) yv.hidden=!yt;
   if(ya) ya.hidden=!yt;
-  if(xv) xv.hidden=!page;
-  if(xp) xp.hidden=!page;
+  if(xv) xv.hidden=true;
+  if(xp) xp.hidden=true;
   if(ta){
     ta.hidden=true;
     const note=ta.querySelector('small');
     if(note) note.textContent='مصدر الأغنية';
   }
-  if(fs) fs.hidden=!fbPost;
-  if(fa) fa.hidden=!fbPost;
+  if(fs) fs.hidden=!fb;
+  if(fa) fa.hidden=!fb;
   if(kick&&yt) kick.textContent='تحميل يوتيوب للفيديو أو صوت MP3';
-  if(tt&&ta){
+  if(tt&&!page&&ta){
     const token=shared;
     radarTikTokMusic(link).then(song=>{
       if(radarSharePending!==token||!song||!song.url) return;
@@ -4368,8 +4380,17 @@ function handleSharedLink(){
       if(note) note.textContent=song.name;
     }).catch(()=>{});
   }
-  if(kick&&fbPost) kick.textContent='تحميل فيسبوك';
-  if(kick&&page) kick.textContent='صفحة '+page.user+' · آخر المنشورات العامة';
+  if(kick&&fb) kick.textContent='تحميل فيسبوك';
+  if(page){
+    if(gen) gen.hidden=true;
+    if(fs) fs.hidden=true;
+    if(fa) fa.hidden=true;
+    if(yv) yv.hidden=true;
+    if(ya) ya.hidden=true;
+    if(xv) xv.hidden=false;
+    if(xp) xp.hidden=false;
+    if(kick) kick.textContent='صفحة '+page.user+' · آخر المنشورات العامة';
+  }
   const box=document.getElementById('radarShareChoice');
   if(box) box.hidden=false;
   document.body.style.overflow='hidden';
@@ -4833,6 +4854,7 @@ async function radarXProfilePage(user, cursor){
   return null;
 }
 function radarPageTarget(link){
+  if(radarShareIsPost(link)) return null;
   const x=radarXProfileName(link);
   if(x) return {platform:'x', user:x};
   try{
@@ -4840,16 +4862,18 @@ function radarPageTarget(link){
     const host=u.hostname.replace(/^www\./,'').toLowerCase();
     const parts=u.pathname.split('/').filter(Boolean);
     if(/tiktok\.com$/.test(host)){
-      const name=(parts[0]||'').replace(/^@/,'');
-      if(!name||parts[1]) return null;
+      if(/^(vt|vm|t)\.tiktok\.com$/.test(host)) return null;
+      const raw=parts[0]||'';
+      if(raw.charAt(0)!=='@'||parts[1]) return null;
+      const name=raw.slice(1);
       if(!/^[A-Za-z0-9._]{2,24}$/.test(name)) return null;
-      if(/^(foryou|following|explore|live|login|signup|tag|music|discover)$/i.test(name)) return null;
       return {platform:'tiktok', user:name};
     }
     if(/instagram\.com$/.test(host)){
       const name=parts[0]||'';
       if(!/^[A-Za-z0-9._]{1,30}$/.test(name)) return null;
       if(/^(p|reel|reels|tv|stories|explore|accounts|direct|about|share)$/i.test(name)) return null;
+      if(parts.length>2) return null;
       if(parts[1]&&!/^(reels|tagged|channel)$/i.test(parts[1])) return null;
       return {platform:'instagram', user:name};
     }
