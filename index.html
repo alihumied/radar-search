@@ -5078,20 +5078,30 @@ function radarIgCodesFromText(text){
 }
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
-    const urls=['/radar-ig-reels?user='+encodeURIComponent(user),'/api/ig-reels?user='+encodeURIComponent(user)];
-    for(const u of urls){
+    const base='/radar-ig-reels?user='+encodeURIComponent(user);
+    let listed=null;
+    for(let attempt=0; attempt<2 && !(listed&&listed.codes&&listed.codes.length); attempt++){
       try{
         if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        const res=await fetch(u);
-        const text=await res.text();
-        let j=null;
-        try{ j=JSON.parse(text); }catch(e){ continue; }
-        const ready=Array.isArray(j&&j.items)?j.items.filter(x=>x&&/^https?:/i.test(x.url)):[];
-        if(ready.length){
-          return {items:ready.map(x=>({url:x.url, ext:x.ext||'mp4', kind:'video', name:x.name||user}))};
-        }
+        const res=await fetch(base);
+        listed=await res.json();
+      }catch(e){ listed=null; }
+    }
+    const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
+    if(!codes.length) return {error:true, items:[]};
+    const items=[];
+    for(let i=0;i<codes.length;i++){
+      if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
+      radarProgLock=true;
+      radarPaintProgress(Math.round(((i+1)/codes.length)*70));
+      try{
+        const res=await fetch(base+'&code='+encodeURIComponent(codes[i]));
+        const one=await res.json();
+        if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
     }
+    if(!items.length) return {error:true, items:[]};
+    return {items};
   }
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
   let userData=null;
