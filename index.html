@@ -4925,49 +4925,36 @@ function radarTtImageUrls(v){
   const raw=Array.isArray(v&&v.images)?v.images:[];
   return raw.map(x=>typeof x==='string'?x:(x&&(x.url||x.imageURL||''))).filter(u=>/^https?:/i.test(String(u||'')));
 }
+async function radarTikTokEmbedCards(user){
+  const html=await radarSharePageText('https://www.tiktok.com/embed/@'+encodeURIComponent(user));
+  if(!html) return [];
+  const text=html.replace(/&/g,'&');
+  const ids=[];
+  const re=/tiktok\.com\/@[^/"'\s]+\/(?:video|photo)\/(\d+)/g;
+  let m;
+  while((m=re.exec(text))){ if(!ids.includes(m[1])) ids.push(m[1]); }
+  const srcs=[...text.matchAll(/<video[^>]*\ssrc="([^"]+)"/gi)].map(x=>x[1]);
+  return ids.slice(0,10).map((id,i)=>({id, src:srcs[i]||'', photo:/\/photo\//.test(text.slice(Math.max(0, text.indexOf(id)-80), text.indexOf(id)+20))}));
+}
 async function radarTikTokProfileItems(user, kind, say){
-  const rows=[];
-  let cursor='0';
-  let saw=false;
-  for(let page=0; page<3 && rows.length<12; page++){
-    const feed=await radarTikTokFeed(user, cursor);
-    if(!feed) break;
-    saw=true;
-    if(!feed.list.length) break;
-    feed.list.forEach(v=>rows.push(v));
-    const next=feed.cursor==null?'':String(feed.cursor);
-    if(!feed.hasMore||!next||next===cursor) break;
-    cursor=next;
-  }
-  if(!saw) return {error:true, items:[]};
+  const cards=await radarTikTokEmbedCards(user);
+  if(!cards.length) return {error:true, items:[]};
   const items=[];
-  for(let n=0; n<rows.length && items.length<12; n++){
-    const v=rows[n]||{};
-    const id=String(v.video_id||v.aweme_id||v.id||'');
-    let images=radarTtImageUrls(v);
-    let play=v.hdplay||v.play||'';
-    const photo=images.length>0 && !(Number(v.duration)>0) && !v.hdplay;
-    const need=id && ((kind==='video' && !photo && !play) || (kind==='image' && !images.length));
-    if(need){
-      if(say) say('⏳ جارٍ قراءة منشور '+(n+1)+'...');
-      const detail=await radarTikTokData('https://www.tiktok.com/@'+user+'/video/'+id);
-      if(detail){
-        play=detail.hdplay||detail.play||play;
-        if(!images.length) images=radarTtImageUrls(detail);
-        v.id=detail.id||id;
-        v.hdplay=detail.hdplay||v.hdplay||'';
-        v.play=detail.play||v.play||'';
-      }
-    }
-    const isPhoto=images.length>0 && !(Number(v.duration)>0) && !(v.hdplay||play);
+  for(let i=0;i<cards.length && items.length<10;i++){
+    if(say) say('⏳ جارٍ قراءة منشور '+(i+1)+' من '+cards.length+'...');
+    const page='https://www.tiktok.com/@'+user+'/'+(cards[i].photo?'photo':'video')+'/'+cards[i].id;
+    const detail=await radarTikTokData(page);
+    const images=detail?radarTtImageUrls(detail):[];
+    const play=detail&&(detail.hdplay||detail.play)||'';
     if(kind==='image'){
-      if(isPhoto) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
-    }else if(!isPhoto && (play||v.hdplay||v.play)){
-      const file=play||v.hdplay||v.play;
-      items.push({url:file, ext:'mp4', kind:'video', tiktok:Object.assign({}, v, {id:v.id||id, hdplay:v.hdplay||file, play:v.play||file})});
+      if(images.length && !play) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
+    }else if(play && detail){
+      items.push({url:play, ext:'mp4', kind:'video', tiktok:detail});
+    }else if(!cards[i].photo && cards[i].src){
+      items.push({url:cards[i].src, ext:'mp4', kind:'video'});
     }
   }
-  return {items:items.slice(0,30)};
+  return {items};
 }
 async function radarIgProfileItems(user, kind){
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
@@ -6102,7 +6089,7 @@ async function hxFetchMediaBlob(src, kind){
     const no=u.replace(/^https?:\/\//i,'');
     urls.push('https://wsrv.nl/?url='+encodeURIComponent(no)+'&n=-1');
     if(/fbcdn\.net|scontent|pbs\.twimg\.com|pbs\.twitter\.com|tiktokcdn|tiktokv\.com|muscdn|byteimg|sc-cdn\.net/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
-  }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net/i.test(u)){
+  }else if((kind==='video'||kind==='audio')&&/cdninstagram|fbcdn\.net|instagram\.com|video\.twimg\.com|sc-cdn\.net|tiktokcdn|tiktokv\.com/i.test(u)){
     urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
   }
   if(/savenow\.to/i.test(u)) urls.push('https://corsmirror.com/v1?url='+encodeURIComponent(u));
