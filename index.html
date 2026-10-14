@@ -5079,30 +5079,33 @@ function radarIgCodesFromText(text){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
+    const root=(location.origin&&location.origin!=='null')?location.origin:'';
     const bases=[
-      '/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp,
-      '/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp
+      root+'/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp,
+      root+'/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp
     ];
     let listed=null;
+    let detail='';
     for(const u of bases){
       try{
         if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        const res=await fetch(u,{cache:'no-store',headers:{Accept:'application/json'}});
+        const res=await fetch(u,{mode:'cors',cache:'no-store',headers:{Accept:'application/json'}});
         const text=await res.text();
+        detail=res.status+' '+(text.trim().slice(0,12).replace(/\s+/g,' '));
         try{ listed=JSON.parse(text); }catch(e){ listed=null; }
         if(listed&&Array.isArray(listed.codes)&&listed.codes.length) break;
-      }catch(e){ listed=null; }
+      }catch(e){ listed=null; detail='net'; }
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
-    if(!codes.length) return {error:true, items:[]};
+    if(!codes.length) return {error:true, items:[], detail};
     const items=[];
-    const fileBase='/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp+'&igcode=';
+    const fileBase=root+'/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp+'&code=';
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const res=await fetch(fileBase+encodeURIComponent(codes[i]),{cache:'no-store',headers:{Accept:'application/json'}});
+        const res=await fetch(fileBase+encodeURIComponent(codes[i]),{mode:'cors',cache:'no-store',headers:{Accept:'application/json'}});
         const one=await res.json();
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
@@ -5245,7 +5248,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
-    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
+    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب.'+(got.detail?' '+got.detail:'')); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
