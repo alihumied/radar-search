@@ -4970,64 +4970,69 @@ async function radarTikTokOne(link){
   }
   return null;
 }
-async function radarTikTokFeedText(user){
-  const q='unique_id='+encodeURIComponent(user)+'&count=10&cursor=0';
-  const urls=['https://www.tikwm.com/api/user/Posts?'+q,'https://tikwm.com/api/user/Posts?'+q];
-  for(let n=0;n<2;n++){
-    for(const u of urls){
+async function radarTikTokFeedRows(user, say){
+  const rows=[];
+  const seen=new Set();
+  let cursor='0';
+  for(let page=0; page<6 && rows.length<120; page++){
+    if(say) say('⏳ جارٍ قراءة قائمة '+(page+1)+'...');
+    const q='unique_id='+encodeURIComponent(user)+'&count=30&cursor='+encodeURIComponent(cursor);
+    let data=null;
+    for(const u of ['https://www.tikwm.com/api/user/Posts?'+q,'https://tikwm.com/api/user/Posts?'+q]){
       try{
-        const res=await radarFetchRace(u, 8000);
+        const res=await radarFetchRace(u, 12000);
         if(!res.ok) continue;
-        const t=await res.text();
-        if(!t||t.charAt(0)!=='{') continue;
-        if(/"code"\s*:\s*-1/.test(t)&&/limit/i.test(t)){ await new Promise(r=>setTimeout(r,1300)); continue; }
-        return t;
+        const j=await res.json();
+        if(j&&j.code===-1){ await new Promise(r=>setTimeout(r,1300)); continue; }
+        if(j&&j.data&&Array.isArray(j.data.videos)){ data=j.data; break; }
       }catch(e){}
     }
+    if(!data||!data.videos.length) break;
+    let fresh=0;
+    data.videos.forEach(v=>{
+      const id=String(v.video_id||v.id||'');
+      if(!id||seen.has(id)) return;
+      seen.add(id);
+      fresh++;
+      const images=radarTtImageUrls(v);
+      const play=String(v.hdplay||v.play||'');
+      rows.push({id, images, play, raw:v, photo:images.length>0 && !(Number(v.duration)>0) && !v.hdplay});
+    });
+    const next=data.cursor==null?'':String(data.cursor);
+    if(!data.hasMore||!next||next===cursor||!fresh) break;
+    cursor=next;
+    await new Promise(r=>setTimeout(r,800));
   }
-  return '';
-}
-function radarTtFeedItems(text){
-  let j=null;
-  try{ j=JSON.parse(text); }catch(e){ return []; }
-  const d=j&&j.data;
-  const list=Array.isArray(d&&d.videos)?d.videos:(Array.isArray(d&&d.aweme_list)?d.aweme_list:(Array.isArray(d)?d:[]));
-  return list.map(v=>{
-    const id=String((v&&(v.video_id||v.aweme_id||v.id))||'');
-    const images=radarTtImageUrls(v);
-    const play=String((v&&(v.hdplay||v.play))||'');
-    return {id, images, play, raw:v, photo:images.length>0 && !(Number(v&&v.duration)>0) && !v.hdplay};
-  }).filter(x=>x.play||x.images.length||/^\d{15,}$/.test(x.id)).slice(0,10);
+  return rows;
 }
 async function radarTikTokProfileItems(user, kind, say){
   if(say) say('⏳ جارٍ فتح صفحة '+user+'...');
-  const feedText=await radarTikTokFeedText(user);
-  let rows=radarTtFeedItems(feedText);
+  let rows=await radarTikTokFeedRows(user, say);
   if(!rows.length){
     const text=await radarTikTokProfileText(user);
     rows=radarTtCardsFromText(text).map(c=>({id:c.id, images:[], play:'', src:c.src, raw:null, photo:false}));
   }
   if(!rows.length) return {error:true, items:[]};
   const items=[];
-  for(let i=0;i<rows.length && items.length<10;i++){
+  for(let i=0;i<rows.length;i++){
     const row=rows[i];
-    if(say) say('⏳ جارٍ جلب منشور '+(i+1)+' من '+rows.length+'...');
-    let detail=row.raw&&(row.play||row.images.length)?row.raw:null;
+    if(say && i%5===0) say('⏳ جارٍ تجهيز '+(i+1)+' من '+rows.length+'...');
     let images=row.images||[];
     let play=row.play||'';
-    if(!play && !(images.length && row.photo)){
-      if(i||detail) await new Promise(r=>setTimeout(r,1200));
+    let detail=row.raw||null;
+    if(!play && !(images.length && row.photo) && row.id){
       detail=await radarTikTokOne('https://www.tiktok.com/@'+user+'/video/'+row.id);
       if(detail){
         play=detail.hdplay||detail.play||'';
         images=radarTtImageUrls(detail);
       }
+      await new Promise(r=>setTimeout(r,1100));
     }
     if(kind==='image'){
       if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
-    }else if(play && (detail||row.raw)){
-      const pack=Object.assign({}, detail&&(detail.hdplay||detail.play)?detail:(row.raw||{}), {id:row.id||detail&&detail.id||'', play:play, hdplay:(detail&&detail.hdplay)||play});
-      items.push({url:pack.hdplay||play, ext:'mp4', kind:'video', tiktok:pack});
+    }else if(row.id || play){
+      const pack=Object.assign({}, detail||{}, {id:row.id||detail&&detail.id||'', play:play, hdplay:(detail&&detail.hdplay)||''});
+      items.push({url:play||('https://www.tikwm.com/video/media/hdplay/'+row.id+'.mp4'), ext:'mp4', kind:'video', tiktok:pack});
     }else if(kind==='video' && row.src){
       items.push({url:row.src, ext:'mp4', kind:'video'});
     }
@@ -5094,7 +5099,7 @@ async function radarSnapProfileItems(user, kind){
 }
 async function radarSaveMediaList(user, kind, items, say){
   const want=kind==='video'?'فيديو':'صورة';
-  const list=items.slice(0,30);
+  const list=items.slice(0,120);
   if(!list.length){ say('⚠️ ما في '+want+' ظاهرة في آخر منشورات هذه الصفحة.'); return; }
   let saved=0;
   const batches=Math.ceil(list.length/10);
