@@ -5078,27 +5078,20 @@ function radarIgCodesFromText(text){
 }
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
-    try{
-      if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-      const res=await fetch('/api/ig-reels?user='+encodeURIComponent(user));
-      if(res.ok){
-        const j=await res.json();
-        const codes=Array.isArray(j&&j.codes)?j.codes:[];
-        if(codes.length){
-          const items=[];
-          for(let i=0;i<codes.length && items.length<30;i++){
-            if(say) say('⏳ جارٍ جلب ريل '+(i+1)+' من '+codes.length+'...');
-            const files=await radarIgShareFiles('https://www.instagram.com/reel/'+codes[i]+'/');
-            files.forEach(f=>{
-              if(f.kind!=='video') return;
-              const name=f.name && f.name.toLowerCase().indexOf(user.toLowerCase())===0 ? f.name : radarShareClipName(user, f.name||'');
-              items.push({url:f.url, ext:f.ext||'mp4', kind:'video', name});
-            });
-          }
-          if(items.length) return {items};
+    const urls=['/radar-ig-reels?user='+encodeURIComponent(user),'/api/ig-reels?user='+encodeURIComponent(user)];
+    for(const u of urls){
+      try{
+        if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
+        const res=await fetch(u);
+        const text=await res.text();
+        let j=null;
+        try{ j=JSON.parse(text); }catch(e){ continue; }
+        const ready=Array.isArray(j&&j.items)?j.items.filter(x=>x&&/^https?:/i.test(x.url)):[];
+        if(ready.length){
+          return {items:ready.map(x=>({url:x.url, ext:x.ext||'mp4', kind:'video', name:x.name||user}))};
         }
-      }
-    }catch(e){}
+      }catch(e){}
+    }
   }
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
   let userData=null;
