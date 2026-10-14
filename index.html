@@ -5079,19 +5079,21 @@ function radarIgCodesFromText(text){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const root=(location.origin&&location.origin!=='null')?location.origin:'';
-    const bases=[
-      root+'/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp,
-      root+'/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp
-    ];
+    const listUrl=new URL('radar-ig-reels', location.href);
+    listUrl.searchParams.set('user', user);
+    listUrl.searchParams.set('v', String(stamp));
+    const pageUrl=new URL(location.pathname||'/radar.html', location.href);
+    pageUrl.searchParams.set('iguser', user);
+    pageUrl.searchParams.set('v', String(stamp));
+    const bases=[listUrl.href, pageUrl.href];
     let listed=null;
     let detail='';
     for(const u of bases){
       try{
         if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        const res=await fetch(u,{mode:'cors',cache:'no-store',headers:{Accept:'application/json'}});
+        const res=await fetch(u,{cache:'no-store'});
         const text=await res.text();
-        detail=res.status+' '+(text.trim().slice(0,12).replace(/\s+/g,' '));
+        detail=String(res.status);
         try{ listed=JSON.parse(text); }catch(e){ listed=null; }
         if(listed&&Array.isArray(listed.codes)&&listed.codes.length) break;
       }catch(e){ listed=null; detail='net'; }
@@ -5099,13 +5101,16 @@ async function radarIgProfileItems(user, kind, say){
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
     if(!codes.length) return {error:true, items:[], detail};
     const items=[];
-    const fileBase=root+'/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp+'&code=';
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const res=await fetch(fileBase+encodeURIComponent(codes[i]),{mode:'cors',cache:'no-store',headers:{Accept:'application/json'}});
+        const oneUrl=new URL('radar-ig-reels', location.href);
+        oneUrl.searchParams.set('user', user);
+        oneUrl.searchParams.set('code', codes[i]);
+        oneUrl.searchParams.set('v', String(stamp));
+        const res=await fetch(oneUrl.href,{cache:'no-store'});
         const one=await res.json();
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
