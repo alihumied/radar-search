@@ -5078,24 +5078,31 @@ function radarIgCodesFromText(text){
 }
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
-    const base='/radar-ig-reels?user='+encodeURIComponent(user);
+    const stamp=Date.now();
+    const bases=[
+      '/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp,
+      '/radar-ig-reels?user='+encodeURIComponent(user)+'&v='+stamp
+    ];
     let listed=null;
-    for(let attempt=0; attempt<2 && !(listed&&listed.codes&&listed.codes.length); attempt++){
+    for(const u of bases){
       try{
         if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        const res=await fetch(base);
-        listed=await res.json();
+        const res=await fetch(u,{cache:'no-store',headers:{Accept:'application/json'}});
+        const text=await res.text();
+        try{ listed=JSON.parse(text); }catch(e){ listed=null; }
+        if(listed&&Array.isArray(listed.codes)&&listed.codes.length) break;
       }catch(e){ listed=null; }
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
     if(!codes.length) return {error:true, items:[]};
     const items=[];
+    const fileBase='/radar.html?iguser='+encodeURIComponent(user)+'&v='+stamp+'&igcode=';
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const res=await fetch(base+'&code='+encodeURIComponent(codes[i]));
+        const res=await fetch(fileBase+encodeURIComponent(codes[i]),{cache:'no-store',headers:{Accept:'application/json'}});
         const one=await res.json();
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
@@ -5211,11 +5218,15 @@ async function radarSaveMediaList(user, kind, items, say){
 }
 async function radarPagePack(link, kind){
   const say=t=>{
+    if(!document.getElementById('radarFetchFill')) radarShowProgress(t||'');
     const msg=document.getElementById('radarFetchMsg');
-    if(!msg) radarShowProgress(t);
-    else msg.textContent=t;
-    if(!t||String(t).includes('⚠️')) radarClearProgress();
+    if(msg) msg.textContent=t||'';
+    if(!t||String(t).includes('⚠️')){
+      clearInterval(radarProgTimer);
+      radarProgLock=true;
+    }
   };
+  radarShowProgress('⏳ جارٍ قراءة الصفحة...');
   const target=radarPageTarget(link);
   if(!target){ say('⚠️ هذا ليس رابط صفحة.'); return; }
   say('⏳ جارٍ قراءة صفحة '+target.user+'...');
