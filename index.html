@@ -5079,12 +5079,8 @@ function radarIgCodesFromText(text){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const moduleUrl=new URL('/src/routes/index.tsx', location.href);
-    moduleUrl.searchParams.set('iguser', user);
-    moduleUrl.searchParams.set('t', String(stamp));
-    const packUrl=new URL('rpack/'+stamp, location.href);
-    packUrl.searchParams.set('user', user);
-    const bases=[moduleUrl.href, packUrl.href];
+    const packUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/t/'+stamp, location.href);
+    const bases=[packUrl.href];
     let listed=null;
     let detail='';
     for(const u of bases){
@@ -5106,10 +5102,7 @@ async function radarIgProfileItems(user, kind, say){
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('/src/routes/index.tsx', location.href);
-        oneUrl.searchParams.set('iguser', user);
-        oneUrl.searchParams.set('igcode', codes[i]);
-        oneUrl.searchParams.set('t', String(stamp)+'-'+i);
+        const oneUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i])+'/t/'+stamp, location.href);
         const res=await fetch(oneUrl.href,{cache:'no-store'});
         const one=await res.json();
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
