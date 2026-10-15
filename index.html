@@ -5098,9 +5098,10 @@ function radarPackFrame(url){
     }
     frame.onload=function(){
       try{
+        const href=frame.contentWindow&&frame.contentWindow.location&&frame.contentWindow.location.href;
+        if(!href||href==='about:blank') return;
         const doc=frame.contentDocument;
-        if(!doc) return;
-        const el=doc.getElementById('radarPack');
+        const el=doc&&doc.getElementById('radarPack');
         if(el&&el.textContent) finish(JSON.parse(el.textContent));
         else finish(null);
       }catch(e){}
