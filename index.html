@@ -5114,14 +5114,18 @@ function radarPackFrame(url){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const packUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/t/'+stamp+'/html', location.href).href;
+    const packUrl=new URL('/src/rpack/'+encodeURIComponent(user), location.href).href;
     if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
     let listed=await radarPackFrame(packUrl);
     if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
       try{
-        const jsonUrl=packUrl.replace(/\/html$/,'');
-        const res=await fetch(jsonUrl,{cache:'no-store'});
-        const parsed=JSON.parse(await res.text());
+        const res=await fetch(packUrl,{cache:'no-store'});
+        const text=await res.text();
+        let parsed=null;
+        try{ parsed=JSON.parse(text); }catch(e){
+          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+          if(m) try{ parsed=JSON.parse(m[1]); }catch(e2){}
+        }
         if(parsed&&Array.isArray(parsed.codes)&&parsed.codes.length) listed=parsed;
       }catch(e){}
     }
@@ -5133,10 +5137,17 @@ async function radarIgProfileItems(user, kind, say){
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i])+'/t/'+stamp+'/html', location.href).href;
+        const oneUrl=new URL('/src/rpack/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i]), location.href).href;
         let one=await radarPackFrame(oneUrl);
         if(!(one&&one.url)){
-          try{ one=await (await fetch(oneUrl.replace(/\/html$/,''),{cache:'no-store'})).json(); }catch(e){ one=null; }
+          try{
+            const res=await fetch(oneUrl,{cache:'no-store'});
+            const text=await res.text();
+            try{ one=JSON.parse(text); }catch(e){
+              const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+              if(m) one=JSON.parse(m[1]);
+            }
+          }catch(e){ one=null; }
         }
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
