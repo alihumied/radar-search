@@ -5076,35 +5076,58 @@ function radarIgCodesFromText(text){
   while((m=re2.exec(s))) add(m[1]);
   return ids.slice(0,24);
 }
+function radarPackFrame(url){
+  return new Promise(function(resolve){
+    const frame=document.createElement('iframe');
+    frame.setAttribute('aria-hidden','true');
+    frame.style.cssText='position:absolute;width:0;height:0;border:0;opacity:0';
+    let done=false;
+    const timer=setTimeout(finish, 20000);
+    function finish(data){
+      if(done) return;
+      done=true;
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      frame.remove();
+      resolve(data||null);
+    }
+    function onMsg(ev){
+      const d=ev.data;
+      if(!d || d.radarPack!==1 || !d.payload) return;
+      finish(d.payload);
+    }
+    window.addEventListener('message', onMsg);
+    frame.src=url;
+    (document.body||document.documentElement).appendChild(frame);
+  });
+}
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const packUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/t/'+stamp, location.href);
-    const bases=[packUrl.href];
-    let listed=null;
-    let detail='';
-    for(const u of bases){
+    const packUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/t/'+stamp+'/html', location.href).href;
+    if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
+    let listed=await radarPackFrame(packUrl);
+    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
       try{
-        if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        const res=await fetch(u,{cache:'no-store'});
-        const text=await res.text();
-        let parsed=null;
-        try{ parsed=JSON.parse(text); }catch(e){ parsed=null; }
-        if(parsed&&Array.isArray(parsed.codes)&&parsed.codes.length){ listed=parsed; break; }
-        detail=(parsed&&parsed.error)?'empty':String(res.status);
-      }catch(e){ detail='net'; }
+        const jsonUrl=packUrl.replace(/\/html$/,'');
+        const res=await fetch(jsonUrl,{cache:'no-store'});
+        const parsed=JSON.parse(await res.text());
+        if(parsed&&Array.isArray(parsed.codes)&&parsed.codes.length) listed=parsed;
+      }catch(e){}
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
-    if(!codes.length) return {error:true, items:[], detail};
+    if(!codes.length) return {error:true, items:[]};
     const items=[];
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i])+'/t/'+stamp, location.href);
-        const res=await fetch(oneUrl.href,{cache:'no-store'});
-        const one=await res.json();
+        const oneUrl=new URL('rpack/u/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i])+'/t/'+stamp+'/html', location.href).href;
+        let one=await radarPackFrame(oneUrl);
+        if(!(one&&one.url)){
+          try{ one=await (await fetch(oneUrl.replace(/\/html$/,''),{cache:'no-store'})).json(); }catch(e){ one=null; }
+        }
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
     }
