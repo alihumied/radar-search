@@ -5076,6 +5076,23 @@ function radarIgCodesFromText(text){
   while((m=re2.exec(s))) add(m[1]);
   return ids.slice(0,24);
 }
+function radarAskParent(user, code){
+  return new Promise(function(resolve){
+    const id=String(Date.now())+Math.random().toString(16).slice(2);
+    const timer=setTimeout(function(){ window.removeEventListener('message', onMsg); resolve(null); }, 20000);
+    function onMsg(ev){
+      const d=ev.data;
+      if(!d || d.type!=='radar-ig-answer' || d.id!==id) return;
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      resolve(d.result||null);
+    }
+    window.addEventListener('message', onMsg);
+    try{ window.parent.postMessage({type:'radar-ig-ask', id, user, code:code||''}, '*'); }
+    catch(e){ clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(null); }
+  });
+}
+
 function radarPackFrame(url){
   return new Promise(function(resolve){
     const frame=document.createElement('iframe');
@@ -5114,21 +5131,25 @@ function radarPackFrame(url){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const packUrl=new URL('/src/rpack/'+encodeURIComponent(user), location.href).href;
+    const packUrl=new URL('/src/routes/index.tsx', location.href);
+    packUrl.searchParams.set('iguser', user);
+    packUrl.searchParams.set('v', String(stamp));
     if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-    let listed=null;
+    let listed=await radarAskParent(user, '');
     let detail='';
-    try{
-      const res=await fetch(packUrl,{cache:'no-store'});
-      const text=await res.text();
-      detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
-      try{ listed=JSON.parse(text); }catch(e){
-        const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-        if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
-      }
-    }catch(e){ detail='net'; }
     if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
-      listed=await radarPackFrame(packUrl);
+      try{
+        const res=await fetch(packUrl.href,{cache:'no-store'});
+        const text=await res.text();
+        detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
+        try{ listed=JSON.parse(text); }catch(e){
+          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+          if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
+        }
+      }catch(e){ detail='net'; }
+    }
+    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
+      listed=await radarPackFrame(packUrl.href);
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
     if(!codes.length) return {error:true, items:[], detail};
@@ -5138,11 +5159,14 @@ async function radarIgProfileItems(user, kind, say){
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('/src/rpack/'+encodeURIComponent(user)+'/c/'+encodeURIComponent(codes[i]), location.href).href;
-        let one=await radarPackFrame(oneUrl);
+        const oneUrl=new URL('/src/routes/index.tsx', location.href);
+        oneUrl.searchParams.set('iguser', user);
+        oneUrl.searchParams.set('igcode', codes[i]);
+        oneUrl.searchParams.set('v', String(stamp));
+        let one=await radarAskParent(user, codes[i]);
         if(!(one&&one.url)){
           try{
-            const res=await fetch(oneUrl,{cache:'no-store'});
+            const res=await fetch(oneUrl.href,{cache:'no-store'});
             const text=await res.text();
             try{ one=JSON.parse(text); }catch(e){
               const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
@@ -5150,6 +5174,7 @@ async function radarIgProfileItems(user, kind, say){
             }
           }catch(e){ one=null; }
         }
+        if(!(one&&one.url)) one=await radarPackFrame(oneUrl.href);
         if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
       }catch(e){}
     }
