@@ -5143,7 +5143,7 @@ function radarPackFrame(url){
 async function radarIgUserId(user){
   const u='https://corsmirror.com/v1?url='+encodeURIComponent('https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/');
   try{
-    const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});
+    const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
     if(!res.ok) return '';
     return ((await res.text()).match(/USER_ID\s*=\s*(\d+)/)||[])[1]||'';
   }catch(e){ return ''; }
@@ -5151,7 +5151,7 @@ async function radarIgUserId(user){
 async function radarIgCodesFromId(id){
   const gql='https://www.instagram.com/graphql/query?doc_id=27234427476213202&variables='+encodeURIComponent(JSON.stringify({data:{include_feed_video:true,page_size:12,target_user_id:id}}));
   try{
-    const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(gql),{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});
+    const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(gql),{credentials:'omit',referrerPolicy:'no-referrer'});
     if(!res.ok) return [];
     const t=await res.text();
     const codes=[];
@@ -5163,13 +5163,17 @@ async function radarIgCodesFromId(id){
 }
 function radarIgPreload(user){
   const want=String(user||'').toLowerCase();
-  const pack=window.__igPack;
-  if(pack && String(pack.user||'').toLowerCase()===want && Array.isArray(pack.codes) && pack.codes.length) return pack;
-  const m=String(location.hash||'').match(/(?:^#|[?&])ig=([^&]+)/);
-  if(!m) return null;
+  const accept=row=>row && String(row.user||want).toLowerCase()===want && Array.isArray(row.codes) && row.codes.length ? row : null;
+  const inline=accept(window.__igPack);
+  if(inline) return inline;
   try{
-    const row=JSON.parse(decodeURIComponent(m[1]));
-    if(row && String(row.user||'').toLowerCase()===want && Array.isArray(row.codes) && row.codes.length) return row;
+    const raw=new URLSearchParams(location.search).get('ig');
+    if(raw){ const row=accept(JSON.parse(raw)); if(row) return row; }
+  }catch(e){}
+  try{
+    const hash=String(location.hash||'').replace(/^#/,'');
+    const raw=new URLSearchParams(hash).get('ig');
+    if(raw){ const row=accept(JSON.parse(decodeURIComponent(raw))); if(row) return row; }
   }catch(e){}
   return null;
 }
