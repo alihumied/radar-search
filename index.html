@@ -5140,48 +5140,32 @@ function radarPackFrame(url){
     (document.body||document.documentElement).appendChild(frame);
   });
 }
+function radarIgPreload(user){
+  const want=String(user||'').toLowerCase();
+  const pack=window.__igPack;
+  if(pack && String(pack.user||'').toLowerCase()===want && Array.isArray(pack.codes) && pack.codes.length) return pack;
+  const m=String(location.hash||'').match(/(?:^#|[?&])ig=([^&]+)/);
+  if(!m) return null;
+  try{
+    const row=JSON.parse(decodeURIComponent(m[1]));
+    if(row && String(row.user||'').toLowerCase()===want && Array.isArray(row.codes) && row.codes.length) return row;
+  }catch(e){}
+  return null;
+}
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
-    const stamp=Date.now();
-    const packUrl=new URL('/api/ig/'+encodeURIComponent(user), location.href);
-    if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-    let listed=await radarScriptPack(user, '');
-    let detail='';
-    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
-      try{
-        const res=await fetch(packUrl.href,{cache:'no-store'});
-        const text=await res.text();
-        try{ listed=JSON.parse(text); }catch(e){
-          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-          if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
-        }
-      }catch(e){}
-    }
-    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
-      listed=await radarPackFrame(packUrl.href);
-    }
-    const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
-    if(!codes.length) return {error:true, items:[], detail};
+    const listed=radarIgPreload(user);
+    const codes=listed&&Array.isArray(listed.codes)?listed.codes.slice(0,12):[];
+    if(!codes.length) return {error:true, items:[]};
     const items=[];
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('/api/ig/'+encodeURIComponent(user)+'/'+encodeURIComponent(codes[i]), location.href);
-        let one=await radarScriptPack(user, codes[i]);
-        if(!(one&&one.url)){
-          try{
-            const res=await fetch(oneUrl.href,{cache:'no-store'});
-            const text=await res.text();
-            try{ one=JSON.parse(text); }catch(e){
-              const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-              if(m) one=JSON.parse(m[1]);
-            }
-          }catch(e){ one=null; }
-        }
-        if(!(one&&one.url)) one=await radarPackFrame(oneUrl.href);
-        if(one&&/^https?:/i.test(one.url)) items.push({url:one.url, ext:'mp4', kind:'video', name:one.name||user});
+        const files=await radarIgShareFiles('https://www.instagram.com/reel/'+codes[i]+'/');
+        const video=(files||[]).find(function(f){ return f&&f.kind==='video'&&/^https?:/i.test(f.url); });
+        if(video) items.push({url:video.url, ext:'mp4', kind:'video', name:video.name||user});
       }catch(e){}
     }
     if(!items.length) return {error:true, items:[]};
