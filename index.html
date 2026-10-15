@@ -5165,15 +5165,25 @@ async function radarIgCodesFromId(id){
 let radarIgPack=null;
 function radarIgCapturePack(){
   try{
+    const row=window.parent&&window.parent!==window&&window.parent.__igPack;
+    if(row&&((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length))) radarIgPack=row;
+  }catch(e){}
+  if(radarIgPack) return;
+  try{
     const raw=new URLSearchParams(location.search).get('ig');
     if(!raw) return;
     const row=JSON.parse(raw);
-    if(row && Array.isArray(row.codes) && row.codes.length) radarIgPack=row;
+    if(row&&((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length))) radarIgPack=row;
   }catch(e){}
 }
 function radarIgPreload(user){
+  radarIgCapturePack();
   const want=String(user||'').toLowerCase();
-  const accept=row=>row && String(row.user||want).toLowerCase()===want && Array.isArray(row.codes) && row.codes.length ? row : null;
+  const accept=row=>{
+    if(!row||String(row.user||want).toLowerCase()!==want) return null;
+    if((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length)) return row;
+    return null;
+  };
   const saved=accept(radarIgPack);
   if(saved) return saved;
   const inline=accept(window.__igPack);
@@ -5208,6 +5218,25 @@ async function radarIgProfileItems(user, kind, say){
         const files=await radarIgShareFiles('https://www.instagram.com/reel/'+codes[i]+'/');
         const video=(files||[]).find(function(f){ return f&&f.kind==='video'&&/^https?:/i.test(f.url); });
         if(video) items.push({url:video.url, ext:'mp4', kind:'video', name:video.name||user});
+      }catch(e){}
+    }
+    if(!items.length) return {error:true, items:[]};
+    return {items};
+  }
+  radarIgCapturePack();
+  const photoPack=radarIgPreload(user);
+  const photoCodes=photoPack&&Array.isArray(photoPack.images)?photoPack.images.slice(0,40):[];
+  if(photoCodes.length){
+    const items=[];
+    for(let i=0;i<photoCodes.length;i++){
+      if(say) say('⏳ جارٍ تجهيز صورة '+(i+1)+' من '+photoCodes.length+'...');
+      radarProgLock=true;
+      radarPaintProgress(Math.round(((i+1)/photoCodes.length)*70));
+      try{
+        const files=await radarIgShareFiles('https://www.instagram.com/p/'+photoCodes[i]+'/');
+        (files||[]).forEach(function(f){
+          if(f&&f.kind==='image'&&/^https?:/i.test(f.url)) items.push({url:f.url, ext:f.ext||'jpg', kind:'image', name:f.name||user});
+        });
       }catch(e){}
     }
     if(!items.length) return {error:true, items:[]};
