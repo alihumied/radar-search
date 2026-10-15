@@ -5158,22 +5158,40 @@ async function radarIgCodesFromId(id){
     const codes=[];
     const re=/"code":"([A-Za-z0-9_-]{5,15})"/g;
     let m;
-    while((m=re.exec(t)) && codes.length<12){ if(!codes.includes(m[1])) codes.push(m[1]); }
+    while((m=re.exec(t)) && codes.length<50){ if(!codes.includes(m[1])) codes.push(m[1]); }
     return codes;
   }catch(e){ return []; }
 }
 let radarIgPack=null;
+function radarIgTake(params, keys){
+  const out=[];
+  keys.forEach(function(k){
+    const v=params.get(k);
+    if(!v) return;
+    v.split(/[.\s,]+/).forEach(function(c){
+      if(/^[A-Za-z0-9_-]{5,15}$/.test(c) && out.indexOf(c)<0) out.push(c);
+    });
+  });
+  return out;
+}
 function radarIgCapturePack(){
   try{
     const row=window.parent&&window.parent!==window&&window.parent.__igPack;
-    if(row&&((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length))) radarIgPack=row;
+    if(row&&((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length))){ radarIgPack=row; return; }
   }catch(e){}
-  if(radarIgPack) return;
   try{
-    const raw=new URLSearchParams(location.search).get('ig');
-    if(!raw) return;
-    const row=JSON.parse(raw);
-    if(row&&((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length))) radarIgPack=row;
+    const params=new URLSearchParams(location.search);
+    const codes=radarIgTake(params,['igv','igv2','igv3','igv4','igv5']);
+    const images=radarIgTake(params,['igi','igi2','igi3','igi4']);
+    const raw=params.get('ig');
+    if(raw){
+      try{
+        const row=JSON.parse(raw);
+        (row.codes||[]).forEach(function(c){ if(codes.indexOf(c)<0) codes.push(c); });
+        (row.images||[]).forEach(function(c){ if(images.indexOf(c)<0) images.push(c); });
+      }catch(e){}
+    }
+    if(codes.length||images.length) radarIgPack={user:params.get('igu')||'', codes:codes, images:images};
   }catch(e){}
 }
 function radarIgPreload(user){
