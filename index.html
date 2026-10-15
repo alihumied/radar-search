@@ -5218,7 +5218,7 @@ function radarIgTake(params, keys){
 }
 function radarIgScore(row){
   if(!row) return 0;
-  return (Array.isArray(row.codes)?row.codes.length:0)+(Array.isArray(row.photos)?row.photos.length:0)+(Array.isArray(row.images)?row.images.length:0);
+  return (Array.isArray(row.codes)?row.codes.length:0)+(Array.isArray(row.videos)?row.videos.length:0)+(Array.isArray(row.photos)?row.photos.length:0)+(Array.isArray(row.images)?row.images.length:0);
 }
 function radarIgCapturePack(){
   const rows=[];
@@ -5247,7 +5247,7 @@ function radarIgPreload(user){
   const want=String(user||'').toLowerCase();
   const accept=row=>{
     if(!row||String(row.user||want).toLowerCase()!==want) return null;
-    if((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.images)&&row.images.length)||(Array.isArray(row.photos)&&row.photos.length)) return row;
+    if((Array.isArray(row.codes)&&row.codes.length)||(Array.isArray(row.videos)&&row.videos.length)||(Array.isArray(row.images)&&row.images.length)||(Array.isArray(row.photos)&&row.photos.length)) return row;
     return null;
   };
   const saved=accept(radarIgPack);
@@ -5268,6 +5268,11 @@ function radarIgPreload(user){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const listed=radarIgPreload(user);
+    const direct=listed&&Array.isArray(listed.videos)?listed.videos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,60):[];
+    if(direct.length){
+      if(say) say('⏳ جارٍ تجهيز '+direct.length+' فيديو...');
+      return {items:direct.map(function(url){ return {url:url, ext:'mp4', kind:'video', name:user}; })};
+    }
     let codes=listed&&Array.isArray(listed.codes)?listed.codes.slice(0,60):[];
     if(codes.length<24){
       if(say) say('⏳ جارٍ قراءة باقي ريلز '+user+'...');
