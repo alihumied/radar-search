@@ -5131,23 +5131,19 @@ function radarPackFrame(url){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const stamp=Date.now();
-    const packUrl=new URL('/src/routes/index.tsx', location.href);
-    packUrl.searchParams.set('iguser', user);
-    packUrl.searchParams.set('v', String(stamp));
+    const packUrl=new URL('/api/ig/'+encodeURIComponent(user), location.href);
     if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-    let listed=await radarAskParent(user, '');
+    let listed=null;
     let detail='';
-    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
-      try{
-        const res=await fetch(packUrl.href,{cache:'no-store'});
-        const text=await res.text();
-        detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
-        try{ listed=JSON.parse(text); }catch(e){
-          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-          if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
-        }
-      }catch(e){ detail='net'; }
-    }
+    try{
+      const res=await fetch(packUrl.href,{cache:'no-store'});
+      const text=await res.text();
+      detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
+      try{ listed=JSON.parse(text); }catch(e){
+        const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+        if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
+      }
+    }catch(e){ detail='net'; }
     if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
       listed=await radarPackFrame(packUrl.href);
     }
@@ -5159,11 +5155,8 @@ async function radarIgProfileItems(user, kind, say){
       radarProgLock=true;
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
-        const oneUrl=new URL('/src/routes/index.tsx', location.href);
-        oneUrl.searchParams.set('iguser', user);
-        oneUrl.searchParams.set('igcode', codes[i]);
-        oneUrl.searchParams.set('v', String(stamp));
-        let one=await radarAskParent(user, codes[i]);
+        const oneUrl=new URL('/api/ig/'+encodeURIComponent(user)+'/'+encodeURIComponent(codes[i]), location.href);
+        let one=null;
         if(!(one&&one.url)){
           try{
             const res=await fetch(oneUrl.href,{cache:'no-store'});
