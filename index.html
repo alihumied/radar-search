@@ -4361,6 +4361,7 @@ function radarSharePlatformName(link){
   return '';
 }
 function handleSharedLink(){
+  radarIgCapturePack();
   const params = new URLSearchParams(window.location.search);
   const shared = ['url','text','title','shared_url','shared_text'].map(k=>radarShareQueryValue(k)||params.get(k)||'').filter(Boolean).join('\n');
   if(!/https?:\/\//i.test(shared)) return;
@@ -5161,9 +5162,20 @@ async function radarIgCodesFromId(id){
     return codes;
   }catch(e){ return []; }
 }
+let radarIgPack=null;
+function radarIgCapturePack(){
+  try{
+    const raw=new URLSearchParams(location.search).get('ig');
+    if(!raw) return;
+    const row=JSON.parse(raw);
+    if(row && Array.isArray(row.codes) && row.codes.length) radarIgPack=row;
+  }catch(e){}
+}
 function radarIgPreload(user){
   const want=String(user||'').toLowerCase();
   const accept=row=>row && String(row.user||want).toLowerCase()===want && Array.isArray(row.codes) && row.codes.length ? row : null;
+  const saved=accept(radarIgPack);
+  if(saved) return saved;
   const inline=accept(window.__igPack);
   if(inline) return inline;
   try{
