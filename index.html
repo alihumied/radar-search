@@ -3470,6 +3470,46 @@ async function radarIgHostFile(code,n){
   if(head.charCodeAt(0)===0xFF||head.startsWith('\x89P')||head.startsWith('RIFF')||head.startsWith('GIF')) return {blob,ext:'jpg',kind:'image'};
   return null;
 }
+async function radarIgAlbumFiles(text){
+  const raw=radarShareUnescape(String(text||''));
+  const files=[];
+  const seen=new Set();
+  const push=(url,kind)=>{
+    if(!url||!/^https?:/i.test(url)) return;
+    const clean=typeof radarHighestImageUrl==='function'&&kind!=='video'?radarHighestImageUrl(url):url;
+    const key=(clean.match(/\/(\d{8,})_/)||[])[1]||clean.split('?')[0];
+    if(seen.has(key)) return;
+    seen.add(key);
+    const ext=kind==='video'?'mp4':((clean.match(/\.(jpe?g|png|webp)(?:\?|$)/i)||[])[1]||'jpg').replace(/jpeg/i,'jpg');
+    files.push({url:clean,ext,kind});
+  };
+  const blocks=raw.match(/"image_versions2"\s*:\s*\{[\s\S]{0,9000}?"candidates"\s*:\s*\[[\s\S]{0,14000}?\]/g)||[];
+  blocks.forEach(block=>{
+    let best='',w=0,m;
+    const re=/"width"\s*:\s*(\d{2,5})[\s\S]{0,220}?"url"\s*:\s*"(https:[^"]+)"|"url"\s*:\s*"(https:[^"]+)"[\s\S]{0,220}?"width"\s*:\s*(\d{2,5})/g;
+    while((m=re.exec(block))){
+      const width=+(m[1]||m[4]||0), url=m[2]||m[3];
+      if(url&&width>=w){w=width;best=url}
+    }
+    push(best,'image');
+  });
+  const vblocks=raw.match(/"video_versions"\s*:\s*\[[\s\S]{0,9000}?\]/g)||[];
+  vblocks.forEach(block=>{
+    let best='',w=0,m;
+    const re=/"width"\s*:\s*(\d{2,5})[\s\S]{0,280}?"url"\s*:\s*"(https:[^"]+)"|"url"\s*:\s*"(https:[^"]+)"[\s\S]{0,280}?"width"\s*:\s*(\d{2,5})/g;
+    while((m=re.exec(block))){
+      const width=+(m[1]||m[4]||0), url=m[2]||m[3];
+      if(url&&width>=w){w=width;best=url}
+    }
+    push(best,'video');
+  });
+  if(!files.length){
+    const picked=radarSharePickFromText(raw);
+    if(picked.video) push(picked.video,'video');
+    picked.images.forEach(u=>push(u,'image'));
+  }
+  return files;
+}
 async function radarIgShareFiles(link){
   const canon=radarIgCanon(link);
   const m=canon.match(/instagram\.com\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
@@ -3491,17 +3531,28 @@ async function radarIgShareFiles(link){
   };
   if(code.length<=15 && kind==='p'){
     const seen=new Set();
+    let empty=0;
+    const absorb=(list)=>{
+      let added=0;
+      (list||[]).forEach(f=>{
+        const key=(f.url.match(/\/(\d{8,})_/)||[])[1]||f.url.split('?')[0];
+        if(seen.has(key)) return;
+        seen.add(key);
+        files.push(f);
+        added++;
+      });
+      return added;
+    };
     for(let i=1;i<=20;i++){
       const text=await radarSharePageText('https://fxinstagram.com/p/'+code+'/?img_index='+i);
       note(text);
-      const picked=radarSharePickFromText(text);
-      const url=picked.video||picked.images[0]||'';
-      if(!url) break;
-      const key=(url.match(/\/(\d{6,})_/)||[])[1]||url.split('?')[0];
-      if(seen.has(key)) break;
-      seen.add(key);
-      pushFile(url, picked.video?'video':'image');
+      const added=absorb(radarIgAlbumFiles(text));
+      if(!added){ empty++; if(empty>=2) break; }
+      else empty=0;
     }
+    const embed=await radarSharePageText('https://www.instagram.com/p/'+code+'/embed/captioned/');
+    note(embed);
+    absorb(radarIgAlbumFiles(embed));
   }else if(code.length<=15){
     const pages=['https://fxinstagram.com/'+kind+'/'+code+'/'];
     if(kind!=='p') pages.push('https://fxinstagram.com/p/'+code+'/');
