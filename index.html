@@ -5192,7 +5192,7 @@ function radarIgPreload(user){
 async function radarIgProfileItems(user, kind, say){
   if(kind==='video'){
     const listed=radarIgPreload(user);
-    let codes=listed&&Array.isArray(listed.codes)?listed.codes.slice(0,12):[];
+    let codes=listed&&Array.isArray(listed.codes)?listed.codes.slice(0,50):[];
     if(!codes.length){
       if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
       const id=await radarIgUserId(user);
