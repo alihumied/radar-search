@@ -5096,6 +5096,15 @@ function radarPackFrame(url){
       if(!d || d.radarPack!==1 || !d.payload) return;
       finish(d.payload);
     }
+    frame.onload=function(){
+      try{
+        const doc=frame.contentDocument;
+        if(!doc) return;
+        const el=doc.getElementById('radarPack');
+        if(el&&el.textContent) finish(JSON.parse(el.textContent));
+        else finish(null);
+      }catch(e){}
+    };
     window.addEventListener('message', onMsg);
     frame.src=url;
     (document.body||document.documentElement).appendChild(frame);
