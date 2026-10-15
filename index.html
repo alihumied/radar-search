@@ -5116,21 +5116,22 @@ async function radarIgProfileItems(user, kind, say){
     const stamp=Date.now();
     const packUrl=new URL('/src/rpack/'+encodeURIComponent(user), location.href).href;
     if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-    let listed=await radarPackFrame(packUrl);
+    let listed=null;
+    let detail='';
+    try{
+      const res=await fetch(packUrl,{cache:'no-store'});
+      const text=await res.text();
+      detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
+      try{ listed=JSON.parse(text); }catch(e){
+        const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+        if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
+      }
+    }catch(e){ detail='net'; }
     if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
-      try{
-        const res=await fetch(packUrl,{cache:'no-store'});
-        const text=await res.text();
-        let parsed=null;
-        try{ parsed=JSON.parse(text); }catch(e){
-          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-          if(m) try{ parsed=JSON.parse(m[1]); }catch(e2){}
-        }
-        if(parsed&&Array.isArray(parsed.codes)&&parsed.codes.length) listed=parsed;
-      }catch(e){}
+      listed=await radarPackFrame(packUrl);
     }
     const codes=Array.isArray(listed&&listed.codes)?listed.codes.slice(0,12):[];
-    if(!codes.length) return {error:true, items:[]};
+    if(!codes.length) return {error:true, items:[], detail};
     const items=[];
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
@@ -5290,7 +5291,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
-    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
+    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب.'+(got.detail?' '+got.detail:'')); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
