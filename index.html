@@ -5076,20 +5076,32 @@ function radarIgCodesFromText(text){
   while((m=re2.exec(s))) add(m[1]);
   return ids.slice(0,24);
 }
-function radarAskParent(user, code){
+function radarScriptPack(user, code){
   return new Promise(function(resolve){
-    const id=String(Date.now())+Math.random().toString(16).slice(2);
-    const timer=setTimeout(function(){ window.removeEventListener('message', onMsg); resolve(null); }, 20000);
-    function onMsg(ev){
-      const d=ev.data;
-      if(!d || d.type!=='radar-ig-answer' || d.id!==id) return;
+    const s=document.createElement('script');
+    let done=false;
+    const timer=setTimeout(function(){ finish(null); }, 15000);
+    function finish(data){
+      if(done) return;
+      done=true;
       clearTimeout(timer);
-      window.removeEventListener('message', onMsg);
-      resolve(d.result||null);
+      s.remove();
+      resolve(data||null);
     }
-    window.addEventListener('message', onMsg);
-    try{ window.parent.postMessage({type:'radar-ig-ask', id, user, code:code||''}, '*'); }
-    catch(e){ clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(null); }
+    const before=(window.radarPackInbox||[]).length;
+    const u=new URL('/@id/radar-ig/'+encodeURIComponent(user)+(code?'/'+encodeURIComponent(code):''), location.href);
+    u.searchParams.set('t', String(Date.now()));
+    s.async=true;
+    s.src=u.href;
+    s.onload=function(){
+      const box=window.radarPackInbox||[];
+      const hit=box.slice(before).reverse().find(function(row){
+        return row && (code ? row.url : Array.isArray(row.codes));
+      }) || null;
+      finish(hit);
+    };
+    s.onerror=function(){ finish(null); };
+    (document.head||document.documentElement).appendChild(s);
   });
 }
 
@@ -5133,17 +5145,18 @@ async function radarIgProfileItems(user, kind, say){
     const stamp=Date.now();
     const packUrl=new URL('/api/ig/'+encodeURIComponent(user), location.href);
     if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-    let listed=null;
+    let listed=await radarScriptPack(user, '');
     let detail='';
-    try{
-      const res=await fetch(packUrl.href,{cache:'no-store'});
-      const text=await res.text();
-      detail=res.status+' '+(text.trim().slice(0,18).replace(/\s+/g,' '));
-      try{ listed=JSON.parse(text); }catch(e){
-        const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
-        if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
-      }
-    }catch(e){ detail='net'; }
+    if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
+      try{
+        const res=await fetch(packUrl.href,{cache:'no-store'});
+        const text=await res.text();
+        try{ listed=JSON.parse(text); }catch(e){
+          const m=text.match(/<pre id="radarPack">([\s\S]*?)<\/pre>/);
+          if(m) try{ listed=JSON.parse(m[1]); }catch(e2){}
+        }
+      }catch(e){}
+    }
     if(!(listed&&Array.isArray(listed.codes)&&listed.codes.length)){
       listed=await radarPackFrame(packUrl.href);
     }
@@ -5156,7 +5169,7 @@ async function radarIgProfileItems(user, kind, say){
       radarPaintProgress(Math.round(((i+1)/codes.length)*70));
       try{
         const oneUrl=new URL('/api/ig/'+encodeURIComponent(user)+'/'+encodeURIComponent(codes[i]), location.href);
-        let one=null;
+        let one=await radarScriptPack(user, codes[i]);
         if(!(one&&one.url)){
           try{
             const res=await fetch(oneUrl.href,{cache:'no-store'});
@@ -5309,7 +5322,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
-    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب.'+(got.detail?' '+got.detail:'')); return; }
+    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
