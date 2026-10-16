@@ -5209,12 +5209,60 @@ function radarPackFrame(url){
   });
 }
 async function radarIgUserId(user){
-  const u='https://corsmirror.com/v1?url='+encodeURIComponent('https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/');
-  try{
-    const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
-    if(!res.ok) return '';
-    return ((await res.text()).match(/USER_ID\s*=\s*(\d+)/)||[])[1]||'';
-  }catch(e){ return ''; }
+  const pages=[
+    'https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/',
+    'https://corsmirror.com/v1?url='+encodeURIComponent('https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/')
+  ];
+  for(const u of pages){
+    try{
+      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!res.ok) continue;
+      const id=((await res.text()).match(/USER_ID\s*=\s*(\d+)/)||[])[1]||'';
+      if(id) return id;
+    }catch(e){}
+  }
+  return '';
+}
+async function radarIgFeedItems(id, kind){
+  const items=[];
+  const seen=new Set();
+  let max='';
+  for(let page=0; page<4 && items.length<40; page++){
+    const path='https://i.instagram.com/api/v1/feed/user/'+id+'/?count=12'+(max?'&max_id='+encodeURIComponent(max):'');
+    const alt='https://www.instagram.com/api/v1/feed/user/'+id+'/?count=12'+(max?'&max_id='+encodeURIComponent(max):'');
+    let text='';
+    for(const u of [path, alt, 'https://corsmirror.com/v1?url='+encodeURIComponent(path)]){
+      try{
+        const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',headers:{'X-IG-App-ID':'936619743392459','X-IG-WWW-Claim':'0'}});
+        if(!res.ok) continue;
+        text=await res.text();
+        if(text&&text.indexOf('"items"')>=0) break;
+        text='';
+      }catch(e){}
+    }
+    if(!text) break;
+    let j=null;
+    try{ j=JSON.parse(text); }catch(e){ break; }
+    const rows=j.items||[];
+    if(!rows.length) break;
+    rows.forEach(function(row){
+      const isVideo=row.media_type===2||row.product_type==='clips'||(row.video_versions&&row.video_versions.length);
+      if(kind==='video'){
+        if(!isVideo) return;
+        const vers=(row.video_versions||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
+        if(vers[0]&&vers[0].url&&!seen.has(vers[0].url)){ seen.add(vers[0].url); items.push({url:vers[0].url,ext:'mp4',kind:'video'}); }
+      }else if(!isVideo){
+        (row.carousel_media||[row]).forEach(function(m){
+          if(m.media_type===2) return;
+          const c=(((m.image_versions2||{}).candidates)||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
+          if(c[0]&&c[0].url&&!seen.has(c[0].url)){ seen.add(c[0].url); items.push({url:c[0].url,ext:'jpg',kind:'image'}); }
+        });
+      }
+    });
+    max=j.next_max_id||'';
+    if(!max) break;
+  }
+  return items;
 }
 async function radarIgCodesFromId(id){
   const codes=[];
@@ -5349,7 +5397,16 @@ async function radarIgProfileItems(user, kind, say){
         more.forEach(function(c){ if(codes.indexOf(c)<0) codes.push(c); });
       }
     }
-    if(!codes.length) return {error:true, items:[]};
+    if(!codes.length){
+      const id=await radarIgUserId(user);
+      if(id){
+        if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
+        radarPaintProgress(12);
+        const direct=await radarIgFeedItems(id, 'video');
+        if(direct.length) return {items:direct};
+      }
+      return {error:true, items:[]};
+    }
     const items=[];
     for(let i=0;i<codes.length;i++){
       if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
@@ -5378,6 +5435,15 @@ async function radarIgProfileItems(user, kind, say){
     if(id){
       const more=await radarIgImagesFromId(id);
       more.forEach(function(c){ if(photoCodes.indexOf(c)<0) photoCodes.push(c); });
+    }
+  }
+  if(!photoCodes.length){
+    const id=await radarIgUserId(user);
+    if(id){
+      if(say) say('⏳ جارٍ قراءة منشورات '+user+'...');
+      radarPaintProgress(12);
+      const direct=await radarIgFeedItems(id, 'image');
+      if(direct.length) return {items:direct};
     }
   }
   if(photoCodes.length){
