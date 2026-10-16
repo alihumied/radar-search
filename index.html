@@ -5120,7 +5120,8 @@ async function radarTikTokFeedRows(user, say){
       const images=radarTtImageUrls(v);
       const play=String(v.hdplay||v.play||'');
       const cap=radarTtCaption(v);
-      rows.push({id, images, play, raw:v, cap, photo:images.length>0 && !(Number(v.duration)>0) && !v.hdplay});
+      const photo=images.length>1 || (images.length===1 && !play && !(Number(v.duration)>0));
+      rows.push({id, images, play, raw:v, cap, photo});
     });
     const next=data.cursor==null?'':String(data.cursor);
     if(!data.hasMore||!next||next===cursor||!fresh) break;
@@ -5144,7 +5145,9 @@ async function radarTikTokProfileItems(user, kind, say){
     let images=row.images||[];
     let play=row.play||'';
     let detail=row.raw||null;
-    if(!play && !(images.length && row.photo) && row.id){
+    if(kind==='image' && !row.photo) continue;
+    if(kind==='video' && row.photo && !play) continue;
+    if(kind!=='image' && !play && row.id){
       detail=await radarTikTokOne('https://www.tiktok.com/@'+user+'/video/'+row.id);
       if(detail){
         play=detail.hdplay||detail.play||'';
@@ -5162,7 +5165,7 @@ async function radarTikTokProfileItems(user, kind, say){
       items.push(item);
     };
     if(kind==='image'){
-      if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>named(url,'jpg','image'));
+      images.filter(url=>!/\.mp4(?:\?|$)/i.test(url)).forEach(url=>named(url,'jpg','image'));
     }else if(row.id || play){
       const pack=Object.assign({}, detail||{}, {id:row.id||detail&&detail.id||'', play:play, hdplay:(detail&&detail.hdplay)||''});
       named(play||('https://www.tikwm.com/video/media/hdplay/'+row.id+'.mp4'), 'mp4', 'video', {tiktok:pack});
@@ -5771,7 +5774,7 @@ async function radarXProfileItems(user, kind){
           const url=radarXBestFormat(v);
           if(url) items.push({url,ext:'mp4',kind:'video',title:radarMediaLabel(items.length+1, user, cap)});
         });
-      }else{
+      }else if(!(media.videos||[]).length){
         const photos=(Array.isArray(media.photos)&&media.photos.length)?media.photos:(media.all||[]).filter(m=>m&&m.type==='photo');
         const cap=String(tw.text||tw.raw_text||'').replace(/\s+/g,' ').trim();
         photos.forEach(p=>{
