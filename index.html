@@ -3635,7 +3635,7 @@ function radarNameFiles(list, label){
   list.forEach((f,i)=>{ if(!f.name) f.name=list.length>1?label+' '+(i+1):label; });
 }
 function radarFileTitle(name, ext){
-  const base=String(name||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,90);
+  const base=String(name||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,140);
   return (base||'youtube')+'.'+ext;
 }
 async function radarShareSave(url,ext,kind,post,name){
@@ -5111,7 +5111,8 @@ async function radarTikTokFeedRows(user, say){
       fresh++;
       const images=radarTtImageUrls(v);
       const play=String(v.hdplay||v.play||'');
-      rows.push({id, images, play, raw:v, photo:images.length>0 && !(Number(v.duration)>0) && !v.hdplay});
+      const cap=String(v.title||v.desc||'').replace(/\s+/g,' ').trim();
+      rows.push({id, images, play, raw:v, cap, photo:images.length>0 && !(Number(v.duration)>0) && !v.hdplay});
     });
     const next=data.cursor==null?'':String(data.cursor);
     if(!data.hasMore||!next||next===cursor||!fresh) break;
@@ -5143,13 +5144,18 @@ async function radarTikTokProfileItems(user, kind, say){
       }
       await new Promise(r=>setTimeout(r,1100));
     }
+    const cap=String(row.cap||(detail&&(detail.title||detail.desc))||'').replace(/\s+/g,' ').trim();
+    const named=(url, ext, kind, extra)=>{
+      const item=Object.assign({url, ext, kind, title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')}, extra||{});
+      items.push(item);
+    };
     if(kind==='image'){
-      if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>items.push({url,ext:'jpg',kind:'image'}));
+      if((row.photo||(images.length&&!play)) && images.length) images.forEach(url=>named(url,'jpg','image'));
     }else if(row.id || play){
       const pack=Object.assign({}, detail||{}, {id:row.id||detail&&detail.id||'', play:play, hdplay:(detail&&detail.hdplay)||''});
-      items.push({url:play||('https://www.tikwm.com/video/media/hdplay/'+row.id+'.mp4'), ext:'mp4', kind:'video', tiktok:pack});
+      named(play||('https://www.tikwm.com/video/media/hdplay/'+row.id+'.mp4'), 'mp4', 'video', {tiktok:pack});
     }else if(kind==='video' && row.src){
-      items.push({url:row.src, ext:'mp4', kind:'video'});
+      named(row.src, 'mp4', 'video');
     }
   }
   return {items};
@@ -5637,14 +5643,14 @@ async function radarSaveMediaList(user, kind, items, say){
       radarPaintProgress(70+Math.round(((b*10+i+1)/list.length)*28));
       const job=slice[i].tiktok?radarTikTokVideoBlob(slice[i].tiktok):hxFetchMediaBlob(slice[i].url, slice[i].kind);
       const blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null),32000))]);
-      if(blob) blobs.push({blob, ext:slice[i].ext||'jpg'});
+      if(blob) blobs.push({blob, ext:slice[i].ext||'jpg', title:slice[i].title||''});
     }
     if(!blobs.length) continue;
     const n=b+1;
     const label=user+' '+(kind==='video'?'videos':'photos')+' '+n;
-    if(blobs.length===1) radarOfferFile(blobs[0].blob, radarFileTitle(user+' '+(b*10+1), blobs[0].ext));
+    if(blobs.length===1) radarOfferFile(blobs[0].blob, radarFileTitle(blobs[0].title||(user+' '+(b*10+1)), blobs[0].ext));
     else{
-      const packed=await radarStoreZip(blobs.map((row,i)=>({name:radarFileTitle(user+' '+(b*10+i+1), row.ext), blob:row.blob})));
+      const packed=await radarStoreZip(blobs.map((row,i)=>({name:radarFileTitle(row.title||(user+' '+(b*10+i+1)), row.ext), blob:row.blob})));
       radarOfferFile(packed, radarFileTitle(label,'zip'));
     }
     saved++;
@@ -5747,15 +5753,17 @@ async function radarXProfileItems(user, kind){
       fresh++;
       const media=tw.media||{};
       if(kind==='video'){
+        const cap=String(tw.text||tw.raw_text||'').replace(/\s+/g,' ').trim();
         (media.videos||[]).forEach(v=>{
           const url=radarXBestFormat(v);
-          if(url) items.push({url,ext:'mp4',kind:'video'});
+          if(url) items.push({url,ext:'mp4',kind:'video',title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')});
         });
       }else{
         const photos=(Array.isArray(media.photos)&&media.photos.length)?media.photos:(media.all||[]).filter(m=>m&&m.type==='photo');
+        const cap=String(tw.text||tw.raw_text||'').replace(/\s+/g,' ').trim();
         photos.forEach(p=>{
           const img=radarXOrigImage(p&&p.url);
-          if(img) items.push({url:img,ext:'jpg',kind:'image'});
+          if(img) items.push({url:img,ext:'jpg',kind:'image',title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')});
         });
       }
     }
