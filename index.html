@@ -4955,13 +4955,16 @@ function radarXBestFormat(video){
 }
 async function radarXProfilePage(user, cursor){
   const api='https://api.fxtwitter.com/2/profile/'+encodeURIComponent(user)+'/statuses'+(cursor?'?cursor='+encodeURIComponent(cursor):'');
-  for(const u of [api, 'https://corsmirror.com/v1?url='+encodeURIComponent(api)]){
-    try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) continue;
-      const j=await res.json();
-      if(j&&Array.isArray(j.results)) return j;
-    }catch(e){}
+  for(let attempt=0; attempt<2; attempt++){
+    for(const u of [api, 'https://corsmirror.com/v1?url='+encodeURIComponent(api)]){
+      try{
+        const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
+        if(!res.ok) continue;
+        const j=await res.json();
+        if(j&&Array.isArray(j.results)) return j;
+      }catch(e){}
+    }
+    if(attempt===0) await new Promise(r=>setTimeout(r,800));
   }
   return null;
 }
@@ -5633,7 +5636,7 @@ async function radarSaveMediaList(user, kind, items, say){
       say('⏳ جارٍ جلب '+want+' '+(b*10+i+1)+' من '+list.length+'...');
       radarPaintProgress(70+Math.round(((b*10+i+1)/list.length)*28));
       const job=slice[i].tiktok?radarTikTokVideoBlob(slice[i].tiktok):hxFetchMediaBlob(slice[i].url, slice[i].kind);
-      const blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null),18000))]);
+      const blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null),32000))]);
       if(blob) blobs.push({blob, ext:slice[i].ext||'jpg'});
     }
     if(!blobs.length) continue;
@@ -6748,6 +6751,7 @@ async function hxFetchMediaBlob(src, kind){
   if(!u||!/^https?:\/\//i.test(u)) return null;
   const urls=[];
   if(/cdninstagram|fbcdn\.net/i.test(u)) urls.push('/api/ig-file?u='+encodeURIComponent(u));
+  if(/(?:video|pbs)\.twimg\.com/i.test(u)) urls.push('/api/x-file?u='+encodeURIComponent(u));
   urls.push(u);
   if(kind==='image'){
     const no=u.replace(/^https?:\/\//i,'');
