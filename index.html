@@ -4439,7 +4439,8 @@ function handleSharedLink(){
   const xv=document.getElementById('radarShareXVideos');
   const xp=document.getElementById('radarShareXPhotos');
   const tt=/tiktok\.com/i.test(link);
-  const page=radarShareIsPost(link)?null:radarPageTarget(link);
+  let page=radarShareIsPost(link)?null:radarPageTarget(link);
+  if(page&&page.platform==='instagram') page=null;
   if(gen) gen.hidden=yt||fb;
   if(yv) yv.hidden=!yt;
   if(ya) ya.hidden=!yt;
@@ -4472,16 +4473,14 @@ function handleSharedLink(){
     if(xv){
       xv.hidden=!page;
       const b=xv.querySelector('b'), s=xv.querySelector('small');
-      const ig=page&&page.platform==='instagram';
-      if(b) b.textContent=ig?'جلب الريلز':'فيديوهات الصفحة';
-      if(s) s.textContent=ig?'فيديوهات الحساب، أكبر قدر ظاهر':'كل 10 فيديوهات في ملف';
+      if(b) b.textContent='فيديوهات الصفحة';
+      if(s) s.textContent='كل 10 فيديوهات في ملف';
     }
     if(xp){
       xp.hidden=!page;
       const b=xp.querySelector('b'), s=xp.querySelector('small');
-      const ig=page&&page.platform==='instagram';
-      if(b) b.textContent=ig?'جلب المنشورات':'صور الصفحة';
-      if(s) s.textContent=ig?'صور المنشورات، أكبر قدر ظاهر':'كل 10 صور في ملف';
+      if(b) b.textContent='صور الصفحة';
+      if(s) s.textContent='كل 10 صور في ملف';
     }
     if(kick) kick.textContent='صفحة '+page.user+' · آخر المنشورات العامة';
   }
@@ -5662,14 +5661,6 @@ async function radarPagePack(link, kind){
   }
   else if(target.platform==='snapchat') items=await radarSnapProfileItems(target.user, kind);
   else if(target.platform==='instagram'){
-    if(new URLSearchParams(location.search).get('go')!=='1'){
-      const next=new URL('/radar-26.html', location.origin);
-      next.searchParams.set('text', 'https://www.instagram.com/'+target.user+'/');
-      next.searchParams.set('kind', kind);
-      next.searchParams.set('go', '1');
-      location.assign(next.toString());
-      return;
-    }
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
     if(got.error || !(got.items||[]).length){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب بعد التمرير.'); return; }
@@ -5677,12 +5668,6 @@ async function radarPagePack(link, kind){
   }
   await radarSaveMediaList(target.user, kind, items, say);
 }
-setTimeout(function(){
-  try{
-    if(!window.__igGo||!window.__igPack||!window.__igPack.user) return;
-    radarPagePack('https://www.instagram.com/'+window.__igPack.user+'/', window.__igGo==='video'?'video':'image');
-  }catch(e){}
-}, 500);
 async function radarXProfileItems(user, kind){
   const items=[];
   const seen=new Set();
