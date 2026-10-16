@@ -5490,6 +5490,35 @@ async function radarIgProfileItems(user, kind, say){
     if(photos.length) return {items:photos.map(function(url){ return {url:url, ext:'jpg', kind:'image', name:user}; })};
   }
   if(say) say('⏳ جارٍ قراءة '+(kind==='video'?'الريلز':'المنشورات')+'...');
+  try{
+    const res=await fetch('/api/ig/'+encodeURIComponent(user),{credentials:'same-origin'});
+    if(res.ok){
+      const pack=await res.json();
+      const photos=Array.isArray(pack.photos)?pack.photos.filter(function(u){ return /^https?:/i.test(u); }):[];
+      const videos=Array.isArray(pack.videos)?pack.videos.filter(function(u){ return /^https?:/i.test(u); }):[];
+      const codes=Array.isArray(pack.codes)?pack.codes:[];
+      if(kind==='video'){
+        if(videos.length) return {items:videos.map(function(url){ return {url:url, ext:'mp4', kind:'video', name:user}; })};
+        if(codes.length){
+          const items=[];
+          const cap=Math.min(codes.length, 30);
+          for(let i=0;i<cap;i++){
+            if(say) say('⏳ ريل '+(i+1)+' من '+cap);
+            radarProgLock=true;
+            radarPaintProgress(Math.round(((i+1)/cap)*70));
+            try{
+              const one=await fetch('/api/ig/'+encodeURIComponent(user)+'/'+encodeURIComponent(codes[i]),{credentials:'same-origin'});
+              const row=one.ok?await one.json():null;
+              if(row&&/^https?:/i.test(row.url)) items.push({url:row.url, ext:'mp4', kind:'video', name:row.name||user});
+            }catch(e){}
+          }
+          if(items.length) return {items};
+        }
+      }else if(photos.length){
+        return {items:photos.slice(0,80).map(function(url){ return {url:url, ext:'jpg', kind:'image', name:user}; })};
+      }
+    }
+  }catch(e){}
   const pages=kind==='video'
     ? ['https://www.instagram.com/'+encodeURIComponent(user)+'/reels/','https://www.instagram.com/'+encodeURIComponent(user)+'/embed/']
     : ['https://www.instagram.com/'+encodeURIComponent(user)+'/embed/'];
