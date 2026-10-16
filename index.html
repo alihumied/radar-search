@@ -5356,128 +5356,124 @@ function radarIgPreload(user){
   }catch(e){}
   return null;
 }
-async function radarIgProfileItems(user, kind, say){
-  if(kind==='video'){
-    const listed=radarIgPreload(user);
-    const direct=listed&&Array.isArray(listed.videos)?listed.videos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,60):[];
-    if(direct.length){
-      if(say) say('⏳ جارٍ تجهيز '+direct.length+' فيديو...');
-      return {items:direct.map(function(url){ return {url:url, ext:'mp4', kind:'video', name:user}; })};
+function radarIgPullCodes(text, kind){
+  const ids=[];
+  const add=c=>{
+    const id=String(c||'').replace(/[^A-Za-z0-9_-]/g,'');
+    if(id.length>=5 && id.length<=15 && ids.indexOf(id)<0) ids.push(id);
+  };
+  const s=String(text||'');
+  let m;
+  const re=/"code":"([A-Za-z0-9_-]{5,15})"/g;
+  while((m=re.exec(s))) add(m[1]);
+  const re2=/"shortcode":"([A-Za-z0-9_-]{5,15})"/g;
+  while((m=re2.exec(s))){
+    if(kind==='image'){
+      const around=s.slice(Math.max(0,m.index-600), m.index+400);
+      if(/"is_video":true/.test(around) && !/"is_video":false/.test(around)) continue;
     }
-    let codes=listed&&Array.isArray(listed.codes)?listed.codes.slice(0,60):[];
-    if(codes.length<24){
-      if(say) say('⏳ جارٍ قراءة باقي ريلز '+user+'...');
-      const id=await radarIgUserId(user);
-      if(id){
-        const more=await radarIgCodesFromId(id);
-        more.forEach(function(c){ if(codes.indexOf(c)<0) codes.push(c); });
-      }
-    }
-    if(!codes.length){
-      const id=await radarIgUserId(user);
-      if(id){
-        if(say) say('⏳ جارٍ قراءة ريلز '+user+'...');
-        radarPaintProgress(12);
-        const direct=await radarIgFeedItems(id, 'video');
-        if(direct.length) return {items:direct};
-      }
-      return {error:true, items:[]};
-    }
-    const items=[];
-    for(let i=0;i<codes.length;i++){
-      if(say) say('⏳ جارٍ تجهيز ريل '+(i+1)+' من '+codes.length+'...');
-      radarProgLock=true;
-      radarPaintProgress(Math.round(((i+1)/codes.length)*70));
-      try{
-        const files=await radarIgShareFiles('https://www.instagram.com/reel/'+codes[i]+'/');
-        const video=(files||[]).find(function(f){ return f&&f.kind==='video'&&/^https?:/i.test(f.url); });
-        if(video) items.push({url:video.url, ext:'mp4', kind:'video', name:video.name||user});
-      }catch(e){}
-    }
-    if(!items.length) return {error:true, items:[]};
-    return {items};
+    add(m[1]);
   }
-  radarIgCapturePack();
-  const photoPack=radarIgPreload(user);
-  const direct=photoPack&&Array.isArray(photoPack.photos)?photoPack.photos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,400):[];
-  if(direct.length){
-    if(say) say('⏳ جارٍ تجهيز '+direct.length+' صورة...');
-    return {items:direct.map(function(url){ return {url:url, ext:'jpg', kind:'image', name:user}; })};
+  const re3=/instagram\.com\/(?:reel|reels|p)\/([A-Za-z0-9_-]{5,15})/g;
+  while((m=re3.exec(s))) add(m[1]);
+  return ids;
+}
+async function radarIgRead(url){
+  const wraps=[
+    'https://corsmirror.com/v1?url='+encodeURIComponent(url),
+    'https://corsproxy.io/?url='+encodeURIComponent(url),
+    'https://api.allorigins.win/raw?url='+encodeURIComponent(url)
+  ];
+  for(const u of wraps){
+    const t=await radarIgTimedText(u, 7000);
+    if(t && t.length>180 && /code|shortcode|\/reel\/|\/p\/|edge_owner|timeline/i.test(t)) return t;
   }
-  let photoCodes=photoPack&&Array.isArray(photoPack.images)?photoPack.images.slice(0,80):[];
-  if(photoCodes.length<8){
-    if(say) say('⏳ جارٍ قراءة صور '+user+'...');
-    const id=await radarIgUserId(user);
-    if(id){
-      const more=await radarIgImagesFromId(id);
-      more.forEach(function(c){ if(photoCodes.indexOf(c)<0) photoCodes.push(c); });
-    }
-  }
-  if(!photoCodes.length){
-    const id=await radarIgUserId(user);
-    if(id){
-      if(say) say('⏳ جارٍ قراءة منشورات '+user+'...');
-      radarPaintProgress(12);
-      const direct=await radarIgFeedItems(id, 'image');
-      if(direct.length) return {items:direct};
-    }
-  }
-  if(photoCodes.length){
-    const items=[];
-    for(let i=0;i<photoCodes.length;i++){
-      if(say) say('⏳ جارٍ تجهيز صورة '+(i+1)+' من '+photoCodes.length+'...');
-      radarProgLock=true;
-      radarPaintProgress(Math.round(((i+1)/photoCodes.length)*70));
-      try{
-        const files=await radarIgShareFiles('https://www.instagram.com/p/'+photoCodes[i]+'/');
-        (files||[]).forEach(function(f){
-          if(f&&f.kind==='image'&&/^https?:/i.test(f.url)) items.push({url:f.url, ext:f.ext||'jpg', kind:'image', name:f.name||user});
-        });
-      }catch(e){}
-    }
-    if(!items.length) return {error:true, items:[]};
-    return {items};
-  }
-  const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
-  let userData=null;
-  for(const u of [api, 'https://corsmirror.com/v1?url='+encodeURIComponent(api)]){
-    const t=await radarIgTimedText(u, 8000);
-    if(!t) continue;
+  return '';
+}
+async function radarIgScrollCodes(user, id, kind, say){
+  const codes=[];
+  const push=list=>{ (list||[]).forEach(c=>{ if(codes.indexOf(c)<0 && codes.length<36) codes.push(c); }); };
+  if(say) say('⏳ تمرير '+(kind==='video'?'الريلز':'المنشورات')+'...');
+  const profile=await radarIgRead('https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user));
+  if(profile){
     try{
-      const j=JSON.parse(t);
-      if(j&&j.data&&j.data.user){ userData=j.data.user; break; }
+      const j=JSON.parse(profile);
+      const row=j&&j.data&&j.data.user;
+      if(row&&row.is_private) return {locked:true, codes:[]};
+      const edges=row&&row.edge_owner_to_timeline_media&&row.edge_owner_to_timeline_media.edges||[];
+      edges.forEach(edge=>{
+        const node=edge&&edge.node||{};
+        if(!node.shortcode) return;
+        if(kind==='video' ? !node.is_video : node.is_video) return;
+        push([node.shortcode]);
+      });
+    }catch(e){ push(radarIgPullCodes(profile, kind)); }
+  }
+  let cursor='';
+  for(let page=0; page<6 && codes.length<36; page++){
+    if(say) say('⏳ تمرير صفحة '+(page+1)+' · '+codes.length+' عنصر');
+    radarPaintProgress(Math.min(28, 6+page*4));
+    let gql='';
+    if(id){
+      if(kind==='video'){
+        const data={include_feed_video:true,page_size:12,target_user_id:id};
+        if(cursor) data.max_id=cursor;
+        gql='https://www.instagram.com/graphql/query?doc_id=27234427476213202&variables='+encodeURIComponent(JSON.stringify({data}));
+      }else{
+        const variables={id:id, first:12};
+        if(cursor) variables.after=cursor;
+        gql='https://www.instagram.com/graphql/query?doc_id=7950326061742207&variables='+encodeURIComponent(JSON.stringify(variables));
+      }
+    }
+    const text=gql?await radarIgRead(gql):'';
+    if(!text){
+      if(!codes.length){
+        const pageUrl=kind==='video'
+          ? 'https://www.instagram.com/'+encodeURIComponent(user)+'/reels/'
+          : 'https://www.instagram.com/'+encodeURIComponent(user)+'/';
+        push(radarIgPullCodes(await radarIgRead(pageUrl), kind));
+      }
+      break;
+    }
+    const before=codes.length;
+    push(radarIgPullCodes(text, kind));
+    const next=(text.match(/"end_cursor":"([^"]+)"/)||text.match(/"next_max_id":"([^"]+)"/)||[])[1]||'';
+    if(codes.length===before || !next || next===cursor) break;
+    cursor=next;
+  }
+  return {locked:false, codes};
+}
+async function radarIgProfileItems(user, kind, say){
+  const listed=radarIgPreload(user);
+  if(kind==='video'){
+    const direct=listed&&Array.isArray(listed.videos)?listed.videos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,60):[];
+    if(direct.length) return {items:direct.map(function(url){ return {url:url, ext:'mp4', kind:'video', name:user}; })};
+  }else{
+    radarIgCapturePack();
+    const photos=listed&&Array.isArray(listed.photos)?listed.photos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,400):[];
+    if(photos.length) return {items:photos.map(function(url){ return {url:url, ext:'jpg', kind:'image', name:user}; })};
+  }
+  const id=await radarIgUserId(user);
+  const got=await radarIgScrollCodes(user, id, kind, say);
+  if(got.locked) return {locked:true, items:[]};
+  const codes=got.codes||[];
+  if(!codes.length) return {error:true, items:[]};
+  const items=[];
+  const cap=Math.min(codes.length, 30);
+  for(let i=0;i<cap;i++){
+    if(say) say('⏳ '+(kind==='video'?'ريل':'منشور')+' '+(i+1)+' من '+cap);
+    radarProgLock=true;
+    radarPaintProgress(Math.round(((i+1)/cap)*70));
+    try{
+      const link='https://www.instagram.com/'+(kind==='video'?'reel':'p')+'/'+codes[i]+'/';
+      const files=await radarIgShareFiles(link);
+      (files||[]).forEach(function(f){
+        if(!f || f.kind!==kind || !/^https?:/i.test(f.url)) return;
+        items.push({url:f.url, ext:f.ext||(kind==='video'?'mp4':'jpg'), kind:kind, name:f.name||user});
+      });
     }catch(e){}
   }
-  if(userData&&userData.is_private) return {locked:true, items:[]};
-  const edges=userData&&userData.edge_owner_to_timeline_media&&userData.edge_owner_to_timeline_media.edges||[];
-  const codes=[];
-  edges.forEach(edge=>{
-    const node=edge&&edge.node||{};
-    if(!node.shortcode) return;
-    if(!!node.is_video!==(kind==='video')) return;
-    codes.push(node.shortcode);
-  });
-  if(!codes.length){
-    for(const page of [
-      'https://www.instagram.com/'+encodeURIComponent(user)+'/',
-      'https://www.instagram.com/'+encodeURIComponent(user)+'/reels/'
-    ]){
-      radarIgCodesFromText(await radarSharePageText(page)).forEach(c=>{ if(!codes.includes(c)) codes.push(c); });
-      if(codes.length) break;
-    }
-  }
-  if(!userData && !codes.length) return {error:true, items:[]};
-  const items=[];
-  for(const code of codes.slice(0,24)){
-    if(items.length>=24) break;
-    const link='https://www.instagram.com/'+(kind==='video'?'reel':'p')+'/'+code+'/';
-    const files=await radarIgShareFiles(link);
-    files.forEach(f=>{
-      if(f.kind!==kind) return;
-      const name=f.name && f.name.toLowerCase().indexOf(user.toLowerCase())===0 ? f.name : radarShareClipName(user, f.name||'');
-      items.push({url:f.url, ext:f.ext||(kind==='video'?'mp4':'jpg'), kind, name});
-    });
-  }
+  if(!items.length) return {error:true, items:[]};
   return {items};
 }
 async function radarSnapProfileItems(user, kind){
@@ -5575,7 +5571,7 @@ async function radarPagePack(link, kind){
   else if(target.platform==='instagram'){
     const got=await radarIgProfileItems(target.user, kind, say);
     if(got.locked){ say('⚠️ الحساب خاص، وإنستغرام لا يسلّم منشوراته.'); return; }
-    if(got.error){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب. شارك الريل نفسه.'); return; }
+    if(got.error || !(got.items||[]).length){ say('⚠️ إنستغرام لم يسلّم قائمة هذا الحساب بعد التمرير.'); return; }
     items=got.items||[];
   }
   await radarSaveMediaList(target.user, kind, items, say);
