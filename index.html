@@ -5208,85 +5208,64 @@ function radarPackFrame(url){
     (document.body||document.documentElement).appendChild(frame);
   });
 }
+function radarIgTimedText(url, ms){
+  const ctrl=typeof AbortController==='function'?new AbortController():null;
+  const timer=setTimeout(()=>{try{ctrl&&ctrl.abort()}catch(e){}}, ms||8000);
+  return fetch(url,{credentials:'omit',referrerPolicy:'no-referrer',signal:ctrl?ctrl.signal:undefined,headers:{'X-IG-App-ID':'936619743392459','X-IG-WWW-Claim':'0'}})
+    .then(r=>r.ok?r.text():'').catch(()=>'').finally(()=>clearTimeout(timer));
+}
 async function radarIgUserId(user){
   const pages=[
     'https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/',
     'https://corsmirror.com/v1?url='+encodeURIComponent('https://insta-stories-viewer.com/'+encodeURIComponent(user)+'/')
   ];
   for(const u of pages){
-    try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) continue;
-      const id=((await res.text()).match(/USER_ID\s*=\s*(\d+)/)||[])[1]||'';
-      if(id) return id;
-    }catch(e){}
+    const id=((await radarIgTimedText(u, 8000)).match(/USER_ID\s*=\s*(\d+)/)||[])[1]||'';
+    if(id) return id;
   }
   return '';
 }
 async function radarIgFeedItems(id, kind){
+  const path='https://i.instagram.com/api/v1/feed/user/'+id+'/?count=12';
+  const text=await radarIgTimedText('https://corsmirror.com/v1?url='+encodeURIComponent(path), 8000);
+  if(!text||text.indexOf('"items"')<0) return [];
+  let j=null;
+  try{ j=JSON.parse(text); }catch(e){ return []; }
   const items=[];
   const seen=new Set();
-  let max='';
-  for(let page=0; page<4 && items.length<40; page++){
-    const path='https://i.instagram.com/api/v1/feed/user/'+id+'/?count=12'+(max?'&max_id='+encodeURIComponent(max):'');
-    const alt='https://www.instagram.com/api/v1/feed/user/'+id+'/?count=12'+(max?'&max_id='+encodeURIComponent(max):'');
-    let text='';
-    for(const u of [path, alt, 'https://corsmirror.com/v1?url='+encodeURIComponent(path)]){
-      try{
-        const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',headers:{'X-IG-App-ID':'936619743392459','X-IG-WWW-Claim':'0'}});
-        if(!res.ok) continue;
-        text=await res.text();
-        if(text&&text.indexOf('"items"')>=0) break;
-        text='';
-      }catch(e){}
+  (j.items||[]).forEach(function(row){
+    const isVideo=row.media_type===2||row.product_type==='clips'||(row.video_versions&&row.video_versions.length);
+    if(kind==='video'){
+      if(!isVideo) return;
+      const vers=(row.video_versions||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
+      if(vers[0]&&vers[0].url&&!seen.has(vers[0].url)){ seen.add(vers[0].url); items.push({url:vers[0].url,ext:'mp4',kind:'video'}); }
+    }else if(!isVideo){
+      (row.carousel_media||[row]).forEach(function(m){
+        if(m.media_type===2) return;
+        const c=(((m.image_versions2||{}).candidates)||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
+        if(c[0]&&c[0].url&&!seen.has(c[0].url)){ seen.add(c[0].url); items.push({url:c[0].url,ext:'jpg',kind:'image'}); }
+      });
     }
-    if(!text) break;
-    let j=null;
-    try{ j=JSON.parse(text); }catch(e){ break; }
-    const rows=j.items||[];
-    if(!rows.length) break;
-    rows.forEach(function(row){
-      const isVideo=row.media_type===2||row.product_type==='clips'||(row.video_versions&&row.video_versions.length);
-      if(kind==='video'){
-        if(!isVideo) return;
-        const vers=(row.video_versions||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
-        if(vers[0]&&vers[0].url&&!seen.has(vers[0].url)){ seen.add(vers[0].url); items.push({url:vers[0].url,ext:'mp4',kind:'video'}); }
-      }else if(!isVideo){
-        (row.carousel_media||[row]).forEach(function(m){
-          if(m.media_type===2) return;
-          const c=(((m.image_versions2||{}).candidates)||[]).slice().sort(function(a,b){ return (b.width||0)-(a.width||0); });
-          if(c[0]&&c[0].url&&!seen.has(c[0].url)){ seen.add(c[0].url); items.push({url:c[0].url,ext:'jpg',kind:'image'}); }
-        });
-      }
-    });
-    max=j.next_max_id||'';
-    if(!max) break;
-  }
+  });
   return items;
 }
 async function radarIgCodesFromId(id){
   const codes=[];
   let cursor='';
-  for(let page=0;page<5 && codes.length<50;page++){
+  for(let page=0;page<8 && codes.length<48;page++){
     const data={include_feed_video:true,page_size:12,target_user_id:id};
     if(cursor) data.max_id=cursor;
     const gql='https://www.instagram.com/graphql/query?doc_id=27234427476213202&variables='+encodeURIComponent(JSON.stringify({data}));
-    let t='';
-    try{
-      let res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(gql),{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok){
-        await new Promise(function(r){ setTimeout(r,1200); });
-        res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(gql),{credentials:'omit',referrerPolicy:'no-referrer'});
-      }
-      if(!res.ok) break;
-      t=await res.text();
-    }catch(e){ break; }
+    const t=await radarIgTimedText('https://corsmirror.com/v1?url='+encodeURIComponent(gql), 8000);
+    if(!t) break;
     const before=codes.length;
     const re=/"code":"([A-Za-z0-9_-]{5,15})"/g;
     let m;
-    while((m=re.exec(t)) && codes.length<50){ if(codes.indexOf(m[1])<0) codes.push(m[1]); }
-    const next=(t.match(/"end_cursor":"([^"]+)"/)||[])[1]||'';
-    if(codes.length===before || next===cursor || !/"has_next_page":true/.test(t) || !next) break;
+    while((m=re.exec(t)) && codes.length<48){ if(codes.indexOf(m[1])<0) codes.push(m[1]); }
+    const next=(t.match(/"end_cursor":"([^"]+)"/)||t.match(/"next_max_id":"([^"]+)"/)||[])[1]||'';
+    const more=/"has_next_page":true/.test(t)||/"more_available":true/.test(t);
+    if(codes.length===before||!next||next===cursor) break;
+    if(!more&&page>=2) break;
     cursor=next;
   }
   return codes;
@@ -5294,27 +5273,24 @@ async function radarIgCodesFromId(id){
 async function radarIgImagesFromId(id){
   const images=[];
   let after='';
-  for(let page=0;page<4 && images.length<40;page++){
+  for(let page=0;page<6 && images.length<48;page++){
     const variables={id:id,first:12};
     if(after) variables.after=after;
     const gql='https://www.instagram.com/graphql/query?doc_id=7950326061742207&variables='+encodeURIComponent(JSON.stringify(variables));
-    let t='';
-    try{
-      const res=await fetch('https://corsmirror.com/v1?url='+encodeURIComponent(gql),{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) break;
-      t=await res.text();
-    }catch(e){ break; }
+    const t=await radarIgTimedText('https://corsmirror.com/v1?url='+encodeURIComponent(gql), 8000);
+    if(!t) break;
     const before=images.length;
     const re=/"shortcode":"([A-Za-z0-9_-]{5,15})"/g;
     let m;
-    while((m=re.exec(t)) && images.length<40){
-      const back=t.slice(Math.max(0,m.index-1200), m.index);
-      const flags=back.match(/"is_video":(true|false)/g);
-      const last=flags&&flags[flags.length-1];
-      if(last==='"is_video":false' && images.indexOf(m[1])<0) images.push(m[1]);
+    while((m=re.exec(t)) && images.length<48){
+      const around=t.slice(Math.max(0,m.index-800), m.index+800);
+      if(/"is_video":true/.test(around)&&!/"is_video":false/.test(around)) continue;
+      if(images.indexOf(m[1])<0) images.push(m[1]);
     }
     const next=(t.match(/"end_cursor":"([^"]+)"/)||[])[1]||'';
-    if(images.length===before || next===after || !/"has_next_page":true/.test(t) || !next) break;
+    const more=/"has_next_page":true/.test(t);
+    if(images.length===before||!next||next===after) break;
+    if(!more&&page>=2) break;
     after=next;
   }
   return images;
@@ -5465,10 +5441,10 @@ async function radarIgProfileItems(user, kind, say){
   const api='https://www.instagram.com/api/v1/users/web_profile_info/?username='+encodeURIComponent(user);
   let userData=null;
   for(const u of [api, 'https://corsmirror.com/v1?url='+encodeURIComponent(api)]){
+    const t=await radarIgTimedText(u, 8000);
+    if(!t) continue;
     try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',headers:{'X-IG-App-ID':'936619743392459','X-IG-WWW-Claim':'0'}});
-      if(!res.ok) continue;
-      const j=await res.json();
+      const j=JSON.parse(t);
       if(j&&j.data&&j.data.user){ userData=j.data.user; break; }
     }catch(e){}
   }
