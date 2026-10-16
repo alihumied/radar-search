@@ -4465,8 +4465,20 @@ function handleSharedLink(){
     if(fa) fa.hidden=true;
     if(yv) yv.hidden=true;
     if(ya) ya.hidden=true;
-    if(xv) xv.hidden=false;
-    if(xp) xp.hidden=false;
+    if(xv){
+      xv.hidden=!page;
+      const b=xv.querySelector('b'), s=xv.querySelector('small');
+      const ig=page&&page.platform==='instagram';
+      if(b) b.textContent=ig?'جلب الريلز':'فيديوهات الصفحة';
+      if(s) s.textContent=ig?'فيديوهات الحساب، أكبر قدر ظاهر':'كل 10 فيديوهات في ملف';
+    }
+    if(xp){
+      xp.hidden=!page;
+      const b=xp.querySelector('b'), s=xp.querySelector('small');
+      const ig=page&&page.platform==='instagram';
+      if(b) b.textContent=ig?'جلب المنشورات':'صور الصفحة';
+      if(s) s.textContent=ig?'صور المنشورات، أكبر قدر ظاهر':'كل 10 صور في ملف';
+    }
     if(kick) kick.textContent='صفحة '+page.user+' · آخر المنشورات العامة';
   }
   const box=document.getElementById('radarShareChoice');
