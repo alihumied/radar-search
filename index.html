@@ -5443,6 +5443,42 @@ async function radarIgScrollCodes(user, id, kind, say){
   }
   return {locked:false, codes};
 }
+function radarIgCleanUrl(url){
+  let u=String(url||'');
+  for(let i=0;i<3;i++) u=u.replace(/\\\//g,'/').replace(/\\u0026/gi,'&').replace(/\\u0025/gi,'%');
+  try{ u=decodeURIComponent(u); }catch(e){}
+  u=u.replace(/([?&])stp=[^&]+&?/,'$1').replace(/[?&]$/,'');
+  return u;
+}
+function radarIgFlat(text){
+  let t=String(text||'');
+  for(let i=0;i<3;i++){
+    const n=t.replace(/\\\//g,'/').replace(/\\"/g,'"').replace(/\\u0026/gi,'&');
+    if(n===t) break;
+    t=n;
+  }
+  return t;
+}
+function radarIgEmbedRows(raw, kind){
+  const rows=[];
+  const seen=new Set();
+  const re=/"shortcode":"([A-Za-z0-9_-]{5,15})","is_video":(true|false)/g;
+  let m;
+  while((m=re.exec(raw))){
+    const video=m[2]==='true';
+    if((kind==='video')!==video) continue;
+    if(seen.has(m[1])) continue;
+    seen.add(m[1]);
+    const slice=raw.slice(m.index, m.index+1200);
+    const pic=(slice.match(/"display_url":"(https:[^"]+)"/)||[])[1]||'';
+    rows.push({code:m[1], video, pic:radarIgCleanUrl(pic)});
+  }
+  return rows;
+}
+async function radarIgPageRaw(url){
+  const text=await radarIgTimedText('https://corsmirror.com/v1?url='+encodeURIComponent(url), 12000);
+  return radarIgFlat(text);
+}
 async function radarIgProfileItems(user, kind, say){
   const listed=radarIgPreload(user);
   if(kind==='video'){
@@ -5453,25 +5489,53 @@ async function radarIgProfileItems(user, kind, say){
     const photos=listed&&Array.isArray(listed.photos)?listed.photos.filter(function(u){ return /^https?:/i.test(u); }).slice(0,400):[];
     if(photos.length) return {items:photos.map(function(url){ return {url:url, ext:'jpg', kind:'image', name:user}; })};
   }
-  const id=await radarIgUserId(user);
-  const got=await radarIgScrollCodes(user, id, kind, say);
-  if(got.locked) return {locked:true, items:[]};
-  const codes=got.codes||[];
-  if(!codes.length) return {error:true, items:[]};
+  if(say) say('⏳ جارٍ قراءة '+(kind==='video'?'الريلز':'المنشورات')+'...');
+  const pages=kind==='video'
+    ? ['https://www.instagram.com/'+encodeURIComponent(user)+'/reels/','https://www.instagram.com/'+encodeURIComponent(user)+'/embed/']
+    : ['https://www.instagram.com/'+encodeURIComponent(user)+'/embed/'];
+  let rows=[];
+  let raw='';
+  for(const page of pages){
+    raw=await radarIgPageRaw(page);
+    if(/"is_private":true/.test(raw) && !/"is_private":false/.test(raw)) return {locked:true, items:[]};
+    const found=radarIgEmbedRows(raw, kind);
+    found.forEach(function(row){ if(!rows.some(function(r){ return r.code===row.code; })) rows.push(row); });
+    if(rows.length>=8) break;
+  }
+  if(kind==='video' && rows.length<12){
+    const id=await radarIgUserId(user);
+    if(id){
+      const more=await radarIgCodesFromId(id);
+      more.forEach(function(c){ if(!rows.some(function(r){ return r.code===c; })) rows.push({code:c, video:true, pic:''}); });
+    }
+  }
+  rows=rows.slice(0,40);
+  if(!rows.length) return {error:true, items:[]};
+  if(kind!=='video'){
+    const items=[];
+    const seen=new Set();
+    rows.forEach(function(row){
+      if(!row.pic||seen.has(row.pic)) return;
+      seen.add(row.pic);
+      items.push({url:row.pic, ext:'jpg', kind:'image', name:user});
+    });
+    if(items.length) return {items};
+  }
   const items=[];
-  const cap=Math.min(codes.length, 30);
+  const cap=rows.length;
   for(let i=0;i<cap;i++){
     if(say) say('⏳ '+(kind==='video'?'ريل':'منشور')+' '+(i+1)+' من '+cap);
     radarProgLock=true;
     radarPaintProgress(Math.round(((i+1)/cap)*70));
     try{
-      const link='https://www.instagram.com/'+(kind==='video'?'reel':'p')+'/'+codes[i]+'/';
+      const link='https://www.instagram.com/'+(kind==='video'?'reel':'p')+'/'+rows[i].code+'/';
       const files=await radarIgShareFiles(link);
       (files||[]).forEach(function(f){
         if(!f || f.kind!==kind || !/^https?:/i.test(f.url)) return;
         items.push({url:f.url, ext:f.ext||(kind==='video'?'mp4':'jpg'), kind:kind, name:f.name||user});
       });
     }catch(e){}
+    if(!items.length && rows[i].pic && kind!=='video') items.push({url:rows[i].pic, ext:'jpg', kind:'image', name:user});
   }
   if(!items.length) return {error:true, items:[]};
   return {items};
