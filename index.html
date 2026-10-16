@@ -3228,16 +3228,20 @@ function radarSharePickFromText(text){
   return {video, images:bestImages};
 }
 async function radarSharePageText(link){
-  for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(link), link]){
-    try{
-      const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer'});
-      if(!res.ok) continue;
-      const t=await res.text();
-      if(!t||t.length<180) continue;
-      if(!/snapchat\.com/i.test(link)&&/Error Facebook|something went wrong/i.test(t)&&!/scontent/i.test(t)) continue;
-      return t;
-    }catch(e){}
-  }
+  const ctrl=typeof AbortController==='function'?new AbortController():null;
+  const timer=setTimeout(()=>{try{ctrl&&ctrl.abort()}catch(e){}},9000);
+  try{
+    for(const u of ['https://corsmirror.com/v1?url='+encodeURIComponent(link), link]){
+      try{
+        const res=await fetch(u,{credentials:'omit',referrerPolicy:'no-referrer',signal:ctrl?ctrl.signal:undefined});
+        if(!res.ok) continue;
+        const t=await res.text();
+        if(!t||t.length<180) continue;
+        if(!/snapchat\.com/i.test(link)&&/Error Facebook|something went wrong/i.test(t)&&!/scontent/i.test(t)) continue;
+        return t;
+      }catch(e){}
+    }
+  }finally{ clearTimeout(timer); }
   return '';
 }
 
@@ -3543,7 +3547,7 @@ async function radarIgShareFiles(link){
       });
       return added;
     };
-    for(let i=1;i<=20;i++){
+    for(let i=1;i<=12;i++){
       const text=await radarSharePageText('https://fxinstagram.com/p/'+code+'/?img_index='+i);
       note(text);
       const added=absorb(radarIgAlbumFiles(text));
@@ -5478,7 +5482,9 @@ async function radarSaveMediaList(user, kind, items, say){
     const blobs=[];
     for(let i=0;i<slice.length;i++){
       say('⏳ جارٍ جلب '+want+' '+(b*10+i+1)+' من '+list.length+'...');
-      const blob=slice[i].tiktok?await radarTikTokVideoBlob(slice[i].tiktok):await hxFetchMediaBlob(slice[i].url, slice[i].kind);
+      radarPaintProgress(70+Math.round(((b*10+i+1)/list.length)*28));
+      const job=slice[i].tiktok?radarTikTokVideoBlob(slice[i].tiktok):hxFetchMediaBlob(slice[i].url, slice[i].kind);
+      const blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null),18000))]);
       if(blob) blobs.push({blob, ext:slice[i].ext||'jpg'});
     }
     if(!blobs.length) continue;
