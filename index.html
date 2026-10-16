@@ -5732,7 +5732,7 @@ async function radarXProfileItems(user, kind){
   const items=[];
   const seen=new Set();
   let cursor='';
-  for(let page=0; page<5 && items.length<30; page++){
+  for(let page=0; page<10 && items.length<120; page++){
     const j=await radarXProfilePage(user, cursor);
     const rows=j&&j.results||[];
     if(!rows.length) break;
@@ -5760,7 +5760,7 @@ async function radarXProfileItems(user, kind){
     if(!fresh||!next||next===cursor) break;
     cursor=next;
   }
-  return items.slice(0,30);
+  return items.slice(0,120);
 }
 async function radarXShareFiles(link){
   const id=(String(link||'').match(/status\/(\d{8,})/)||[])[1]||'';
@@ -5777,12 +5777,20 @@ async function radarXShareFiles(link){
   }
   if(!text) return [];
   let label='';
+  let parsed=null;
   try{
-    const j=JSON.parse(text);
-    const tw=j.tweet||{};
+    parsed=JSON.parse(text);
+    const tw=parsed.tweet||{};
     const author=tw.author||{};
     label=radarShareClipName(author.screen_name||author.name||'', tw.text||tw.raw_text||'');
   }catch(e){}
+  const videos=((parsed&&parsed.tweet&&parsed.tweet.media)||{}).videos||[];
+  const many=[];
+  videos.forEach(function(v){
+    const url=radarXBestFormat(v);
+    if(url) many.push({url:url, ext:'mp4', kind:'video', name:label});
+  });
+  if(many.length) return many;
   const mp4=radarXBestMp4(text,'');
   if(mp4) return [{url:mp4,ext:'mp4',kind:'video',name:label}];
   const files=[];
