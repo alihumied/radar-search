@@ -5040,6 +5040,14 @@ function radarTtImageUrls(v){
   const raw=Array.isArray(v&&v.images)?v.images:[];
   return raw.map(x=>typeof x==='string'?x:(x&&(x.url||x.imageURL||''))).filter(u=>/^https?:/i.test(String(u||'')));
 }
+function radarTtCaption(v){
+  if(!v||typeof v!=='object') return '';
+  return String(v.title||v.desc||v.description||'').replace(/\s+/g,' ').trim();
+}
+function radarMediaLabel(n, user, cap){
+  const c=String(cap||'').replace(/\s+/g,' ').trim();
+  return n+'. '+user+(c?' - '+c:'');
+}
 function radarTtCardsFromText(text){
   const s=String(text||'').replace(/\\u0026/g,'&').replace(/&/g,'&').replace(/\\\//g,'/');
   const ids=[];
@@ -5111,7 +5119,7 @@ async function radarTikTokFeedRows(user, say){
       fresh++;
       const images=radarTtImageUrls(v);
       const play=String(v.hdplay||v.play||'');
-      const cap=String(v.title||v.desc||'').replace(/\s+/g,' ').trim();
+      const cap=radarTtCaption(v);
       rows.push({id, images, play, raw:v, cap, photo:images.length>0 && !(Number(v.duration)>0) && !v.hdplay});
     });
     const next=data.cursor==null?'':String(data.cursor);
@@ -5144,9 +5152,13 @@ async function radarTikTokProfileItems(user, kind, say){
       }
       await new Promise(r=>setTimeout(r,1100));
     }
-    const cap=String(row.cap||(detail&&(detail.title||detail.desc))||'').replace(/\s+/g,' ').trim();
+    let cap=radarTtCaption(row.raw)||radarTtCaption(detail);
+    if(!cap && row.id && play){
+      const extra=await radarTikTokOne('https://www.tiktok.com/@'+user+'/video/'+row.id);
+      if(extra) cap=radarTtCaption(extra);
+    }
     const named=(url, ext, kind, extra)=>{
-      const item=Object.assign({url, ext, kind, title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')}, extra||{});
+      const item=Object.assign({url, ext, kind, title:radarMediaLabel(items.length+1, user, cap)}, extra||{});
       items.push(item);
     };
     if(kind==='image'){
@@ -5641,18 +5653,19 @@ async function radarSaveMediaList(user, kind, items, say){
     for(let i=0;i<slice.length;i++){
       say('⏳ جارٍ جلب '+want+' '+(b*10+i+1)+' من '+list.length+'...');
       radarPaintProgress(70+Math.round(((b*10+i+1)/list.length)*28));
-      const job=slice[i].tiktok?radarTikTokVideoBlob(slice[i].tiktok):hxFetchMediaBlob(slice[i].url, slice[i].kind);
-      const blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null),32000))]);
+      let blob=null;
+      const tries=slice[i].tiktok?2:1;
+      for(let attempt=0; attempt<tries && !blob; attempt++){
+        const job=slice[i].tiktok?radarTikTokVideoBlob(slice[i].tiktok):hxFetchMediaBlob(slice[i].url, slice[i].kind);
+        blob=await Promise.race([job, new Promise(r=>setTimeout(()=>r(null), slice[i].tiktok?45000:32000))]);
+      }
       if(blob) blobs.push({blob, ext:slice[i].ext||'jpg', title:slice[i].title||''});
     }
     if(!blobs.length) continue;
     const n=b+1;
     const label=user+' '+(kind==='video'?'videos':'photos')+' '+n;
-    if(blobs.length===1) radarOfferFile(blobs[0].blob, radarFileTitle(blobs[0].title||(user+' '+(b*10+1)), blobs[0].ext));
-    else{
-      const packed=await radarStoreZip(blobs.map((row,i)=>({name:radarFileTitle(row.title||(user+' '+(b*10+i+1)), row.ext), blob:row.blob})));
-      radarOfferFile(packed, radarFileTitle(label,'zip'));
-    }
+    const packed=await radarStoreZip(blobs.map((row,i)=>({name:radarFileTitle(row.title||(user+' '+(b*10+i+1)), row.ext), blob:row.blob})));
+    radarOfferFile(packed, radarFileTitle(label,'zip'));
     saved++;
     await new Promise(r=>setTimeout(r,700));
   }
@@ -5756,14 +5769,14 @@ async function radarXProfileItems(user, kind){
         const cap=String(tw.text||tw.raw_text||'').replace(/\s+/g,' ').trim();
         (media.videos||[]).forEach(v=>{
           const url=radarXBestFormat(v);
-          if(url) items.push({url,ext:'mp4',kind:'video',title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')});
+          if(url) items.push({url,ext:'mp4',kind:'video',title:radarMediaLabel(items.length+1, user, cap)});
         });
       }else{
         const photos=(Array.isArray(media.photos)&&media.photos.length)?media.photos:(media.all||[]).filter(m=>m&&m.type==='photo');
         const cap=String(tw.text||tw.raw_text||'').replace(/\s+/g,' ').trim();
         photos.forEach(p=>{
           const img=radarXOrigImage(p&&p.url);
-          if(img) items.push({url:img,ext:'jpg',kind:'image',title:(items.length+1)+'. '+user+(cap?' ـ '+cap:'')});
+          if(img) items.push({url:img,ext:'jpg',kind:'image',title:radarMediaLabel(items.length+1, user, cap)});
         });
       }
     }
